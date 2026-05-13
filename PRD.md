@@ -43,7 +43,7 @@ karma v2 的设计起点是一个**真实长期痛点**，用户原话：
 
 ### 1. 核心方向「钉死」而不是「检索」
 
-用户的最高优先级方向（5-10 条上限）**always-on**，每个 user_prompt 前面都注入。
+用户的最高优先级方向（10 条上限（接近但不越 14 注意力拐点））**always-on**，每个 user_prompt 前面都注入。
 
 不需要 cosine / scene 选哪条 — 因为这些都是**用户公开声明的最高优先级**，每次都该看到。
 
@@ -76,7 +76,7 @@ karma 只做**「核心方向永驻 + 违反检测」**这一件事。
 
 ### F1. 核心方向配置
 
-- 用户在 `~/.claude/karma/sticky.yaml` 定义 5-10 条
+- 用户在 `~/.claude/karma/sticky.yaml` 定义 5-10 条（上限 10，超过 12 拒绝加载）
 - 字段：`id` / `preference` (一句话规则) / `violation_keywords` (触发词数组) / 可选 `violation_check` (检查函数名)
 - karma CLI: `karma sticky add / remove / list / edit`
 
