@@ -28,6 +28,9 @@ _DOC_SUFFIXES = (".md", ".rst", ".txt", ".markdown", ".adoc")
 # 例：sticky.yaml 列违反字面、production config 含黑名单数据
 _DATA_SUFFIXES = (".yaml", ".yml", ".json", ".toml", ".ini", ".csv", ".tsv")
 _TEST_FILE_RE = re.compile(r"(?:^|[/_])test_[\w\-]+\.\w+$|[\w\-]+_test\.\w+$")
+# karma 检测器实现路径 — 这些文件**必须**含触发字面（pattern 定义 / docstring 描述）
+# 不算针对作者作弊，是任何 karma 用户的实现自身必然要描述要拦的字面
+_KARMA_IMPL_RE = re.compile(r"karma/checks/[\w\-]+\.py$|karma/hooks/[\w\-]+\.py$")
 _SCRATCH_NAME_RE = re.compile(r"(?:probe|scratch|sample|playground|fixture)", re.IGNORECASE)
 
 # 这些 tool 会被各类 check 扫；只对它们做上下文判定
@@ -80,5 +83,9 @@ def is_description_context(
     # 6. 文件名含 probe / scratch / sample
     if _SCRATCH_NAME_RE.search(name):
         return True, "探针/样本文件名"
+
+    # 7. karma 检测器实现 — checks/*.py 和 hooks/*.py 必然要含触发字面（定义 pattern）
+    if _KARMA_IMPL_RE.search(file_path.replace("\\", "/")):
+        return True, "karma 检测器实现 (self-reference 必然)"
 
     return False, ""

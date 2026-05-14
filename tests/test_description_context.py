@@ -14,6 +14,18 @@ def test_markdown_doc_is_description():
     assert is_description_context("Write", {"file_path": "x.adoc"})[0]
 
 
+def test_karma_impl_files_are_description():
+    """karma/checks/ 和 karma/hooks/ 下 .py 文件是检测器实现 — 必然要含触发
+    字面（pattern 定义 / docstring 描述）→ 豁免。任何 karma 用户都有这些文件，
+    不算针对作者作弊。"""
+    assert is_description_context("Write", {"file_path": "/x/karma/checks/long_term.py"})[0]
+    assert is_description_context("Edit", {"file_path": "/repo/karma/checks/bypass_karma.py"})[0]
+    assert is_description_context("Write", {"file_path": "/a/karma/hooks/stop.py"})[0]
+    # 但 karma/cli.py / karma/sticky.py 等非 checks/hooks 不豁免
+    assert not is_description_context("Write", {"file_path": "/x/karma/cli.py"})[0]
+    assert not is_description_context("Write", {"file_path": "/x/karma/sticky.py"})[0]
+
+
 def test_data_config_files_are_description():
     """yaml/json/toml 等数据文件 — 内容是描述性数据不是执行字面。"""
     assert is_description_context("Write", {"file_path": "/x/sticky.yaml"})[0]
