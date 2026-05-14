@@ -7,7 +7,7 @@
 
 > **让 Agent 不在长任务中遗忘你最重视的几条原则。**
 
-karma 是 Claude Code 的一个轻量插件，把你**反复强调过但 Agent 总忘**的几条核心方向偏好「钉」在每次对话最显眼的位置，并在 Agent 违反时实时拦截 / 事后提醒。
+karma 是 **Claude Code / Codex CLI / Gemini CLI 通用**的轻量插件，把你**反复强调过但 Agent 总忘**的几条核心方向偏好「钉」在每次对话最显眼的位置，并在 Agent 违反时实时拦截 / 事后提醒。
 
 ## 这是什么
 
@@ -35,14 +35,18 @@ pip install -e .
 # 2. 初始化（创建 ~/.claude/karma/ + 复制 sticky 模板）
 karma init
 
-# 3. 装 Claude Code hooks（自动写 settings.json，保留你已有的其他 hook）
-karma install-hooks
+# 3. 装 hooks（默认 Claude Code 向后兼容；codex / gemini-cli / all 显式选）
+karma install-hooks                    # Claude Code（默认）
+karma install-hooks --backend codex    # Codex CLI（自动启用 features.hooks）
+karma install-hooks --backend gemini-cli  # Gemini CLI
+karma install-hooks --backend all      # 本机检测到的所有客户端一次装
 
 # 验证
 karma doctor    # 应看到 4 个 hook event 全 ✓
 ```
 
-接下来正常用 Claude Code，karma 自动工作。
+接下来正常用 Claude Code / Codex / Gemini CLI 哪家，karma 自动工作。
+保留你已装的其他 hook 插件（vibe-island / rtk / 等），共存不冲突。
 
 ## 你会看到什么
 
@@ -118,6 +122,22 @@ karma 做三件事：
 
 `~/.claude/karma/config.yaml` 调阈值不用改代码。`karma doctor` 看当前生效值
 + 完整字段表 详 [ARCHITECTURE.md](./ARCHITECTURE.md#配置)。
+
+## 支持的 AI 编程客户端
+
+karma v0.4+ 支持 **3 家 AI 编程客户端 hook 协议**（基类抽象，加新家是「填表」）：
+
+| 客户端 | 配置文件 | 启用方式 | 实测状态 |
+|---|---|---|---|
+| Claude Code | `~/.claude/settings.json` | 默认启用 | ✓ v0.1.0 起 |
+| Codex CLI | `~/.codex/hooks.json` | `karma install-hooks --backend codex`<br/>自动启用 `[features] hooks = true` | ✓ v0.3.0 起 |
+| Gemini CLI | `~/.gemini/settings.json` | `karma install-hooks --backend gemini-cli` | ✓ v0.4.0 起 |
+
+加新客户端 backend 看 [karma/backends/HOWTO.md](./karma/backends/HOWTO.md) —
+继承 `JsonHooksBackend` 基类只需填 6 个类属性 + 4 个 event 映射。
+
+vibe-island 等其他通用桥实证支持的客户端清单：cursor / factory / qoder /
+copilot / codebuddy / kimi — 这些都能填表加进 karma backend。
 
 ## 场景化定位
 
