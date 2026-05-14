@@ -33,6 +33,7 @@ from karma.violations import load_all
 
 KARMA_DIR = Path.home() / ".claude" / "karma"
 EXAMPLE_STICKY = Path(__file__).parent.parent / "data" / "sticky.dev.example.yaml"
+EXAMPLE_CONFIG = Path(__file__).parent.parent / "data" / "config.example.yaml"
 
 # karma hook 在 Claude Code settings.json 里的事件名 → wrapper 文件名 (snake_case)
 _KARMA_HOOK_EVENTS = {
@@ -130,17 +131,25 @@ def _check_hooks_installed() -> dict[str, dict]:
 
 
 def cmd_init() -> int:
-    """创建 ~/.claude/karma/ + 复制 sticky 模板。"""
+    """创建 ~/.claude/karma/ + 复制 sticky 模板 + config 模板。"""
     KARMA_DIR.mkdir(parents=True, exist_ok=True)
+    # sticky 模板
     if STICKY_PATH.exists():
         print(f"sticky.yaml 已存在: {STICKY_PATH}")
-        return 0
-    if not EXAMPLE_STICKY.exists():
+    elif not EXAMPLE_STICKY.exists():
         print(f"模板文件不存在: {EXAMPLE_STICKY}", file=sys.stderr)
         return 1
-    shutil.copyfile(EXAMPLE_STICKY, STICKY_PATH)
-    print(f"创建 sticky.yaml: {STICKY_PATH}")
-    print("编辑用: karma sticky edit")
+    else:
+        shutil.copyfile(EXAMPLE_STICKY, STICKY_PATH)
+        print(f"创建 sticky.yaml: {STICKY_PATH}")
+    # config 模板
+    config_path = KARMA_DIR / "config.yaml"
+    if config_path.exists():
+        print(f"config.yaml 已存在: {config_path}")
+    elif EXAMPLE_CONFIG.exists():
+        shutil.copyfile(EXAMPLE_CONFIG, config_path)
+        print(f"创建 config.yaml: {config_path}")
+    print("编辑用: karma sticky edit  /  vim ~/.claude/karma/config.yaml")
     return 0
 
 

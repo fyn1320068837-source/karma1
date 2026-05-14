@@ -1,0 +1,22 @@
+# karma 配置文件 — 调阈值不用改代码
+#
+# 安装：karma init 会复制本文件到 ~/.claude/karma/config.yaml
+# 缺失字段用代码 DEFAULTS（见 karma/config.py:DEFAULTS）
+
+# 桌面通知开关（macOS osascript / Linux notify-send / Windows msg）
+# 设 false 完全关，或者环境变量 KARMA_NO_NOTIFY=1 临时关
+notify_enabled: true
+
+# 累积告警阈值 — N 分钟内同 sticky 违反 N 次升级 🚨 严重通知
+escalate_threshold: 3
+escalate_window_sec: 1800  # 30 分钟
+
+# violations.jsonl 自动 rotation 配置
+violations_max_lines: 5000          # 超过自动 rotate 为 .1
+violations_keep_history: 3          # 保留 .1 .2 .3，最老删
+
+# session-state json 清理周期（user_prompt_submit 每 turn 跑一次）
+session_state_max_age_days: 30
+
+# SessionState 保留最近 Bash 摘要条数
+max_recent_bash: 15

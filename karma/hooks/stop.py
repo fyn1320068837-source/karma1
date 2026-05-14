@@ -19,7 +19,7 @@ from karma.notify import notify
 from karma.sticky import StickyConfigError, load
 from karma.violations import Violation, append, count_recent, detect
 
-# 累积告警阈值：30 分钟内同 sticky 违反 ≥ 3 次 → 升级严重度
+# 累积告警 default 阈值（fallback，实际从 karma.config 读）
 _ESCALATE_WINDOW_SEC = 1800
 _ESCALATE_THRESHOLD = 3
 
@@ -136,13 +136,21 @@ def main() -> int:
         notify_msgs.append(f"{v.sticky_id} — {v.trigger}")
 
     # 桌面通知（合并多条违反到一条 notification 避免轰炸；fail open）
-    # 累积告警：本次违反含 30 分钟内已累积 ≥3 次同 sticky → 升级严重度
+    # 累积告警：本次违反含窗口内已累积超阈值 → 升级严重度（阈值从 config 读）
     if notify_msgs:
+        try:
+            from karma.config import load as _load_config
+            cfg = _load_config()
+            window_sec = cfg["escalate_window_sec"]
+            threshold = cfg["escalate_threshold"]
+        except Exception:
+            window_sec = _ESCALATE_WINDOW_SEC
+            threshold = _ESCALATE_THRESHOLD
         hit_sticky_ids = {h.sticky_id for h in check_hits} | {
             v.sticky_id for v in keyword_violations if v.sticky_id not in seen_ids
         }
-        counts = count_recent(window_sec=_ESCALATE_WINDOW_SEC)
-        escalated_ids = [sid for sid in hit_sticky_ids if counts.get(sid, 0) >= _ESCALATE_THRESHOLD]
+        counts = count_recent(window_sec=window_sec)
+        escalated_ids = [sid for sid in hit_sticky_ids if counts.get(sid, 0) >= threshold]
         if escalated_ids:
             notify(
                 f"🚨 karma 严重 — 累积违反 {len(escalated_ids)} 条",

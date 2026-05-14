@@ -74,11 +74,20 @@ def _notify_windows(title: str, message: str) -> bool:
 def notify(title: str, message: str) -> bool:
     """跨平台桌面通知。失败静默返回 False。
 
-    用 KARMA_NO_NOTIFY=1 环境变量关闭（CI / 静音场景）。
+    关闭方式（任一即生效）：
+    - KARMA_NO_NOTIFY=1 环境变量（CI / 静音场景）
+    - config.yaml 的 notify_enabled: false
     title / message 长度建议 < 100 字（macOS 通知中心截断）。
     """
     if os.environ.get("KARMA_NO_NOTIFY"):
         return False
+    # 从 config 读 notify_enabled — fail open（config 加载失败按 True 处理）
+    try:
+        from karma.config import load as _load_config
+        if not _load_config().get("notify_enabled", True):
+            return False
+    except Exception:
+        pass
     if not title and not message:
         return False
     sys_name = platform.system()

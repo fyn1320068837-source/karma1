@@ -127,7 +127,7 @@ def rotate_if_needed(
 
 
 def append(violations: list[Violation], path: Path | None = None) -> None:
-    """append 违反到 jsonl。超 MAX_LINES 自动 rotate。
+    """append 违反到 jsonl。超阈值自动 rotate（阈值从 karma.config 读）。
     path=None 时用 module-level DEFAULT_PATH。"""
     if not violations:
         return
@@ -137,8 +137,13 @@ def append(violations: list[Violation], path: Path | None = None) -> None:
     with path.open("a", encoding="utf-8") as f:
         for v in violations:
             f.write(v.to_json() + "\n")
-    # rotate 用 module-level 配置（测试可 monkeypatch MAX_LINES / KEEP_HISTORY）
-    rotate_if_needed(path)
+    # 从 config 读阈值 — module-level MAX_LINES / KEEP_HISTORY 仍是 fallback default
+    try:
+        from karma.config import load as _load_config
+        cfg = _load_config()
+        rotate_if_needed(path, max_lines=cfg["violations_max_lines"], keep=cfg["violations_keep_history"])
+    except Exception:
+        rotate_if_needed(path)  # config 加载失败 fallback 用 module-level defaults
 
 
 def recent(

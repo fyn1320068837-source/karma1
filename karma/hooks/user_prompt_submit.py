@@ -34,12 +34,17 @@ def main() -> int:
     # 实际 prompt 在 'prompt' 字段
     _ = payload.get("prompt", "")  # 不需要 — 我们只注入 additionalContext
 
-    # 每 turn 清理一次 30 天前的 session-state 文件（低频任务，user_prompt_submit
-    # 每 turn 跑一次正合适）。异常不该阻塞 sticky 注入。
+    # 每 turn 清理一次老 session-state 文件（清理周期从 config 读，默认 30 天）。
+    # 异常不该阻塞 sticky 注入。
     try:
-        purge_old_states(max_age_days=30)
+        from karma.config import load as _load_config
+        cfg = _load_config()
+        purge_old_states(max_age_days=cfg["session_state_max_age_days"])
     except Exception:
-        pass
+        try:
+            purge_old_states(max_age_days=30)
+        except Exception:
+            pass
 
     try:
         sticky_list = load()

@@ -168,10 +168,13 @@ def test_rotation_keep_history_count(tmp_path: Path) -> None:
 
 
 def test_append_triggers_rotation_automatically(tmp_path: Path, monkeypatch) -> None:
-    """append() 末尾自动调 rotate_if_needed — 超阈值时自动 rotate。"""
-    import karma.violations as v
-    monkeypatch.setattr(v, "MAX_LINES", 10)
-    monkeypatch.setattr(v, "KEEP_HISTORY", 3)
+    """append() 末尾自动调 rotate_if_needed — 超阈值时自动 rotate。
+    阈值从 karma.config 读，测试 monkeypatch config.load 返回低阈值。"""
+    import karma.config as cfg_mod
+    monkeypatch.setattr(
+        cfg_mod, "load",
+        lambda path=None: {**cfg_mod.DEFAULTS, "violations_max_lines": 10, "violations_keep_history": 3},
+    )
     p = tmp_path / "violations.jsonl"
     items = [
         Violation(ts=i, session_id="s", sticky_id=f"r{i}", trigger="x", snippet=".")
