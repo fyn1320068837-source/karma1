@@ -54,6 +54,16 @@ _PATTERNS = [
         "长 hash / UUID 字面在比较或 case_id 赋值里（测试集 case ID 写死）",
         "不要把测试集 case 的 ID 写死到 if 分支或 case_id 常量。用通用判定逻辑。",
     ),
+    (
+        # 变量名带测试集语义 + 列表里至少 1 个长 hex 字面 → 写死 case ID
+        # 例 gold_cases = ["a1b2c3d4e5f6a7b8", ...] / known_failing_ids = [...]
+        re.compile(
+            r"""\b\w*(?:gold|eval|test|fixture|known|case|truth)_?(?:cases?|ids?|set|examples?|failing|skip)\w*\s*=\s*\[[^\]]*['"][a-f0-9]{16,}""",
+            re.IGNORECASE,
+        ),
+        "测试集 / case 列表里写死长 hash 字面",
+        "用通用 fixture / 算法生成 case ID，不要把具体 case 写死到列表。",
+    ),
 ]
 
 

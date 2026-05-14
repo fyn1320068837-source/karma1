@@ -10,7 +10,8 @@ from unittest.mock import patch
 
 import yaml
 
-from karma.hooks import stop, user_prompt_submit
+from karma.hooks import post_tool_use, stop, user_prompt_submit
+from karma import session_state
 
 
 def _patch_paths(monkeypatch, tmp_path: Path, sticky_items: list[dict] | None = None):
@@ -111,3 +112,40 @@ def test_stop_no_transcript_no_op(monkeypatch, tmp_path, capsys):
     captured = capsys.readouterr()
     assert rc == 0
     assert json.loads(captured.out) == {}
+
+
+def test_post_tool_use_write_records_read(monkeypatch, tmp_path, capsys):
+    """Write 文件后 post_tool_use 既 record_edit 也 record_read —
+    Agent 写过的内容自己知道，后续 Edit 同文件不该被 read_first 多余拦。
+    """
+    monkeypatch.setattr("karma.session_state.DEFAULT_DIR", tmp_path)
+    payload = json.dumps({
+        "session_id": "write_then_edit",
+        "tool_name": "Write",
+        "tool_input": {"file_path": "/x/new.py", "content": "x = 1"},
+        "tool_response": "File created successfully",
+    })
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    rc = post_tool_use.main()
+    assert rc == 0
+    # 验证 state 文件里 read_files 含 /x/new.py
+    state = session_state.load("write_then_edit", base_dir=tmp_path)
+    assert "/x/new.py" in state.read_files, "Write 应该同时 record_read"
+    assert "/x/new.py" in state.edit_files
+
+
+def test_post_tool_use_edit_does_not_imply_read(monkeypatch, tmp_path, capsys):
+    """Edit 只改部分内容 → 不该 record_read（read_first 仍要拦未读 Edit）。"""
+    monkeypatch.setattr("karma.session_state.DEFAULT_DIR", tmp_path)
+    payload = json.dumps({
+        "session_id": "edit_only",
+        "tool_name": "Edit",
+        "tool_input": {"file_path": "/x/existing.py", "old_string": "a", "new_string": "b"},
+        "tool_response": "ok",
+    })
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    rc = post_tool_use.main()
+    assert rc == 0
+    state = session_state.load("edit_only", base_dir=tmp_path)
+    assert "/x/existing.py" not in state.read_files, "Edit 不应自动 record_read"
+    assert "/x/existing.py" in state.edit_files

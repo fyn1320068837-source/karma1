@@ -34,6 +34,100 @@ from karma.violations import load_all
 KARMA_DIR = Path.home() / ".claude" / "karma"
 EXAMPLE_STICKY = Path(__file__).parent.parent / "data" / "sticky.example.yaml"
 
+# karma hook 在 Claude Code settings.json 里的事件名 → wrapper 文件名 (snake_case)
+_KARMA_HOOK_EVENTS = {
+    "UserPromptSubmit": "user_prompt_submit",
+    "PreToolUse": "pre_tool_use",
+    "PostToolUse": "post_tool_use",
+    "Stop": "stop",
+}
+
+
+def _hooks_dir() -> Path:
+    return Path.home() / ".claude" / "hooks"
+
+
+def _settings_path() -> Path:
+    return Path.home() / ".claude" / "settings.json"
+
+
+def _settings_backup_path() -> Path:
+    return Path.home() / ".claude" / "settings.json.before-karma"
+
+
+def _karma_wrapper_path(hook_name_lower: str) -> Path:
+    return _hooks_dir() / f"karma_{hook_name_lower}.py"
+
+
+def _karma_event_entry(hook_name_lower: str) -> dict:
+    """构造一条 karma hook entry — Claude Code settings.json hooks 字段格式。"""
+    return {
+        "matcher": "*",
+        "hooks": [{"type": "command", "command": str(_karma_wrapper_path(hook_name_lower))}],
+    }
+
+
+def _is_karma_entry(entry: dict) -> bool:
+    """判断 hook entry 是不是 karma 装的（任一 command 路径含 karma_ 前缀）。"""
+    for h in entry.get("hooks", []):
+        if "karma_" in h.get("command", ""):
+            return True
+    return False
+
+
+def _load_settings() -> dict:
+    p = _settings_path()
+    if not p.exists():
+        return {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+
+
+def _save_settings(data: dict) -> None:
+    p = _settings_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _remove_karma_entries(settings: dict) -> dict:
+    """从 settings.hooks 移除所有 karma entry，保留其他 hook。"""
+    hooks = settings.get("hooks", {})
+    for event in list(hooks.keys()):
+        hooks[event] = [e for e in hooks[event] if not _is_karma_entry(e)]
+        if not hooks[event]:
+            del hooks[event]
+    return settings
+
+
+def _add_karma_entries(settings: dict) -> dict:
+    """给 settings.hooks 4 个 event 各加一条 karma entry。调用方负责先清旧。"""
+    settings.setdefault("hooks", {})
+    for event, fname in _KARMA_HOOK_EVENTS.items():
+        settings["hooks"].setdefault(event, [])
+        settings["hooks"][event].append(_karma_event_entry(fname))
+    return settings
+
+
+def _check_hooks_installed() -> dict[str, dict]:
+    """诊断每个 hook event 的安装状态 — wrapper 存在 + settings 含引用。"""
+    settings = _load_settings()
+    hooks = settings.get("hooks", {})
+    result: dict[str, dict] = {}
+    for event, fname in _KARMA_HOOK_EVENTS.items():
+        wrapper = _karma_wrapper_path(fname)
+        in_settings = any(
+            _is_karma_entry(e) for e in hooks.get(event, [])
+            if any(fname in h.get("command", "") for h in e.get("hooks", []))
+        )
+        result[event] = {
+            "wrapper_exists": wrapper.exists(),
+            "wrapper_executable": wrapper.exists() and os.access(wrapper, os.X_OK),
+            "in_settings": in_settings,
+        }
+    return result
+
 
 def cmd_init() -> int:
     """创建 ~/.claude/karma/ + 复制 sticky 模板。"""
@@ -168,17 +262,38 @@ def cmd_doctor() -> int:
     except StickyConfigError as e:
         print(f"  sticky 加载: ✗ {e}")
         return 1
-    # TODO: 检查 hook 是否已装到 Claude Code 配置
-    print(f"  hook 安装检测: (待实施)")
-    return 0
+
+    # hook 安装检测 — 每个 event 三项：wrapper 存在 / 可执行 / settings.json 含引用
+    status = _check_hooks_installed()
+    print(f"  hook 安装检测:")
+    all_ok = True
+    any_missing = False
+    for event in ("UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"):
+        s = status[event]
+        if s["wrapper_exists"] and s["wrapper_executable"] and s["in_settings"]:
+            print(f"    {event}: ✓ wrapper + settings 都在")
+        else:
+            all_ok = False
+            any_missing = True
+            problems = []
+            if not s["wrapper_exists"]:
+                problems.append("wrapper 缺失")
+            elif not s["wrapper_executable"]:
+                problems.append("wrapper 不可执行")
+            if not s["in_settings"]:
+                problems.append("settings.json 未引用")
+            print(f"    {event}: ✗ {', '.join(problems)}")
+    if any_missing:
+        print(f"  → 运行 `karma install-hooks` 修复")
+    return 0 if all_ok else 1
 
 
 def cmd_install_hooks() -> int:
-    """生成 hook wrapper 脚本并提示用户怎么配置 Claude Code。"""
-    hooks_dir = Path.home() / ".claude" / "hooks"
+    """生成 wrapper + 自动写 settings.json（idempotent + 备份 + 保留其他 hook）。"""
+    hooks_dir = _hooks_dir()
     hooks_dir.mkdir(parents=True, exist_ok=True)
     karma_python = sys.executable  # 用当前 venv python（含 karma 包），避免 PATH 问题
-    for hook_name in ("user_prompt_submit", "pre_tool_use", "post_tool_use", "stop"):
+    for hook_name in _KARMA_HOOK_EVENTS.values():
         wrapper = hooks_dir / f"karma_{hook_name}.py"
         wrapper.write_text(
             f"#!{karma_python}\n"
@@ -189,32 +304,30 @@ def cmd_install_hooks() -> int:
         )
         wrapper.chmod(0o755)
         print(f"  生成: {wrapper}")
-    # 清理旧版 post_response wrapper (如果存在)
+    # 清理旧版 post_response wrapper
     old_pr = hooks_dir / "karma_post_response.py"
     if old_pr.exists():
         old_pr.unlink()
         print(f"  删除旧版: {old_pr}")
 
-    print(f"\n使用的 Python: {karma_python}")
-    print(f"\n把以下配置加到 ~/.claude/settings.json 的 hooks 块（PascalCase 事件名）:")
-    print()
-    print("""  "UserPromptSubmit": [
-    {"matcher": "*", "hooks": [{"type": "command", "command": "%s/karma_user_prompt_submit.py"}]}
-  ],
-  "PreToolUse": [
-    {"matcher": "*", "hooks": [{"type": "command", "command": "%s/karma_pre_tool_use.py"}]}
-  ],
-  "PostToolUse": [
-    {"matcher": "*", "hooks": [{"type": "command", "command": "%s/karma_post_tool_use.py"}]}
-  ],
-  "Stop": [
-    {"matcher": "*", "hooks": [{"type": "command", "command": "%s/karma_stop.py"}]}
-  ]""" % (hooks_dir, hooks_dir, hooks_dir, hooks_dir))
+    # 备份原 settings.json（仅首次，不覆盖已有备份）
+    settings_path = _settings_path()
+    backup_path = _settings_backup_path()
+    if settings_path.exists() and not backup_path.exists():
+        backup_path.write_text(settings_path.read_text(encoding="utf-8"), encoding="utf-8")
+        print(f"  备份原 settings: {backup_path}")
+
+    # 改 settings.json — 先清旧 karma entry 再加新的（idempotent + 保留他人 hook）
+    settings = _load_settings()
+    _remove_karma_entries(settings)
+    _add_karma_entries(settings)
+    _save_settings(settings)
+    print(f"  已配置 {settings_path}（4 个 hook event）")
     return 0
 
 
 def cmd_uninstall_hooks() -> int:
-    hooks_dir = Path.home() / ".claude" / "hooks"
+    hooks_dir = _hooks_dir()
     n = 0
     for hook_name in ("user_prompt_submit", "pre_tool_use", "post_tool_use", "stop", "post_response"):
         wrapper = hooks_dir / f"karma_{hook_name}.py"
@@ -222,7 +335,17 @@ def cmd_uninstall_hooks() -> int:
             wrapper.unlink()
             n += 1
             print(f"  删除: {wrapper}")
-    print(f"已删除 {n} 个 hook wrapper。Claude Code 配置请手动清理。")
+    # 从 settings.json 也移除 karma entry
+    settings_path = _settings_path()
+    if settings_path.exists():
+        settings = _load_settings()
+        before = sum(len(e) for e in settings.get("hooks", {}).values())
+        _remove_karma_entries(settings)
+        after = sum(len(e) for e in settings.get("hooks", {}).values())
+        if before > after:
+            _save_settings(settings)
+            print(f"  从 settings.json 移除 {before - after} 个 karma entry")
+    print(f"已删除 {n} 个 hook wrapper。")
     return 0
 
 

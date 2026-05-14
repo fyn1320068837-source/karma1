@@ -15,14 +15,24 @@ from pathlib import Path
 DEFAULT_DIR = Path.home() / ".claude" / "karma" / "session-state"
 MAX_RECENT_BASH = 15  # 保留最近 N 条 Bash 摘要
 
-# Claude Code background 任务启动时 tool_response 的完整 marker — 整个句式要匹配
-# 避免任意文本里出现「Output is being written to:」子串就被误判为 background marker
-# （例：git diff 输出含本文件注释里的示例字面，子串匹配会假阳）
-_BG_OUTPUT_FILE_RE = re.compile(
-    # 捕获文件路径到下一个空白或句末标点（marker 句尾的 `.` / `,` 不是路径一部分）
-    r"Command running in background with ID:\s+\S+\.\s+Output is being written to:\s*([^\s.,;]+(?:\.[^\s.,;]+)*)",
-    re.IGNORECASE,
-)
+# Claude Code 真实 background tool_response 是 dict {stdout, stderr, backgroundTaskId, ...}
+# 老 marker regex（扫字面 "Command running in background..."）只在文档/示例字面里出现，
+# 真实 hook payload 用不上。改成从 dict 提取 backgroundTaskId + 从 command 解析 > 重定向。
+
+# shell stdout 重定向 — `cmd > /path` / `cmd >> /path` 提取目标
+# 要求 `>` 前是开头或空白，避开 `2>` `3>` fd 重定向；后面是路径字符
+_REDIRECT_RE = re.compile(r"(?:^|\s)>{1,2}\s*([/.\w][^\s|;&]*)")
+
+
+def _parse_redirect_target(command: str) -> str | None:
+    """从 shell 命令解析最后一个 stdout 重定向路径。
+
+    `cmd > /tmp/x.log 2>&1` → /tmp/x.log
+    没重定向返回 None。
+    """
+    matches = _REDIRECT_RE.findall(command)
+    paths = [m for m in matches if not m.startswith("&")]
+    return paths[-1] if paths else None
 
 # 测试通过信号 — 出现 N passed / all green / 全绿勾
 _PASS_RE = re.compile(
@@ -31,17 +41,21 @@ _PASS_RE = re.compile(
 )
 
 # 测试失败信号 — 精确匹配（不要单独的 'error' / 'traceback' 子串，假阳性高）
-# - "1 failed" pytest 风格计数
+# - "N failed" (N>=0) pytest 风格计数
 # - "FAILED test_x" pytest 单测失败行（行首或空白后）
 # - "FAILURES" 章节标题
-# - "Traceback (most recent call last)" 真 Python traceback（不是字面词 traceback）
-# - AssertionError 等明确的失败异常
+# - "Traceback (most recent call last)" 真 Python traceback
+# - AssertionError / RuntimeError / ImportError 等明确失败异常
+# - 行首 "ERROR:" / "FATAL:" 前缀（go test / cargo / 自家测试常见）
+# - "N error(s)" 计数 N>=1（明确区分 "0 errors"）
 _FAIL_RE = re.compile(
     r"\b\d+\s+failed\b"
     r"|(?:^|\n)FAILED\s"
     r"|\bFAILURES?\b"
     r"|Traceback\s*\(most\s+recent\s+call\s+last\)"
-    r"|\b(?:AssertionError|RuntimeError)\b",
+    r"|\b(?:AssertionError|RuntimeError|ImportError)\b"
+    r"|(?:^|\n)\s*(?:ERROR|FATAL)\s*:"
+    r"|\b[1-9]\d*\s+errors?\b",
     re.IGNORECASE | re.MULTILINE,
 )
 
@@ -107,23 +121,30 @@ class SessionState:
             self.edit_files.append(file_path)
             self.last_edit_ts = self._next_ts()
 
-    def record_bash(self, command: str, output: str, run_in_background: bool = False) -> None:
+    def record_bash(self, command: str, output, run_in_background: bool = False) -> None:
         if not command:
             return
         is_test = bool(_TEST_CMD_RE.search(command))
-        out_str = str(output)
-        # background 任务启动时 output 是 marker 不是真实输出 — 记进 pending 等 catchup
-        # 关键：只在 tool_input.run_in_background=True 时识别 marker，
-        # 否则任意命令 stdout 含 marker 字面（自指/echo/cat 等）会被假阳 record。
+
+        # Claude Code 真实 tool_response 是 dict {stdout, stderr, backgroundTaskId, ...}
+        # 老协议 / 同步直传 string 也要兼容
+        if isinstance(output, dict):
+            stdout = str(output.get("stdout", "") or "")
+            stderr = str(output.get("stderr", "") or "")
+            out_str = stdout if not stderr else (stdout + "\n" + stderr)
+        else:
+            out_str = str(output or "")
+
+        # background 任务启动 — stdout/stderr 是空的，真实输出在用户重定向文件
+        # 推 pending 等 catchup 读重定向目标文件
         if run_in_background:
-            bg_match = _BG_OUTPUT_FILE_RE.search(out_str)
-            if bg_match:
+            redirect_target = _parse_redirect_target(command)
+            if redirect_target:
                 self.pending_bg_tasks.append({
-                    "cmd": command[:100],
-                    "output_file": bg_match.group(1).strip(),
+                    "cmd": command[:200],
+                    "output_file": redirect_target,
                     "started_ts": time.time(),
                 })
-                # 仍然记一条 snapshot，但 output_passed/failed 留空（待 catchup 补）
                 self.recent_bash.append(BashSnapshot(
                     ts=time.time(),
                     command_summary=command[:100],

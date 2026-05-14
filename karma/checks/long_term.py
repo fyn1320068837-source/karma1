@@ -34,6 +34,16 @@ _PATTERNS_ALL = [
         "黑/白名单字面量列表 (变量名匹配黑白名单语义)",
         "把黑白名单提到配置或用规则代替，不要在代码里写死具体名单。",
     ),
+    (
+        # 全大写常量名 + 5 元素以上字符串列表（捕捉 BAD_USERS / SPECIAL_IDS / KNOWN_BOTS 等
+        # 不带 blacklist 字眼但是常见硬编码名单变量名风格）
+        # 要求 5+ 元素避开 EXAMPLES=['a','b'] 这种短小测试样本
+        re.compile(
+            r"""\b[A-Z][A-Z0-9_]{2,}\s*=\s*\[\s*(?:["'][^"'\n]+["']\s*,\s*){4,}""",
+        ),
+        "全大写常量 + 5+ 元素字符串列表（疑似硬编码黑/白名单）",
+        "全大写常量列表通常是硬编码名单 — 提到配置或用规则代替。",
+    ),
 ]
 
 # 仅 Bash tool 检测 — 这些 flag 在文档/代码字符串里出现是描述，不是真违反
@@ -53,9 +63,18 @@ _PATTERNS_BASH_ONLY = [
 # 仅 Write/Edit 代码内容 — TODO/HACK 标记在 Bash 命令里没意义
 _PATTERNS_WRITE_EDIT_ONLY = [
     (
-        re.compile(r"#\s*(TODO|FIXME|HACK|XXX|临时|tmp)\b", re.IGNORECASE),
+        re.compile(r"(?:#|//|--)\s*(TODO|FIXME|HACK|XXX|临时|tmp)\b", re.IGNORECASE),
         "代码含 TODO / FIXME / HACK / 临时 注释",
         "把临时注释解决掉再提交，或者在 PR 里明确 follow-up 计划。",
+    ),
+    (
+        # 明确「打补丁/绕过/凑数」意图的注释（M3 之前关键词层兜底，现在工程层精准化捕获）
+        re.compile(
+            r"(?:#|//|--)\s*[^\n]{0,60}?(?:先打个?补丁|临时方案|快速绕过|workaround|hack\s*around|quick\s*fix|凑数|短期\s*目标|hack\s+for|patch\s+for\s+now)",
+            re.IGNORECASE,
+        ),
+        "代码含「打补丁 / 绕过 / 凑数 / workaround」意图注释",
+        "把这种「先这样」意图解决掉 — 找根因方案再提交。",
     ),
 ]
 

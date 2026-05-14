@@ -108,23 +108,25 @@ def test_word_error_alone_not_failed(tmp_path):
 # -------- background 任务输出 catch-up --------
 
 def test_record_bg_task_then_catchup(tmp_path):
-    """background 任务启动 → record_bg_start；任务完成 → catchup 读 output。"""
+    """background 任务启动 → pending；任务完成 → catchup 读用户重定向 log。
+
+    Claude Code 真实 tool_response 是 dict {stdout, stderr, backgroundTaskId, ...}。
+    catchup 从 command 解析 `> /path` 重定向取真实输出。
+    """
     s = SessionState(session_id="s")
     log_path = tmp_path / "bg.log"
-    # 启动：tool_response 是 background marker，需显式 run_in_background=True 才识别
     s.record_bash(
-        "pytest tests/",
-        f"Command running in background with ID: xyz. Output is being written to: {log_path}.",
+        f"pytest tests/ > {log_path} 2>&1",
+        {"stdout": "", "stderr": "", "backgroundTaskId": "abc"},
         run_in_background=True,
     )
-    # background 启动时还没 PASS 信号
+    # background 启动 stdout 是空，还没 PASS 信号
     assert not s.has_recent_test_pass()
     # 任务真完成，写入 log
     log_path.write_text("===== 99 passed in 0.05s =====")
     # catchup
     n = s.catchup_pending_bg()
     assert n == 1
-    # 现在 has_recent_test_pass = True
     assert s.has_recent_test_pass()
 
 
@@ -133,8 +135,8 @@ def test_catchup_skips_missing_log(tmp_path):
     s = SessionState(session_id="s")
     log_path = tmp_path / "never_written.log"
     s.record_bash(
-        "pytest tests/",
-        f"Command running in background with ID: xyz. Output is being written to: {log_path}.",
+        f"pytest tests/ > {log_path} 2>&1",
+        {"stdout": "", "backgroundTaskId": "abc"},
         run_in_background=True,
     )
     n = s.catchup_pending_bg()
@@ -147,8 +149,8 @@ def test_bg_failed_task_catchup_marks_failed(tmp_path):
     s = SessionState(session_id="s")
     log_path = tmp_path / "bg.log"
     s.record_bash(
-        "pytest tests/",
-        f"Command running in background with ID: xyz. Output is being written to: {log_path}.",
+        f"pytest tests/ > {log_path} 2>&1",
+        {"stdout": "", "backgroundTaskId": "abc"},
         run_in_background=True,
     )
     log_path.write_text("FAILED tests/test_x.py::test_y\n1 failed, 5 passed")
@@ -156,19 +158,55 @@ def test_bg_failed_task_catchup_marks_failed(tmp_path):
     assert not s.has_recent_test_pass()
 
 
-def test_bg_marker_in_stdout_without_bg_flag_ignored(tmp_path):
-    """任意命令 stdout 含 marker 字面但 run_in_background=False → 不识别为 bg。
+def test_bg_no_redirect_no_pending(tmp_path):
+    """background 任务命令没有 > 重定向 → pending 不能定位 output file，跳过 record。
 
-    防止自指循环：cat / echo / print 包含 marker 字面的内容时误判 record pending。
+    （catchup 没有可读的真实输出，evidence check 无法接到通过证据 — 用户应该总是
+    重定向 background 任务的 stdout）。
     """
     s = SessionState(session_id="s")
-    bogus_log = tmp_path / "phantom.log"
-    fake_marker = (
-        f"Command running in background with ID: ghost. "
-        f"Output is being written to: {bogus_log}."
+    s.record_bash(
+        "pytest tests/",
+        {"stdout": "", "backgroundTaskId": "abc"},
+        run_in_background=True,
     )
-    s.record_bash("cat sometext.txt", fake_marker, run_in_background=False)
     assert s.pending_bg_tasks == []
+
+
+def test_bg_dict_with_stdout_passed_synchronous(tmp_path):
+    """run_in_background=False 时 tool_response dict 的 stdout 字段被正确读取。"""
+    s = SessionState(session_id="s")
+    s.record_bash(
+        "pytest tests/",
+        {"stdout": "===== 99 passed in 0.05s =====", "stderr": ""},
+        run_in_background=False,
+    )
+    assert s.has_recent_test_pass()
+
+
+def test_parse_redirect_target():
+    """从 shell 命令字符串解析 > 重定向路径。"""
+    from karma.session_state import _parse_redirect_target
+    assert _parse_redirect_target("pytest > /tmp/x.log") == "/tmp/x.log"
+    assert _parse_redirect_target("pytest > /tmp/x.log 2>&1") == "/tmp/x.log"
+    assert _parse_redirect_target("pytest 2>&1 > /tmp/x.log") == "/tmp/x.log"
+    assert _parse_redirect_target("pytest >> /tmp/x.log") == "/tmp/x.log"
+    assert _parse_redirect_target("pytest tests/") is None
+    # 不要被 fd 重定向（2>&1）误捕
+    assert _parse_redirect_target("pytest 2>&1") is None
+
+
+def test_write_implies_read_for_same_file(tmp_path):
+    """Write 一个文件后，has_read 应为 True — Agent 写过的内容自己当然知道。
+
+    post_tool_use hook 对 Write/NotebookEdit 既 record_edit 也 record_read，
+    避免后续 Edit 同文件被 read_first 多余拦。
+    """
+    # 这个测试验证 has_read 逻辑 — 真实 record_read 由 post_tool_use 触发
+    s = SessionState(session_id="s")
+    s.record_edit("/x/new.py")
+    s.record_read("/x/new.py")  # 模拟 post_tool_use 对 Write 做的事
+    assert s.has_read("/x/new.py")
 
 
 def test_load_missing_returns_empty(tmp_path):

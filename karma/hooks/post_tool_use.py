@@ -25,6 +25,7 @@ def main() -> int:
         print(json.dumps({}))
         return 0
 
+
     session_id = payload.get("session_id", "") or "default"
     tool_name = payload.get("tool_name", "")
     tool_input = payload.get("tool_input", {}) or {}
@@ -39,13 +40,21 @@ def main() -> int:
     if tool_name == "Read":
         fp = tool_input.get("file_path", "")
         state.record_read(fp)
-    elif tool_name in ("Edit", "Write", "NotebookEdit"):
+    elif tool_name in ("Write", "NotebookEdit"):
+        # Write / NotebookEdit 替换或创建整个文件 — Agent 完全知道写入后内容
+        # 既 record_edit（推 last_edit_ts）也 record_read（后续 Edit 不被 read_first 多余拦）
         fp = tool_input.get("file_path", "") or tool_input.get("notebook_path", "")
+        state.record_edit(fp)
+        state.record_read(fp)
+    elif tool_name == "Edit":
+        # Edit 只改部分内容 — 仍要求事先 Read 全文（read_first 检测真违反）
+        fp = tool_input.get("file_path", "")
         state.record_edit(fp)
     elif tool_name == "Bash":
         cmd = tool_input.get("command", "") or ""
         is_bg = bool(tool_input.get("run_in_background"))
-        state.record_bash(cmd, str(tool_response), run_in_background=is_bg)
+        # 不强转 str — record_bash 内部判 dict (Claude Code 真实格式) 或 string
+        state.record_bash(cmd, tool_response, run_in_background=is_bg)
 
     try:
         session_state.save(state)
