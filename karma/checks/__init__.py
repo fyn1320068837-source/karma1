@@ -36,7 +36,7 @@ class CheckHit:
 
 
 class CheckFn(Protocol):
-    def __call__(self, **kwargs) -> CheckHit | None: ...
+    def __call__(self, **_) -> CheckHit | None: ...
 
 
 REGISTRY: dict[str, CheckFn] = {

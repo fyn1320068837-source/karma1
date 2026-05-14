@@ -17,6 +17,7 @@ karma = "karma.cli:main"
 dev = [
     "pytest>=8.0",
     "ruff>=0.5",
+    "vulture>=2.14",   # 死代码扫描 — 跑 `vulture karma/ --min-confidence 60`
 ]
 
 [build-system]
@@ -28,7 +29,8 @@ packages = ["karma"]
 artifacts = ["data/*.yaml"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"data/sticky.example.yaml" = "data/sticky.example.yaml"
+"data/sticky.dev.example.yaml" = "data/sticky.dev.example.yaml"
+"data/config.example.yaml" = "data/config.example.yaml"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
