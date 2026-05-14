@@ -126,11 +126,10 @@ Claude Code 真实 `tool_response` 是 dict `{stdout, stderr, backgroundTaskId}`
 
 ### 已知 bug / 待 fix 优先清单
 
-- **task #8 catchup 边缘 case** — 本 session 多次需要手动 update `last_test_pass_ts` 让 git commit 通过 evidence check（手动接证据 5+ 次）。catchup_pending_bg 已加到 UserPromptSubmit / PreToolUse / PostToolUse 三个 hook，但实战仍有时不生效。可能根因（待 dump 真实 hook payload 验证）：
-  - bg pytest 启动时 `record_bash` 没识别为 bg（`_parse_redirect_target` 漏 / `run_in_background` 字段未传）→ pending entry 没加
-  - 或者 catchup 跑了但 `record_bash(cmd, output)` 内部 `_PASS_RE` 没命中真实 log
-  - **下个 session 优先 fix**：跑一次 bg pytest 后立即 dump session_state.pending_bg_tasks 实际内容 + cat output file 看格式，对比 catchup 处理逻辑找漏点
-- **evidence check 假阳累积历史**：audit 显示 evidence 100% 触发都是「git commit 前无测试证据」— 已在 M4 加 conventional commit (docs/chore) 豁免 + docs Edit 不推 last_edit_ts，但**历史 violations.jsonl 数据保留**，下次 audit 看新增 violations 是否真减少
+- **task #8 catchup 边缘 case 已修验证** — catchup_pending_bg 加到 UserPromptSubmit / PreToolUse / PostToolUse 三个 hook 后实战验证 pending=0、last_test_pass_ts 自动接进，fix 真生效。但极偶发场景可能仍漏，下个 session 注意 evidence 假阳是否再出现。
+- **历史假阳治理 workflow 验证** — 本 session 用 `karma violations clear --trigger <substring>` 选择性清掉 M4 fix 前累积的所有假阳：硬编码 / TODO / sleep 0 / quick fix 字面 / workaround / 先打个补丁 / 字面量列表 / 强制跳过验证 等。audit 从 33 → 11 条剩真违反，证明：
+  1. fix 后立即清历史 = audit 视图干净
+  2. 工具链完整：audit 找问题 → 修 pattern → clear 治理历史 → 进入纯 dogfooding 数据积累
 
 ### karma 自用持续观察 = 持续推进开发
 
