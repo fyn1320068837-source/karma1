@@ -39,6 +39,27 @@
 | **M4 dogfooding 三连 fix**（本 session 用户实战触发 force_block + 累积纠正驱动） | ① **violations.py turn=None fallback bug** — `recent_turns / count_recent_turns` 把无 turn 字段的老违反通过 `.get("turn", 0)` fallback 成 0 落入当前窗口造成假阳。dogfooding 实证：新对话 turn=1 window=3 → cutoff=-2 → 老违反 turn=0 被误数触发 force_block。修：`if turn_raw is None: continue` 直接跳过。② **stop.py force_block 跟「不阻塞 / 继续推进」语义自我矛盾** — 累积「停下太多」违反触发 force_block 要求 Agent「必须停下让用户介入」恰好再次违反规则本身。修：sticky schema 加 `force_block_exempt: bool` 字段（配置驱动去硬编码 sticky id 名）+ stop.py 从 sticky 列表读豁免集合；默认模板 + 作者 sticky.yaml 给 keep-pushing-no-stop / non-blocking-parallel 加 `force_block_exempt: true`。③ **doctor 显示 force_block 豁免名单** + README/ARCHITECTURE 同步字段说明 + 撤回 ARCHITECTURE 残留错诊断「Stop hook 在 user-continuous 不跑」（已实证 trace 5 条真 GUID session 触发）。测试 227 → 232。 | 最新 |
 | **M5 多 backend 横向扩展**（v0.3.0 → v0.4.2，5 个 release） | 从「Claude Code 专用」升级「多 AI 编程客户端通用」。① **v0.3.0 Codex CLI backend**：抽 `karma/backends/` Backend Protocol；实测发现 Codex feature 真名 `hooks` 不是 vibe-island 写的 `codex_hooks`；exec 模式不触发 hook（[GitHub #17532](https://github.com/openai/codex/issues/17532)）。② **v0.4.0 Gemini CLI backend**：event 名完全不同（BeforeAgent/AfterAgent/BeforeTool/AfterTool）；Stop 字段 `prompt_response` 适配；karma 4 wrapper basename 跨 3 backend 复用。③ **v0.4.1 抽 `JsonHooksBackend` 通用基类**：从 vibe-island 实证 9 家清单（cursor/factory/qoder/copilot/codebuddy/kimi 等）学到多客户端同模式，让加新 backend 变 6 类属性「填表」+ 4 行 event 映射。④ **v0.4.2 bypass_karma `2>/dev/null` 假阳修**：dogfooding 实测发现的真 bug — stderr 转黑洞被误识别为 write_op。`karma/backends/HOWTO.md` 5 步走文档让社区贡献门槛低。**作者本机三家全装实测装机/卸装/hook 真触发 catch 违反全跑通**。测试 232 → 304，4 件套（ruff/mypy/vulture/pytest）+ CI 跨平台跨 Python 版本全绿。**未实测的 client 不预加 backend**（sticky #1）— 等装实际 client 真跑实测再加。| 125f361 → c417ed2 |
 
+## 真验证盲区：codex / gemini TUI hook 调度从没在作者本机真触发
+
+2026-05-14 同事即将首装时实测发现：vibe-island bridge.log 767 行全部
+`source=claude`，**0 条 `source=codex`** / **0 条 `source=gemini`** —
+作者本机 codex / gemini 装着 hook 但**从没真用过 TUI 跑过**。
+
+这意味 karma v0.3.0 → v0.4.7 多 backend 横向扩展实测**全是模拟 payload
++ 装机文件验证**：
+- ✓ karma 端 5/5（装机/wrapper 真处理 payload/sticky 注入/拦截/写入）
+- ✓ codex 端 3/3（features.hooks / config.toml / wrappers 可执行）
+- ❌ codex / gemini TUI 真启动 + 真完成一个 turn + 真触发 hook 调度 — **未验证**
+
+`codex exec` / `codex debug prompt-input` / pipe stdin codex 都**不触发**
+hook（codex 协议设计）。codex TUI 真启动用 `script -q` PTY 通过，但精确
+按键时序 expect 难一行命令脚本化（codex ratatui prompt 字符识别复杂）。
+
+**后续验证只能真用户 5 秒手动操作**：起 `codex` TUI 输入 `/hooks` 看
+karma 4 hook 是否真注册 + 输入 prompt 看是否真触发。
+
+不是 karma 的 bug — 是 codex / gemini 客户端调度行为只能在真 TUI 验证。
+
 ## ✅ Stop hook matcher fix 已实战验证生效 + 一条 karma 管不到的元认知盲区
 
 **生效证据**：fix 后 Stop hook 真触发 decision=block 干预（用户在 UI 看到了
