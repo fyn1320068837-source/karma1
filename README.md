@@ -412,13 +412,22 @@ karma v2 「事后审计」架构有天花板 — Agent 容易学到「怎么不
 - **v0.4.26→v0.4.27 反思式语气改造** — keep-pushing / chinese-plain 两条表达风格类规则的 suggested_fix 改反思式（自检你是不是真合理停下 / 真技术专名必须保留）。`long-term` 补丁 + `non-blocking` sleep 等工程行为类规则保持命令式（防 Agent 自我合理化）
 - **v0.4.28 SessionStart sticky baseline** — Claude Code SessionStart hook 在 session 起手注入 sticky baseline。`source` 字段区分 startup / resume / clear / compact，compact 场景额外加强警示
 - **v0.4.29 PreCompact 落盘 + 两端夹击 compact 失忆** — compact 触发前 PreCompact hook 落盘完整 sticky 状态到 `~/.claude/karma/pre_compact_snapshot.md`（含 sticky 内容 + 最近 5 turn 违反清单 + 时间戳），SessionStart(source=compact) 重起时读盘加强提醒。两端夹击让 sticky 跨 compact 不丢。**不阻止 compact** — compact 是 Claude Code 保护机制 karma 不该干扰
-- **v0.4.30 SubagentStart/Stop + 删 PostCompact 幽灵代码** — SubagentStart hook 注入 sticky baseline 让子 Agent 跑长任务也按这些方向；SubagentStop 给主 Agent 注入透明度提醒 + sticky id 回声「sticky 仍生效，接结果时自检」。不扫子 Agent transcript 内容（substring match 假阳爆发），真违反检测交给主 Agent 处理子 Agent 结果时的 PreToolUse / PostToolUse / Stop 三道 hook。同时确认 PostCompact **协议层不支持 additionalContext** → 删 v0.4.29 残留的 post_compact.py 幽灵代码（输出会被 Claude Code 静默丢）。install-hooks 现装 8 个 hook event
+- **v0.4.30 SubagentStart/Stop + 删 PostCompact 幽灵代码** — SubagentStart 注入 sticky baseline，SubagentStop 给主 Agent 透明度提醒。确认 PostCompact 协议层不支持 additionalContext → 删 v0.4.29 残留 post_compact.py 幽灵代码。install-hooks 现装 8 hook event
+- **v0.4.31~33 真根因 fix** — subagent_start.py ensure_ascii 子 Agent 收乱码 / bypass_karma `json.dump\b` regex 缺 word boundary 假阳 / strip_shell_quoted_literals 复合 shell 嵌套（heredoc + indirect Step 顺序错导致 release notes markdown 反引号路径漏剥）
+- **v0.4.34~39 真闭环架构 — 按当前模型自动适应阈值** — 用户洞察连击驱动：
+  - **v0.4.34 子 Agent 独立 state 架构** — 用户「彼此互不干扰 + 临时独立 + 自动销毁」原则。session_state 加 agent_id 路由（`<session_id>__<agent_id>.json`），SubagentStop 自动销毁子 Agent 临时 state
+  - **v0.4.35 model_threshold 表** — 用户「真衰减拐点 70K-200K 不是 8K，差 10x，建议至少 60K + 自动适应不用手动调」。Opus 80K / Sonnet 60K / Haiku 30K / 老模型 8K 向后兼容 / 未知 fallback 60K
+  - **v0.4.36~38 hook payload 路径尝试** — SessionStart payload 真有 model（v0.4.36），但 user_prompt_submit / PreToolUse / PostToolUse / Subagent* 都没（v0.4.38 dogfooding 验证 7 turn state.model 仍 None 证明）
+  - **v0.4.37 子 Agent model 真捕获** — 用户「自己试一下就知道答案」。manual run 实验真发现：tool_name 真是 "Agent" 不是 "Task"，tool_input 真含 model 字段。主 PreToolUse(Agent) 入队 pending → SubagentStart pop 写子 Agent state.model
+  - **v0.4.39 真根本路径 — transcript_path** — 用户「怎么查 model 你不是就能查么」+「我随时 /status 都能看到当前 model」。深挖发现所有 hook payload 真有 transcript_path → reverse scan jsonl 找最后非合成 model 字面 → karma 真权威路径，不依赖 payload 含 model 字段。dogfooding 真生效证据：state.model='claude-opus-4-7' 真写入
 
-后续观察方向：跨场景真用户使用后看字面试探多样性是否下降 + compact 场景 sticky 真不再淡化 + 反思式语气是不是被 Agent 学到新一轮套话 anti-pattern + 子 Agent 跑长任务时 sticky 真继承下去。
+**真效果对比**（本机 dogfooding 真测）：1 turn 累积 ~60K token 场景下，v0.4.32 (8K 阈值) 触发 7+ 次中段提醒，v0.4.39 (opus 80K 真阈值) 触发 0 次 — **7x+ 频率真降，「Agent 防御性写作扭曲」副作用真根因消除**。
+
+后续观察方向：跨场景真用户使用 + 真验证 transcript_path 真路径在长 session（jsonl 几 MB 级别）真性能 + 真用户跨模型场景。
 - [CLAUDE.md](./CLAUDE.md) — 给 Claude Code 协作的项目宪章
 - [karma v1 归档](https://github.com/jhaizhou-ops/karma-v1) — v1 探索过程与反思
 - HANDOFF.md — 内部开发接力文档（非最终用户文档）
 
-karma v2 已完成 M0-M5（多 backend 横向扩展）+ v3 演化六步（中段注入 / 字面多样性监测 / 反思式语气 / SessionStart baseline / PreCompact 落盘 / SubagentStart 装机）+ 多轮评审 Agent 交叉评审 + 多轮 dogfooding 修真 bug，**351 个测试全绿**（含跨平台 locale 检测 17 条 + 多 backend 守护 22 条 + compact/subagent hook 6 条）。三家 AI 客户端（Claude Code / Codex CLI / Gemini CLI）实测装机 / 卸装 / hook 触发全跑通。
+karma v2 已完成 M0-M5（多 backend 横向扩展）+ v3 演化（中段注入 / 字面多样性监测 / 反思式语气 / SessionStart baseline / PreCompact 落盘 / SubagentStart 装机 / 子 Agent 独立 state + 按当前模型自动适应阈值）+ 多轮评审 Agent 交叉评审 + 多轮 dogfooding 修真 bug，**383 个测试全绿**。三家 AI 客户端（Claude Code / Codex CLI / Gemini CLI）实测装机 / 卸装 / hook 触发全跑通。
 
 **用户状态**：2026-05-14 起进入「真实非作者用户使用期」— 之前一年是作者 dogfooding 自用观察，现在开始有同事/朋友首次接触 karma。这是 dogfooding 转 real-user 的关键时刻，新用户首装踩坑会持续触发新一波改进。验证标准是「开发过程能否减少 Agent 在长任务中的方向漂移」— 而**开发 karma 的过程本身就是它最严酷的自用观察期**。
