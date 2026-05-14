@@ -32,13 +32,25 @@ def test_registry_has_three_backends():
     assert isinstance(REGISTRY["gemini-cli"], GeminiCLIBackend)
 
 
-def test_backends_all_have_4_karma_wrappers():
-    """3 个 backend 都映射到 4 个 karma wrapper basename（跨 backend hook 入口
-    完全复用）。Gemini event 名不同（BeforeAgent 等）但 wrapper 还是 user_prompt_submit。"""
-    expected_wrappers = {"user_prompt_submit", "pre_tool_use", "post_tool_use", "stop"}
+def test_backends_all_have_4_common_karma_wrappers():
+    """3 个 backend 都有 4 个通用 karma wrapper basename（跨 backend hook 入口复用）。
+    v0.4.28：Claude Code 额外加 session_start wrapper（karma v3 第四步），所以
+    断言改成「至少包含 4 通用 wrapper」而不是「恰好 4 个」。
+    """
+    common_wrappers = {"user_prompt_submit", "pre_tool_use", "post_tool_use", "stop"}
     for name in ("claude-code", "codex", "gemini-cli"):
         wrappers = set(REGISTRY[name].hook_events().values())
-        assert wrappers == expected_wrappers, f"{name} wrapper 不齐: {wrappers}"
+        assert common_wrappers.issubset(wrappers), (
+            f"{name} 缺通用 wrapper: 缺 {common_wrappers - wrappers}"
+        )
+
+
+def test_claude_code_has_session_start_wrapper():
+    """v0.4.28 (karma v3 第四步)：Claude Code 多加 SessionStart 注入 sticky baseline
+    特别处理 compact 后场景。Codex / Gemini 协议没对应 event，是 Claude Code 特有。
+    """
+    cc_wrappers = set(REGISTRY["claude-code"].hook_events().values())
+    assert "session_start" in cc_wrappers
 
 
 def test_gemini_uses_different_event_names():

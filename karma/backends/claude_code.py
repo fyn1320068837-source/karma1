@@ -20,6 +20,11 @@ class ClaudeCodeBackend(JsonHooksBackend):
         "PreToolUse": "pre_tool_use",
         "PostToolUse": "post_tool_use",
         "Stop": "stop",
+        # v0.4.28（karma v3 第四步）: SessionStart 注入 sticky baseline，每次
+        # session 起手 sticky 就在 context 里。`source` 字段区分 startup /
+        # resume / clear / compact —— compact 场景特别重要（compact 后 sticky
+        # 被压缩淡化，SessionStart 重起时强注入是真根本路径）。
+        "SessionStart": "session_start",
     }
 
     def build_event_entry(self, hook_name_lower: str, event_name: str) -> dict:

@@ -1,14 +1,17 @@
-"""SessionStart hook — Session 开始 / 恢复时加载 sticky。
+"""SessionStart hook — session 起手注入 sticky baseline（karma v3 第四步）。
 
 Claude Code 协议:
-- stdin payload: {source: "startup"|"resume"|"clear"|"compact", session_id, model, ...}
+- stdin payload: {source: "startup"|"resume"|"clear"|"compact", session_id, ...}
 - stdout: {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "..."}}
 
-策略：
-- startup：首次加载 sticky（可选，只做日志）
-- resume：重加载 sticky.yaml，检查版本 drift，防过期 sticky 复活
-- clear：重置 session state
-- compact：同步 compact 后的状态
+设计（v0.4.28 升级 — 之前 stub 只输出摘要文字现在真注入 sticky baseline）：
+- 跟 UserPromptSubmit 注入互补 — 后者每 turn 注入完整 sticky + ⚠️ 标记，
+  前者 session 级一次注入精简 baseline（id + 第一行 preference）
+- compact 场景特别重要 — sticky 在 compact 时被压缩淡化，SessionStart 重起时
+  强注入是真根本路径（PostCompact 不支持 additionalContext 走不通）
+
+性能预算：< 30ms（不该卡客户端启动）
+Fail open：配置坏 / 异常 → 不注入静默 passthrough。
 """
 
 from __future__ import annotations
@@ -16,7 +19,20 @@ from __future__ import annotations
 import json
 import sys
 
-from karma.sticky import load as load_sticky, StickyConfigError
+from karma.sticky import StickyConfigError, load as load_sticky
+
+
+def _passthrough() -> None:
+    print(json.dumps({}))
+
+
+def _emit(additional_context: str) -> None:
+    print(json.dumps({
+        "hookSpecificOutput": {
+            "hookEventName": "SessionStart",
+            "additionalContext": additional_context,
+        }
+    }, ensure_ascii=False))
 
 
 def main() -> int:
@@ -24,68 +40,41 @@ def main() -> int:
         payload = json.load(sys.stdin)
     except json.JSONDecodeError as e:
         print(f"karma SessionStart: 输入 JSON 解析失败 ({e})", file=sys.stderr)
-        print(json.dumps({}))
+        _passthrough()
         return 0
-    
-    source = payload.get("source", "")
-    model = payload.get("model", "")
-    
+
+    source = payload.get("source", "")  # startup / resume / clear / compact
+
     try:
         sticky_list = load_sticky()
     except StickyConfigError as e:
-        # sticky 配置错误，fail loud
         print(f"karma SessionStart: {e}", file=sys.stderr)
-        print(json.dumps({
-            "hookSpecificOutput": {
-                "hookEventName": "SessionStart",
-                "additionalContext": f"❌ sticky 配置错误：{e}"
-            }
-        }))
+        _emit(f"❌ sticky 配置错误：{e}")
         return 0
     except Exception as e:
         print(f"karma SessionStart: sticky 加载失败 ({e})", file=sys.stderr)
-        print(json.dumps({}))
+        _passthrough()
         return 0
-    
-    # 根据 source 生成提醒
-    if source == "resume":
-        if sticky_list:
-            ids = ", ".join(s.id for s in sticky_list)
-            context = f"Session 已恢复。已加载 {len(sticky_list)} 条核心方向：{ids}"
-            print(json.dumps({
-                "hookSpecificOutput": {
-                    "hookEventName": "SessionStart",
-                    "additionalContext": context
-                }
-            }))
-        else:
-            print(json.dumps({}))
-    elif source == "startup":
-        if sticky_list:
-            context = f"新 session 已启动。已加载 {len(sticky_list)} 条核心方向。"
-            print(json.dumps({
-                "hookSpecificOutput": {
-                    "hookEventName": "SessionStart",
-                    "additionalContext": context
-                }
-            }))
-        else:
-            print(json.dumps({}))
-    elif source == "compact":
-        if sticky_list:
-            context = f"Context compact 已完成。{len(sticky_list)} 条核心方向重新加载。"
-            print(json.dumps({
-                "hookSpecificOutput": {
-                    "hookEventName": "SessionStart",
-                    "additionalContext": context
-                }
-            }))
-        else:
-            print(json.dumps({}))
+
+    if not sticky_list:
+        _passthrough()
+        return 0
+
+    # baseline 注入 — 精简版（每 sticky 一行：id + 第一行 preference）
+    # compact 场景加强提醒
+    lines = []
+    if source == "compact":
+        lines.append("[karma 上下文 compact 后重起 — 这些核心方向必须留在记忆里]")
+    elif source == "resume":
+        lines.append("[karma session 恢复 — sticky baseline 重新加载]")
     else:
-        # source == "clear" or unknown
-        print(json.dumps({}))
-    
+        lines.append(f"[karma session 起手 sticky baseline — source={source or 'startup'}]")
+    for s in sticky_list:
+        first_line = s.preference.strip().split("\n")[0]
+        lines.append(f"  - {s.id}: {first_line}")
+    if source == "compact":
+        lines.append("compact 后 sticky 容易被压缩淡化 — 留意你正在按这些方向行为。")
+    _emit("\n".join(lines))
     return 0
 
 

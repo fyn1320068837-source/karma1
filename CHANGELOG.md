@@ -4,6 +4,70 @@
 
 ## [Unreleased]
 
+## [0.4.28] — 2026-05-14（feat — karma v3 第四步：SessionStart 注入 sticky baseline）
+
+### 真触发
+
+用户问：「claude 的 hook 接口还有好多个，研究下其他几个还没有使用的 hook 接口
+有哪些对咱们 karma 有价值值得探索一下」。子 Agent 研究 9 个未用 hook 真协议后
+排序，**SessionStart 工程量最小价值最高**：
+
+- 支持 `additionalContext` 注入信道
+- 有 `source` 字段区分 startup / resume / clear / **compact**
+- compact 场景特别重要 — sticky 在 compact 时被压缩淡化，PostCompact 又**不支持
+  additionalContext** 走不通。SessionStart(source=compact) 是真重起注入路径
+
+### 真根因
+
+karma v2 当前仅 UserPromptSubmit 每 turn 注入完整 sticky。但 session 起手时（包括
+compact 后重起）没 baseline 注入。Agent 接手 session 后第一 turn user_prompt
+还没发就开始处理 — sticky 不在 context 里。
+
+PostCompact 协议层不支持注入（子 Agent 研究真发现）— 之前 HANDOFF 想用 PostCompact
+解决 compact 失忆走不通。SessionStart(source=compact) 才是真路径。
+
+### Feat
+
+`karma/hooks/session_start.py` 已存在但是早期 stub（只输出摘要文字不注入 sticky
+真内容）。v0.4.28 升级成真注入 sticky baseline：
+- 每 sticky 一行：id + 第一行 preference（精简版省 token）
+- compact 场景加开头警示（「上下文 compact 后重起 — 这些核心方向必须留在记忆里」）
+  + 结尾警示（「compact 后 sticky 容易被压缩淡化 — 留意你正在按这些方向行为」）
+- 跟 UserPromptSubmit 每 turn 完整注入互补 — session 级一次 baseline，turn 级动态
+
+`karma/backends/claude_code.py` `_HOOK_EVENTS` 加 `"SessionStart": "session_start"`
+让 install-hooks 真装 wrapper 到 `~/.claude/settings.json`。Codex / Gemini 协议
+没对应 event 是 Claude Code 特有 — `test_backends_all_have_4_common_karma_wrappers`
+断言改成「至少含 4 通用 wrapper」+ 新增 `test_claude_code_has_session_start_wrapper`
+单独测 Claude Code 特性。
+
+### 真生效证据
+
+4 种 source 真跑通：
+```
+source=startup  → [karma session 起手 sticky baseline — source=startup] + 8 sticky
+source=resume   → [karma session 恢复 — sticky baseline 重新加载] + 8 sticky
+source=clear    → [karma session 起手 sticky baseline — source=clear] + 8 sticky
+source=compact  → [karma 上下文 compact 后重起 — 这些核心方向必须留在记忆里]
+                  + 8 sticky
+                  + compact 后 sticky 容易被压缩淡化 — 留意你正在按这些方向行为。
+```
+
+352 测试全过（含 1 个新 SessionStart 守护 case）。
+
+### karma v3 演化清单（4 步）
+
+- v0.4.24 中段注入 anchor（PostToolUse 信道）
+- v0.4.25 字面多样性元行为监测（dev 工具）
+- v0.4.26→v0.4.27 反思式语气改造（keep-pushing + chinese-plain）
+- **v0.4.28 SessionStart 注入 sticky baseline**（session 级 + compact 失忆真路径）
+
+### 安装
+
+新装：用户首次装会自动包含 SessionStart wrapper。
+已装升级：用户跑 `karma install-hooks --backend claude-code` 重装 — 加新 SessionStart
+入口到 `~/.claude/settings.json`。
+
 ## [0.4.27] — 2026-05-14（patch — v0.4.26 过度推广修正：仅 keep-pushing + chinese-plain 反思式）
 
 ### 真触发
