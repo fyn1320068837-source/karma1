@@ -198,6 +198,7 @@ append-only，行数超 5000 自动 rotation（`.1` `.2` `.3` 保留 3 个历史
 | `no_testset_no_future_leakage` | 不喂测试集 | gold_cases 反喂 / 跨 split 复制 / 长 hash 在比较或赋值位置 |
 | `read_before_write` | 先读再写 | Edit/Write 前未 Read 该 file_path（Write 新文件豁免） |
 | `keep_pushing_no_stop` | 不主动停 | response 末尾 80 字按豁免优先级判：1) 含推进信号（我现在/接下来 + 动词）→ 豁免（有下一步计划）2) 含问号 → 豁免（合理询问决策应鼓励）3) 含停顿语气词（下次 / 先到这 / 告一段落）→ 命中（明确暂停）4) 默认命中（纯陈述完结无推进无问号 = 真停下） |
+| `bypass_karma_detection` | 不绕检测 | Bash 命令含 karma 内部字面（last_test_pass_ts / pending_bg_tasks / session-state json 路径）+ 写操作 → 命中「绕开 karma」。豁免：karma 官方 CLI / 只读 inspection / commit message 引号字面（剥后骨架不含敏感字面） |
 
 每个 check 函数签名：`def check(*, tool_name, tool_input, response, session_state, **_) -> CheckHit | None`。
 
