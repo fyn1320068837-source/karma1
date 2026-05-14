@@ -333,6 +333,56 @@ def test_stop_hook_force_blocks_on_accumulated_violations(monkeypatch, tmp_path,
         f"reason 应说明强制累积，实际：{out.get('reason', '')}"
 
 
+def test_stop_hook_force_block_exempts_keep_pushing(monkeypatch, tmp_path, capsys):
+    """keep-pushing-no-stop 自身豁免 force_block — 语义自相矛盾。
+
+    累积「停下太多」违反 → 触发 force_block 让 Agent「停下让用户介入」恰好
+    再违反 keep-pushing 本身。dogfooding 实战发现：本 session 触发 4 次
+    keep-pushing，再 1 次就到 force_block 阈值会自我矛盾。
+    """
+    _, violations_path = _patch_paths(monkeypatch, tmp_path, sticky_items=[
+        {
+            "id": "keep-pushing-no-stop",
+            "preference": "不停下",
+            "violation_keywords": [],
+            "violation_checks": ["keep_pushing_no_stop"],
+        },
+    ])
+    monkeypatch.setattr("karma.session_state.DEFAULT_DIR", tmp_path)
+    # 预设 5 条 keep-pushing 违反（force_threshold 默认 5）
+    from karma.violations import Violation, append as v_append
+    items = [
+        Violation(ts=i, session_id="kp_force", sticky_id="keep-pushing-no-stop",
+                  trigger="response 纯陈述完结", snippet=".", turn=t)
+        for i, t in enumerate(range(1, 6))
+    ]
+    v_append(items, path=violations_path)
+    state = session_state.SessionState(session_id="kp_force")
+    state.turn_count = 5
+    session_state.save(state, base_dir=tmp_path)
+
+    # transcript 命中 keep-pushing（纯陈述完结）
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text(json.dumps({
+        "type": "assistant",
+        "message": {"content": [{"type": "text", "text": "做完了，commit 推上。"}]},
+    }) + "\n", encoding="utf-8")
+    payload = json.dumps({
+        "session_id": "kp_force",
+        "transcript_path": str(transcript),
+    })
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    stop.main()
+    out = json.loads(capsys.readouterr().out)
+    # 应该走 keep-pushing 轻干预路径（reason 含 'keep-pushing'）
+    # 不该走 force_block 路径（reason 不含 '强制干预'）
+    if out.get("decision") == "block":
+        reason = out.get("reason", "")
+        assert "强制干预" not in reason, (
+            f"keep-pushing 不应触发 force_block 自我矛盾，应走轻干预。reason: {reason}"
+        )
+
+
 def test_stop_hook_blocks_when_keep_pushing_violated(monkeypatch, tmp_path, capsys):
     """Agent response 末尾停顿词 + 命中 keep-pushing → Stop hook 输出 decision=block
     让 Agent 不真停下，继续生成。"""
