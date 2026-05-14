@@ -18,7 +18,7 @@ def test_load_partial_user_config_merges_with_defaults(tmp_path):
     cfg = load(p)
     assert cfg["notify_enabled"] is False
     assert cfg["escalate_threshold"] == 5
-    assert cfg["escalate_window_sec"] == DEFAULTS["escalate_window_sec"]
+    assert cfg["escalate_window_turns"] == DEFAULTS["escalate_window_turns"]
     assert cfg["violations_max_lines"] == DEFAULTS["violations_max_lines"]
 
 

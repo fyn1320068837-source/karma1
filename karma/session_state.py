@@ -214,8 +214,9 @@ class SessionState:
         - 实际 race 表现：手动 update ltp 到 future 后，下次 hook 把 ltp 拉回
           到 max(已 update ltp, le) + epsilon — 即 ltp >= le + epsilon
           但小于 update 的 future 值
-        - 下次 session 修复方向：catchup 用 atomic file lock，或者 record_bash
-          内 _next_ts 用 monotonic counter 而非 max(ltp, le)
+        - TODO（已知边界）：极少数情况下多 hook 同时跑会让 ltp 时序略偏，
+          但 has_recent_test_pass 用 ltp >= le 比较，偏移在 epsilon 量级
+          不影响实际判定。要彻底消除可加 atomic file lock。
         """
         if not self.pending_bg_tasks:
             return 0
