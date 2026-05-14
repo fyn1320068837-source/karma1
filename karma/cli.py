@@ -1,8 +1,11 @@
 """karma CLI — sticky 管理 + 违反观察 + hook 安装。
 
 Usage:
-    karma init [--minimal]         创建 ~/.claude/karma/ + 复制 sticky/config 模板
-                                   --minimal 装 5 条真中性核心（默认 7 条完整开发场景）
+    karma init [--minimal|--no-minimal]
+                                   创建 ~/.claude/karma/ + 复制 sticky/config 模板
+                                   默认按系统语言偏好自动选：中文 → 7 条完整；
+                                   非中文/检测不到 → 5 条精简（砍 chinese_plain）
+                                   --minimal / --no-minimal 强制覆盖
     karma install-hooks            自动配置 Claude Code hooks
     karma uninstall-hooks          移除 hook 配置
     karma doctor                   检查环境 + hook 装机 + 当前生效 config
@@ -160,17 +163,32 @@ def _check_hooks_installed() -> dict[str, dict]:
     return result
 
 
-def cmd_init(minimal: bool = False) -> int:
+def cmd_init(minimal: bool | None = None) -> int:
     """创建 ~/.claude/karma/ + 复制 sticky 模板 + config 模板。
 
-    minimal=True 装 5 条真中性核心模板（适合英文母语 / 非 ML 用户）。
-    minimal=False（默认）装 7 条软件开发完整模板（含 chinese-plain + no-testset
-    场景化规则）。
+    minimal=None（默认）→ 自动按系统语言偏好选：中文用户 7 条完整含
+    chinese_plain check；非中文 / 检测不到 → 5 条精简（砍 chinese_plain）。
+    minimal=True 强制装 5 条；minimal=False 强制装 7 条。
 
-    显式参数胜过自动 locale 检测 — 实测 locale.getlocale() 不可靠（macOS 默认
-    en_US 但用户实际可能是中文），让用户显式选避免猜错。
+    跨平台检测见 `karma/locale_detect.py`（macOS 用 defaults read AppleLanguages,
+    Linux 用 $LANG / $LC_ALL）。跟 VS Code / Slack 等 app 安装时自动选语言做法一致。
     """
     KARMA_DIR.mkdir(parents=True, exist_ok=True)
+
+    auto_chose = ""
+    if minimal is None:
+        # 自动按系统语言偏好选（跨平台：macOS defaults / Linux $LANG /
+        # Windows GetUserDefaultUILanguage / fallback POSIX 环境变量）
+        from karma.locale_detect import detect_user_language, is_chinese_user
+        lang = detect_user_language()
+        if is_chinese_user():
+            minimal = False
+            auto_chose = f"（检测到系统语言 {lang!r} → 装完整 7 条含 chinese_plain）"
+        else:
+            minimal = True
+            lang_label = lang or "无法检测"
+            auto_chose = f"（检测到系统语言 {lang_label!r} → 装精简 5 条砍 chinese_plain）"
+
     template = EXAMPLE_STICKY_MINIMAL if minimal else EXAMPLE_STICKY
     label = "5 条真中性核心" if minimal else "7 条完整开发场景"
     # sticky 模板
@@ -181,7 +199,7 @@ def cmd_init(minimal: bool = False) -> int:
         return 1
     else:
         shutil.copyfile(template, STICKY_PATH)
-        print(f"创建 sticky.yaml: {STICKY_PATH} ({label})")
+        print(f"创建 sticky.yaml: {STICKY_PATH} ({label}) {auto_chose}".rstrip())
     # config 模板
     config_path = KARMA_DIR / "config.yaml"
     if config_path.exists():
@@ -190,8 +208,9 @@ def cmd_init(minimal: bool = False) -> int:
         shutil.copyfile(EXAMPLE_CONFIG, config_path)
         print(f"创建 config.yaml: {config_path}")
     print("编辑用: karma sticky edit  /  vim ~/.claude/karma/config.yaml")
-    if not minimal:
-        print("提示：英文母语 / 非 ML 用户可用 `karma init --minimal` 装 5 条精简核心")
+    if auto_chose:
+        override_flag = "--no-minimal" if minimal else "--minimal"
+        print(f"自动选不对？强制覆盖：karma init {override_flag}")
     return 0
 
 
@@ -642,8 +661,15 @@ def main(argv: list[str] | None = None) -> int:
     args = argv[1:]
 
     if cmd == "init":
-        minimal = "--minimal" in args
-        return cmd_init(minimal=minimal)
+        # --minimal 强制 5 条；--no-minimal 强制 7 条；都不带 → None 自动按
+        # 系统语言偏好选
+        if "--minimal" in args:
+            minimal_arg: bool | None = True
+        elif "--no-minimal" in args:
+            minimal_arg = False
+        else:
+            minimal_arg = None
+        return cmd_init(minimal=minimal_arg)
     if cmd == "doctor":
         return cmd_doctor()
     if cmd == "stats":

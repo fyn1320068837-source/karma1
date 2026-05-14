@@ -38,11 +38,10 @@ def _read_settings(home: Path) -> dict:
 
 # ---- install-hooks ----
 
-def test_init_default_installs_7_sticky(fake_home, capsys):
-    """karma init 默认装 7 条 dev.example。"""
+def test_init_explicit_no_minimal_installs_7_sticky(fake_home, capsys):
+    """karma init --no-minimal 强制装 7 条 dev.example（覆盖自动检测）。"""
     import karma.sticky
     monkeypatch_path = fake_home / ".claude" / "karma" / "sticky.yaml"
-    # cmd_init 用 module-level STICKY_PATH，需要 patch
     import unittest.mock
     with unittest.mock.patch.object(cli, "STICKY_PATH", monkeypatch_path):
         with unittest.mock.patch.object(karma.sticky, "DEFAULT_PATH", monkeypatch_path):
@@ -53,8 +52,8 @@ def test_init_default_installs_7_sticky(fake_home, capsys):
     assert len(sticky_list) == 7
 
 
-def test_init_minimal_installs_5_sticky(fake_home, capsys):
-    """karma init --minimal 装 5 条真中性核心（评审 C Agent 「跨用户合理」原则）。"""
+def test_init_explicit_minimal_installs_5_sticky(fake_home, capsys):
+    """karma init --minimal 强制装 5 条精简（覆盖自动检测）。"""
     import karma.sticky
     monkeypatch_path = fake_home / ".claude" / "karma" / "sticky.yaml"
     import unittest.mock
@@ -67,6 +66,58 @@ def test_init_minimal_installs_5_sticky(fake_home, capsys):
     ids = {s.id for s in sticky_list}
     assert "chinese-plain-no-jargon" not in ids
     assert "no-testset-no-future-leakage" not in ids
+
+
+def test_init_auto_chinese_user_installs_7_sticky(fake_home, capsys):
+    """minimal=None + 系统语言中文 → 自动装 7 条含 chinese_plain。"""
+    import karma.sticky
+    import karma.locale_detect
+    monkeypatch_path = fake_home / ".claude" / "karma" / "sticky.yaml"
+    import unittest.mock
+    with unittest.mock.patch.object(cli, "STICKY_PATH", monkeypatch_path):
+        with unittest.mock.patch.object(karma.sticky, "DEFAULT_PATH", monkeypatch_path):
+            with unittest.mock.patch.object(karma.locale_detect, "detect_user_language",
+                                            return_value="zh"):
+                rc = cli.cmd_init(minimal=None)
+    assert rc == 0
+    sticky_list = karma.sticky.load(monkeypatch_path)
+    assert len(sticky_list) == 7
+    out = capsys.readouterr().out
+    assert "zh" in out and "完整" in out  # 反馈给用户自动选了啥
+
+
+def test_init_auto_non_chinese_user_installs_5_sticky(fake_home, capsys):
+    """minimal=None + 系统语言非中文 → 自动装 5 条精简（砍 chinese_plain）。"""
+    import karma.sticky
+    import karma.locale_detect
+    monkeypatch_path = fake_home / ".claude" / "karma" / "sticky.yaml"
+    import unittest.mock
+    with unittest.mock.patch.object(cli, "STICKY_PATH", monkeypatch_path):
+        with unittest.mock.patch.object(karma.sticky, "DEFAULT_PATH", monkeypatch_path):
+            with unittest.mock.patch.object(karma.locale_detect, "detect_user_language",
+                                            return_value="en"):
+                rc = cli.cmd_init(minimal=None)
+    assert rc == 0
+    sticky_list = karma.sticky.load(monkeypatch_path)
+    assert len(sticky_list) == 5
+    out = capsys.readouterr().out
+    assert "en" in out and "精简" in out
+
+
+def test_init_auto_unknown_locale_fallback_to_minimal(fake_home, capsys):
+    """minimal=None + 检测不到（容器 / CI / 异常）→ fallback 5 条精简（最安全）。"""
+    import karma.sticky
+    import karma.locale_detect
+    monkeypatch_path = fake_home / ".claude" / "karma" / "sticky.yaml"
+    import unittest.mock
+    with unittest.mock.patch.object(cli, "STICKY_PATH", monkeypatch_path):
+        with unittest.mock.patch.object(karma.sticky, "DEFAULT_PATH", monkeypatch_path):
+            with unittest.mock.patch.object(karma.locale_detect, "detect_user_language",
+                                            return_value=None):
+                rc = cli.cmd_init(minimal=None)
+    assert rc == 0
+    sticky_list = karma.sticky.load(monkeypatch_path)
+    assert len(sticky_list) == 5
 
 
 def test_install_hooks_creates_wrappers(fake_home, capsys):

@@ -4,6 +4,38 @@
 
 ## [Unreleased]
 
+## [0.2.4] — 2026-05-14（minor — 跨平台 locale 自动检测）
+
+### Added
+
+新模块 `karma/locale_detect.py` — 跟其他 app（VS Code / Slack / Chrome）安装
+时一样的「按系统语言偏好自动选」做法。
+
+用户挑战 v0.2.3 的「locale 检测不可靠所以显式 flag」判断时实测找到：作者机器
+`locale.getlocale()` 返回 `('en_US', 'UTF-8')` 但 `defaults read -g
+AppleLanguages` 返回 `zh-Hans-CN`（作者真实系统语言）。我之前判断错了 —
+Python `locale.getlocale()` 不准，但各平台有标准方法能准确读到用户偏好：
+
+- **macOS**：`defaults read -g AppleLanguages`（系统设置 → 语言与地区里设的真实偏好）
+- **Linux**：`$LC_ALL` > `$LC_MESSAGES` > `$LANG`（POSIX 标准优先级，桌面环境自动设）
+- **Windows**：`ctypes.windll.kernel32.GetUserDefaultUILanguage()` + `locale.windows_locale`
+  查表 LCID → ISO 代码（跟「设置 → 时间和语言 → Windows 显示语言」一致；
+  Windows 默认 shell 通常不设 `$LANG`）
+
+`karma init` 行为变化：
+
+- `karma init`（无 flag）→ **自动按系统语言偏好选**：中文用户装 7 条完整
+  含 chinese_plain；非中文 / 检测不到装 5 条精简。检测结果会打印让用户知道。
+- `karma init --minimal` / `--no-minimal` 强制覆盖自动选择
+- 容器 / CI / 异常环境（locale 全无）→ fallback 5 条精简（最安全默认）
+
+加 17 条跨平台守护测试（mock subprocess / 环境变量 / Windows ctypes 三路径
+独立验证）。
+
+### Test / Quality
+
+- 测试 258 → 275 全过，ruff / mypy / vulture 0 issue。
+
 ## [0.2.3] — 2026-05-14（patch — karma init --minimal flag）
 
 ### Added
@@ -214,7 +246,8 @@ karma v2 的第一个可发布版本，经历多轮 dogfooding + 4 个 Opus 4.7 
 - `.github/workflows/ci.yml` 跨 ubuntu / macOS × py3.11 / 3.12 跑 lint +
   vulture + pytest + wheel build。
 
-[Unreleased]: https://github.com/jhaizhou-ops/karma/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/jhaizhou-ops/karma/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.2.4
 [0.2.3]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.2.3
 [0.2.2]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.2.2
 [0.2.1]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.2.1
