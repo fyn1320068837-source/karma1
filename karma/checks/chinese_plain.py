@@ -122,28 +122,31 @@ def check(*, response: str = "", **_):
     # === Check 2: 术语命中且后续无「括号内中文解释」 ===
     # 严格判定：术语紧跟 0-12 字内出现括号 ( 或 （ + 内部含 ≥2 中文字 = 算解释
     # 仅靠后续中文连接词不算（「oracle 不行」不豁免）
-    for m in _JARGON_RE.finditer(natural):
+    # v0.4.15：jargon 扫描也用 natural_for_ratio（已剥表格 / URL / 版本号 / kebab-snake）
+    # 让表格 cell 里的 jargon 引用 / URL 内英文词豁免（结构性引用不是 jargon 话术）。
+    # dogfooding 真触发：上一 turn 表格 `| 1 | 答 embedding 问 |` 里 embedding 被错拦。
+    for m in _JARGON_RE.finditer(natural_for_ratio):
         # 豁免：jargon 在括号 / 列表里（用户已用括号或列表举例 = 描述 jargon 不是用 jargon）
         # 检测：术语前 N 字内有 ( / （ 开括号 + 当前位置不在闭括号之后
-        before = natural[max(0, m.start() - 40): m.start()]
+        before = natural_for_ratio[max(0, m.start() - 40): m.start()]
         open_paren = max(before.rfind("("), before.rfind("（"))
         close_paren = max(before.rfind(")"), before.rfind("）"))
         if open_paren > close_paren and open_paren >= 0:
             # 当前 jargon 在某个括号里 — 检查括号是不是开放（未闭合）
-            after_text = natural[m.end():]
+            after_text = natural_for_ratio[m.end():]
             if ")" in after_text[:60] or "）" in after_text[:60]:
                 # 括号在 60 字内闭合 → jargon 在「括号说明」里 → 豁免
                 continue
 
-        after_window = natural[m.end(): m.end() + 12]  # 紧邻 12 字内
+        after_window = natural_for_ratio[m.end(): m.end() + 12]  # 紧邻 12 字内
         has_paren_explanation = False
         for bracket_open, bracket_close in [("(", ")"), ("（", "）")]:
             if bracket_open in after_window:
                 # 找最近的括号闭合
                 bo = after_window.find(bracket_open)
-                bc_in_full = natural.find(bracket_close, m.end() + bo)
+                bc_in_full = natural_for_ratio.find(bracket_close, m.end() + bo)
                 if 0 < bc_in_full - (m.end() + bo) < 30:
-                    paren_content = natural[m.end() + bo + 1: bc_in_full]
+                    paren_content = natural_for_ratio[m.end() + bo + 1: bc_in_full]
                     if chinese_char_count(paren_content) >= 2:
                         has_paren_explanation = True
                         break
@@ -153,7 +156,7 @@ def check(*, response: str = "", **_):
         return CheckHit(
             sticky_id=_STICKY_ID,
             trigger=f"术语 {m.group()!r} 后无括号内中文解释",
-            snippet=natural[max(0, m.start() - 20): m.end() + _JARGON_CONTEXT_RADIUS],
+            snippet=natural_for_ratio[max(0, m.start() - 20): m.end() + _JARGON_CONTEXT_RADIUS],
             suggested_fix=f"用了 {m.group()} 后用括号给中文解释（如 `precision (精度)`），或者直接用「精度 / 召回率」等汉字。",
         )
 

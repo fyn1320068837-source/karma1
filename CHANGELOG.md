@@ -4,6 +4,43 @@
 
 ## [Unreleased]
 
+## [0.4.15] — 2026-05-14（patch — chinese-plain jargon 扫描豁免表格 cell 引用）
+
+### 真触发
+
+dogfooding 第 8 次 force_block：上一 turn 末尾我写 markdown 表格汇报
+`| 1 | 答 embedding 问 | ... |` 里 `embedding` 被 jargon 扫错算违反。
+
+深挖：`_TABLE_ROW_RE` 已经在算 ratio 时把表格行剥（line 94），但
+**jargon 词扫描用的是未剥的 `natural`**（line 116），表格 cell 里的
+jargon 没豁免。
+
+按 sticky 设计原理：表格是结构性引用（用户陈列项目术语），不是
+jargon 话术（用户**用** jargon 说话）。表格 cell 里出现 jargon 应该
+跟 URL 内英文词、版本号一样豁免。
+
+### Fix
+
+`karma/checks/chinese_plain.py` jargon 扫描全部从 `natural` 改用
+`natural_for_ratio`（已剥 URL / 表格 / 版本号 / markdown / emoji /
+kebab-snake-ident）。同步改 snippet / 上下文窗口的字符串引用。
+
+### 验证
+
+3 向真测：
+- 表格 cell `| embedding |` → None ✓（结构性引用豁免）
+- 表格外真 jargon `retrieval 做检索` → 命中 ✓（不豁免）
+- 括号内解释 `embedding（嵌入向量）` → None ✓（已有括号检测仍生效）
+
+326 测试全过；加 2 个守护 case。
+
+### 注
+
+本 turn 同时还有 chinese-plain 38% 触发，深挖发现是**真违反不是假阳**
+— 我自己写 release note 风格汇报用了「release note / code identifier
+/ jargon token」类英文复合词没汉字解释。按 sticky 第 3 条原则要求
+**改自己用词**不是改 check。
+
 ## [0.4.14] — 2026-05-14（patch — evidence 两类假阳：chained pytest + heredoc commit prefix）
 
 ### 真触发

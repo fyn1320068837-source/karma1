@@ -380,6 +380,35 @@ def test_chinese_plain_markdown_table_not_counted_in_ratio():
     assert hit is None, f"表格不该拉低中文比例造假阳: {hit}"
 
 
+def test_chinese_plain_jargon_in_table_cell_exempted():
+    """markdown 表格 cell 里的 jargon 是结构性引用不算 jargon 话术。
+
+    v0.4.15 dogfooding 真触发：上一 turn 末尾我写表格 `| 1 | 答 embedding 问
+    | ... |` 里 embedding 被 jargon 扫错算违反。表格行已经在算 ratio 时被
+    `_TABLE_ROW_RE` 剥，但 jargon 扫描没用 natural_for_ratio。fix：jargon
+    扫描也用 natural_for_ratio 让表格 cell 里的 jargon 豁免。
+    """
+    fn = REGISTRY["chinese_plain_no_jargon"]
+    response = (
+        "最终交付清单：\n\n"
+        "| # | 工作 | 证据 |\n"
+        "|---|---|---|\n"
+        "| 1 | 答 embedding 问 | karma v2 代码里只 3 处全是反例 |\n"
+        "| 2 | retrieval 治理候选 | 跟 deep-fix 同根因 |\n"
+    )
+    hit = fn(response=response)
+    assert hit is None, f"表格 cell 里的 jargon 引用是结构性数据不该命中: {hit}"
+
+
+def test_chinese_plain_jargon_outside_table_still_caught():
+    """对偶守护：表格外的真 jargon 仍命中。"""
+    fn = REGISTRY["chinese_plain_no_jargon"]
+    response = "我们用 retrieval 做检索效果不错。" * 3
+    hit = fn(response=response)
+    assert hit is not None, "表格外的真 jargon retrieval 应命中"
+    assert "retrieval" in str(hit.trigger)
+
+
 def test_chinese_plain_kebab_snake_idents_not_counted():
     """项目专有标识符 kebab-case / snake_case（chinese-plain / force_block / karma-v1）
     是 code identifier 不是自然语言 jargon — 算 ratio 时剥。
