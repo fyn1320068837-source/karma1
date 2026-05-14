@@ -4,6 +4,46 @@
 
 ## [Unreleased]
 
+## [0.4.20] — 2026-05-14（patch — keep-pushing 推进信号位置错判：中段推进 + 末尾列表）
+
+### 真触发
+
+v0.4.19 装上后**仍触发**：dogfooding 实测末尾响应「**下次接手做 HANDOFF 候选**...
+（chinese-plain 38% Agent 用词手册 / long-term SEED 清理 / audit timeline
+markdown 输出）」被错算无推进。
+
+### 真根因
+
+`_TAIL_WINDOW=80` 限定只看末尾 80 字 — 推进信号「下次接手做 X」在中段，
+末尾是列表收尾「(A / B / C)」。整 response 已有推进意图但 tail 80 字看不到
+被错算「就此停下」。
+
+这是 v0.4.19 `_PUSH_SIGNAL_RE` 扩展的盲区 — 不是「没识别推进字眼」是
+「推进字眼位置在 tail 外」。
+
+### Fix
+
+`karma/checks/keep_pushing.py` 加新豁免（紧接 `_PUSH_SIGNAL_RE.search(tail)`
+豁免后）：
+
+```python
+# 整 response 含推进规划 + 末尾窗口无明确停顿语气 → 豁免
+if _PUSH_SIGNAL_RE.search(text) and not _STOP_HINT_RE.search(tail):
+    return None
+```
+
+`_PUSH_SIGNAL_RE` 在**整 text** 搜（而非 tail），配合「末尾不含 `_STOP_HINT_RE`
+停顿语气」守护防误豁免（真推进 + 真停顿同时存在该按停顿算）。
+
+### 验证
+
+3 向真测：
+- 推进信号在中段 + 末尾列表收尾 → None ✓（v0.4.20 真根因 fix）
+- 推进信号在中段 + 末尾真停顿语气「先到这」 → 仍命中 ✓（对偶守护）
+- 纯陈述完结无推进无问号 → 仍命中 ✓
+
+335 测试全过；加 2 个守护测试。
+
 ## [0.4.19] — 2026-05-14（patch — keep-pushing 第 3 类假阳：未来规划 / 显式让用户介入）
 
 ### 真触发

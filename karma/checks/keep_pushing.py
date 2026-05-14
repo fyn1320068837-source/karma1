@@ -107,8 +107,18 @@ def check(*, response: str = "", **_):
     text = response.strip()
     tail = text[-_TAIL_WINDOW:]
 
-    # 豁免 1：明确推进信号
+    # 豁免 1：明确推进信号 — tail 直接命中
     if _PUSH_SIGNAL_RE.search(tail):
+        return None
+
+    # v0.4.20：整 response 含推进规划 + 末尾窗口无明确停顿语气 → 豁免。
+    # 真根因：推进信号常在「下次接手做 A / B / C」之后接「(X / Y / Z)」列表结尾，
+    # 整段已有推进意图但 tail 80 字看不到。dogfooding 真触发：v0.4.19 装上后
+    # 「下次接手做 HANDOFF 候选...（chinese-plain / long-term / audit ...）」
+    # 末尾是列表收尾仍被错算无推进。
+    # 守护：要求末尾窗口同时无 _STOP_HINT_RE 命中（不然真有推进 + 真停顿同
+    # 时存在该按停顿算）。
+    if _PUSH_SIGNAL_RE.search(text) and not _STOP_HINT_RE.search(tail):
         return None
 
     # 豁免 2：问号（合理询问决策，鼓励）

@@ -182,6 +182,31 @@ def test_explicit_user_handoff_exempted():
         assert _check(c) is None, f"显式让用户介入合法 stop 应豁免: {c!r}"
 
 
+def test_v420_push_signal_in_middle_tail_pure_statement_exempted():
+    """v0.4.20：推进信号在 response 中段，末尾是列表 / 收尾陈述 → 整段已有
+    推进意图应豁免。
+
+    dogfooding 真触发：「下次接手做 HANDOFF 候选...（chinese-plain / long-term
+    / audit）」 — 「下次接手做」在中段，列表「(X / Y / Z)」在末尾，tail 80
+    字看不到推进信号被错算无推进。
+    """
+    # 推进信号在中段，末尾纯陈述无推进
+    case = "本回合做了 6 件。下次接手做 A 治理 + B 推进 + C 修复。" + \
+        "中段细节填充内容很长。" * 8 + "\n\n最终交付清单已完整。"
+    assert _check(case) is None, "整段已有推进规划但末尾是收尾陈述应豁免"
+
+
+def test_v420_push_in_middle_tail_stop_hint_still_caught():
+    """v0.4.20 对偶守护：整 response 有推进 + 末尾窗口含明确停顿语气 → 仍命中
+    （真停顿优先于「整段有推进」豁免，否则推进 + 停顿同时存在该按停顿算）。
+    """
+    case = "做了 A 跟 B。下次接手做 C 推进规划很完整。" + \
+        "中段细节内容填充很长。" * 8 + "\n\n但今天不做了。先到这。"
+    hit = _check(case)
+    assert hit is not None, "整段有推进 + 末尾真停顿语气仍应拦"
+    assert "先到这" in hit.trigger or "停顿" in hit.trigger
+
+
 def test_v419_real_stop_still_caught():
     """对偶守护：v0.4.19 豁免不影响真停顿语气拦截。"""
     cases = [
