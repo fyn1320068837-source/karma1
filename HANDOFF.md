@@ -28,6 +28,7 @@
 | **M4 keep-pushing 工程层 + Stop hook 真干预** | keep_pushing check（问号 / 停顿语气词双信号）+ Stop hook decision=block 让 Agent 不真停继续生成 + safeguard `stop_block_max_per_turn` 防死循环 | 8502713 |
 | **M4 keep-pushing 反转 + audit 改进建议** | 用户精准纠正：问号是合理决策应豁免，纯陈述完结无下一步才是真停下 → 反转检测方向（推进/问号豁免，停顿词/默认 → 命中）。stats / doctor 显示 stop_block_count；audit 末尾自动改进建议段；catchup 多 hook 跑（UserPromptSubmit+PreToolUse 都跑，task #8 剩余 case）；non_blocking 长任务列表收紧（移除 pytest 等测试命令，保留 docker/build/install）| 8502713 → 最新 |
 | **M4 元层面监管 — 自身被绕过的检测**（用户反馈核心场景） | 回应「这就是一个典型的出现了问题，你绕过/忽略了问题拿了个短期结果」三层实施：① bypass_karma check（Bash 命令含 karma 内部敏感字面 + 写操作 → 命中）② Stop hook 累积强制 decision=block（同 sticky ≥ N 次必须 fix 根因不许继续绕）③ sticky #8 deep-fix-not-bypass 进默认开发模板（preference + 关键词 + 工程层）。strip_shell_quoted_literals 加 python/node/ruby -c flag + placeholder 保护内部引号字面（commit message 自指假阳豁免 + python -c 真执行代码保留扫）| 最新 |
+| **M4 user_prompt_submit 强提醒 fallback** | 用户反馈「你又停下来了，自己加的 sticky 也没拦」根因：Claude Code Stop hook 在 user 立刻接 prompt 时**不跑**（user_prompt_submit 优先级覆盖 Stop hook idle 触发）。fallback：user_prompt_submit hook 读 transcript last assistant message 跑 keep_pushing.check，命中（纯陈述完结无推进）→ 注入「强提醒」段告诉本 turn Claude 上次停了，本 turn 必须立即推进。这是 karma 当前能做的最强 keep-pushing 干预（不依赖 Stop hook 协议层 limitation） | 最新 |
 
 ### 真实工作证据 — 假阳治理后 audit 干净
 
@@ -48,7 +49,7 @@
 
 ### 测试状态
 
-`pytest tests/` → **223/223 passed**（M3+M4 加了 148 个新测试）
+`pytest tests/` → **227/227 passed**（M3+M4 加了 152 个新测试）
 - `tests/test_false_negative_regression.py` — 23 个对偶假阴测试
 - `tests/test_cli.py` — 10 个 CLI 测试
 - `tests/test_description_context.py` — 9 个上下文测试
