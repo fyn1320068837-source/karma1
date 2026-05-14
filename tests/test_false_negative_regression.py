@@ -169,3 +169,143 @@ def test_tests_conftest_hardcoded_id_currently_exempt():
     )
     # 当前：豁免 → hit is None。如果要更严格，改成 assert hit is not None
     assert hit is None, "tests/ 目录当前 catch-all 豁免（M3 决策）"
+
+
+# ============================================================
+# M3 放宽改动的对偶假阴回归（用户反馈：警惕开发迭代模糊真假阳边界）
+# ============================================================
+
+# --- heredoc 区分头部命令：bash heredoc 内是真 shell，python heredoc 内是数据 ---
+
+def test_bash_heredoc_inner_sleep_blocked():
+    """bash <<EOF heredoc 内 sleep 30 是真要执行的 shell 命令，仍要拦。"""
+    fn = REGISTRY["non_blocking_parallel"]
+    cmd = """bash <<'EOF'
+sleep 30
+echo done
+EOF"""
+    hit = fn(tool_name="Bash", tool_input={"command": cmd})
+    assert hit is not None, "bash heredoc 内 sleep 是真执行 — 不该被剥成数据"
+
+
+def test_sh_heredoc_inner_pytest_blocked():
+    """sh <<EOF 内 pytest tests/ 是真要跑测试，仍要拦（缺 background）。"""
+    fn = REGISTRY["non_blocking_parallel"]
+    cmd = """sh <<'EOF'
+cd /repo
+pytest tests/
+EOF"""
+    hit = fn(tool_name="Bash", tool_input={"command": cmd})
+    assert hit is not None, "sh heredoc 内 pytest 是真执行 — 不该被剥成数据"
+
+
+def test_python_heredoc_inner_pytest_literal_passes():
+    """python <<EOF 内 pytest 字面是 Python 数据/字符串，不算执行意图。"""
+    fn = REGISTRY["non_blocking_parallel"]
+    cmd = """python <<'PYEOF'
+import re
+pat = re.compile(r'\\bpytest\\b')
+print(pat.search('foo'))
+PYEOF"""
+    hit = fn(tool_name="Bash", tool_input={"command": cmd})
+    assert hit is None, "python heredoc 内 pytest 字面是数据"
+
+
+def test_cat_heredoc_inner_passes():
+    """cat <<EOF > file 是写文件，内容是数据不是执行。"""
+    fn = REGISTRY["non_blocking_parallel"]
+    cmd = """cat <<'EOF' > /tmp/x.sh
+sleep 30
+EOF"""
+    hit = fn(tool_name="Bash", tool_input={"command": cmd})
+    assert hit is None, "cat heredoc 内容是数据写文件"
+
+
+# --- 关键词层 Write/Edit 注释扫描：意图注释字面要被抓 ---
+
+def test_write_comment_with_intent_keyword_caught(monkeypatch):
+    """Agent Write 代码注释里写自定义触发词 → 关键词层扫注释能抓。
+
+    这个测试假设 task #27 实施后关键词层能扫 Write/Edit 注释行。
+    工程层 long_term 已能抓「先打个补丁」等核心意图词，关键词层补用户自定义词。
+    """
+    from karma.checks.common import extract_natural_language
+    try:
+        # 假设新加的 extract_natural_language 抽出注释 + docstring
+        content = '''def foo():
+    # 自定义触发词:作弊一下
+    return 42'''
+        natural = extract_natural_language(content, ".py")
+        assert "自定义触发词" in natural or "作弊一下" in natural, \
+            f"应抽出注释文本，实际：{natural!r}"
+    except ImportError:
+        # task #27 还没实施 — 测试 fail 提醒
+        assert False, "task #27 extract_natural_language 待实施"
+
+
+# --- commit message 80 字限制 — 标题行就是 hack 类型仍要拦 ---
+
+def test_commit_title_quick_fix_blocked():
+    """git commit 标题行直接是 'quick fix:' 类型仍要拦（80 字内）。"""
+    fn = REGISTRY["long_term_fundamental"]
+    hit = fn(
+        tool_name="Bash",
+        tool_input={"command": 'git commit -m "quick fix: 改个 bug"'},
+    )
+    assert hit is not None, "标题行 quick fix 类型是真违反"
+
+
+def test_commit_title_hack_blocked():
+    """git commit 标题行直接是 'hack: ...' 仍要拦。"""
+    fn = REGISTRY["long_term_fundamental"]
+    hit = fn(
+        tool_name="Bash",
+        tool_input={"command": 'git commit -m "hack: 凑数应付一下"'},
+    )
+    assert hit is not None
+
+
+# --- evidence 加上下文 — 代码任务完成时用「应该」掩盖仍要拦 ---
+
+def test_evidence_weak_claim_in_code_task_blocked():
+    """Agent 说「代码改完了，应该没问题」无测试证据 → 拦。"""
+    fn = REGISTRY["loud_failure_with_evidence"]
+    state = SessionState(session_id="s")
+    hit = fn(response="代码改完了，应该没问题", session_state=state)
+    assert hit is not None, "代码任务上下文里用「应该」掩盖是真违反"
+
+
+def test_evidence_completion_in_code_task_blocked():
+    """Agent 说「修复完成」无测试证据 → 拦。"""
+    fn = REGISTRY["loud_failure_with_evidence"]
+    state = SessionState(session_id="s")
+    hit = fn(response="代码已经修复完成", session_state=state)
+    assert hit is not None
+
+
+# --- 描述上下文豁免 — 正常源码下硬编码仍要拦 ---
+
+def test_normal_source_long_id_if_branch_blocked():
+    """src/handler.py 不是描述上下文 — long-ID if 分支真违反仍拦。"""
+    fn = REGISTRY["long_term_fundamental"]
+    hit = fn(
+        tool_name="Edit",
+        tool_input={
+            "file_path": "/x/src/handler.py",
+            "new_string": 'if turn_id == "abc-def-12345":\n    return special',
+        },
+    )
+    assert hit is not None
+
+
+def test_normal_source_intent_comment_blocked():
+    """src/foo.py 含意图注释 → 拦（工程层意图注释 pattern）。"""
+    fn = REGISTRY["long_term_fundamental"]
+    hit = fn(
+        tool_name="Write",
+        tool_input={
+            "file_path": "/x/src/foo.py",
+            "content": "def f():\n    # 先打个补丁应付一下\n    return None",
+        },
+    )
+    assert hit is not None

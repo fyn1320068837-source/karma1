@@ -73,11 +73,12 @@ def test_deny_bash_sleep(monkeypatch, tmp_path):
     assert violations_path.exists()
 
 
-def test_write_keyword_layer_skipped(monkeypatch, tmp_path):
-    """关键词层不再扫 Write/Edit 内容 — 代码里字面词几乎全是描述/注释/字符串字面假阳。
+def test_write_keyword_layer_scans_comments_only(monkeypatch, tmp_path):
+    """Write/Edit 关键词层只扫注释 + docstring，不扫代码主体。
 
-    Write/Edit 真违反由工程层 violation_checks 用更精准的 pattern + 上下文判定捕获。
-    Stop hook 仍扫 Agent 自然语言 response（关键词表达意图算违反）。
+    用户反馈：关键词层全放 Write/Edit 会漏真违反（注释里写意图字面是真违反）。
+    新语义：关键词层 Write/Edit 扫注释行 + docstring，代码主体不扫
+    （主体里字面赋值几乎全是数据/描述假阳）。
     """
     _patch(monkeypatch, tmp_path, [
         {
@@ -86,7 +87,7 @@ def test_write_keyword_layer_skipped(monkeypatch, tmp_path):
             "violation_keywords": ["硬编码", "先打个补丁"],
         },
     ])
-    # Write 任何含关键词的代码内容 → allow（关键词层不扫）
+    # Write 注释里写违反字眼 → deny（真意图表达）
     out = _run_hook(monkeypatch, {
         "tool_name": "Write",
         "tool_input": {
@@ -94,9 +95,19 @@ def test_write_keyword_layer_skipped(monkeypatch, tmp_path):
             "content": "# 先打个补丁\nMAGIC = 42",
         },
     })
-    assert out["permissionDecision"] == "allow"
+    assert out["permissionDecision"] == "deny", "注释里字面是真意图，要拦"
 
-    # Edit 同理 — 关键词层不再扫 new_string
+    # Write 代码主体字面赋值（字符串数据）→ allow（不扫代码主体）
+    out = _run_hook(monkeypatch, {
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": "/x/src/foo.py",
+            "content": 'MAGIC = "先打个补丁"\n# 这是个变量名常量',
+        },
+    })
+    assert out["permissionDecision"] == "allow", "代码主体字面赋值不扫"
+
+    # Edit 注释行被加 → deny
     out = _run_hook(monkeypatch, {
         "tool_name": "Edit",
         "tool_input": {
@@ -105,7 +116,17 @@ def test_write_keyword_layer_skipped(monkeypatch, tmp_path):
             "new_string": "# 先打个补丁 fix",
         },
     })
-    assert out["permissionDecision"] == "allow"
+    assert out["permissionDecision"] == "deny"
+
+    # 描述上下文（.md 等）仍整段豁免（包括注释层）
+    out = _run_hook(monkeypatch, {
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": "/x/README.md",
+            "content": "# 这条规则拦截「硬编码」「先打个补丁」字眼",
+        },
+    })
+    assert out["permissionDecision"] == "allow", ".md 描述上下文仍豁免"
 
 
 def test_bash_keyword_layer_still_scans(monkeypatch, tmp_path):
