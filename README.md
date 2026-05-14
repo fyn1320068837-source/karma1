@@ -23,16 +23,19 @@ karma 解决的就是这个 — 不让你的最高优先级方向被淹没。
 
 ## 安装
 
+**前置要求**：Python ≥ 3.11 + 已装 Claude Code / Codex CLI / Gemini CLI 至少一家。
+
 3 步上手（< 5 分钟）：
 
 ```bash
-# 1. 拉代码 + 装依赖
+# 1. 拉代码 + 装依赖（Python ≥ 3.11）
 git clone https://github.com/jhaizhou-ops/karma.git
 cd karma
-python -m venv .venv && source .venv/bin/activate
+python3.11 -m venv .venv && source .venv/bin/activate   # 用 python3.11+
 pip install -e .
 
 # 2. 初始化（创建 ~/.claude/karma/ + 复制 sticky 模板）
+#    默认按系统语言偏好自动选 7 条完整（中文）或 5 条精简（其他）。
 karma init
 
 # 3. 装 hooks（默认 Claude Code 向后兼容；codex / gemini-cli / all 显式选）
@@ -41,12 +44,32 @@ karma install-hooks --backend codex    # Codex CLI（自动启用 features.hooks
 karma install-hooks --backend gemini-cli  # Gemini CLI
 karma install-hooks --backend all      # 本机检测到的所有客户端一次装
 
-# 验证
-karma doctor    # 应看到 4 个 hook event 全 ✓
+# 4. 验证
+karma doctor    # 应看到对应 backend 的 4 个 hook event 全 ✓
 ```
 
-接下来正常用 Claude Code / Codex / Gemini CLI 哪家，karma 自动工作。
-保留你已装的其他 hook 插件（vibe-island / rtk / 等），共存不冲突。
+**⚠️ 关键最后一步：装完必须重启 AI 客户端 karma 才生效**。Claude Code / Codex /
+Gemini CLI 都是 session 启动时**一次性**读 hook 配置，跑中修改不重载。当前正在
+跑的 session karma 不会触发，重启新 session 即可。
+
+接下来用 Claude Code / Codex / Gemini CLI 哪家，karma 自动工作。保留你已装
+的其他 hook 插件（vibe-island / rtk / 等），共存不冲突。
+
+### 维护跟卸载
+
+```bash
+# 重装 hooks（修改 sticky.yaml 后不需要重装；只在删了 .venv / 换路径时重装）
+karma install-hooks --backend all
+
+# 卸载（按 backend 单独卸 或 all 一次卸）
+karma uninstall-hooks --backend codex
+karma uninstall-hooks --backend all
+```
+
+**⚠️ 重要**：karma hook wrapper 文件用 `#!/path/to/.venv/bin/python` 硬写
+venv 路径。**删 / 移动 / 重建 .venv 前先 `karma uninstall-hooks --backend all`**,
+否则 hook 会指向不存在的 python 让 AI 客户端启动报错。重建 venv 后再
+`pip install -e . && karma install-hooks --backend <你之前装的>`。
 
 ## 你会看到什么
 
