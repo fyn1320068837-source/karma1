@@ -331,6 +331,66 @@ def test_stop_hook_force_blocks_on_accumulated_violations(monkeypatch, tmp_path,
         f"reason 应说明强制累积，实际：{out.get('reason', '')}"
 
 
+def test_stop_hook_force_block_releases_when_current_turn_not_triggering(monkeypatch, tmp_path, capsys):
+    """v0.4.16 真根因 fix 守护：Agent 修了真根因当前 turn 不再触发 → 不该
+    被历史累积反复 force_block。
+
+    dogfooding 真死循环：chinese-plain 累积 8 次 → v0.4.15 修真根因 →
+    当前 turn 0 触发该 sticky → 但 force_block 仍按历史累积 8 次重复
+    干预，Agent 没法解除卡死。
+
+    fix：force_block 加 `sid in hit_sticky_ids` 条件，只惩罚「当前 turn
+    真触发 + 历史累积超阈值」。
+    """
+    _, violations_path = _patch_paths(monkeypatch, tmp_path, sticky_items=[
+        {
+            "id": "long-term-fundamental",
+            "preference": "x",
+            "violation_keywords": ["先打个补丁"],  # 累积 5 条历史
+        },
+        {
+            "id": "other-sticky",
+            "preference": "y",
+            "violation_keywords": ["其他词"],  # 当前 turn 触发这个
+        },
+    ])
+    monkeypatch.setattr("karma.session_state.DEFAULT_DIR", tmp_path)
+    # 预设 5 条 long-term 历史违反（累积超阈值）
+    from karma.violations import Violation, append as v_append
+    items = [
+        Violation(ts=i, session_id="force2", sticky_id="long-term-fundamental",
+                  trigger="先打个补丁", snippet=".", turn=t)
+        for i, t in enumerate(range(1, 6))
+    ]
+    v_append(items, path=violations_path)
+    state = session_state.SessionState(session_id="force2")
+    state.turn_count = 5
+    session_state.save(state, base_dir=tmp_path)
+
+    # 当前 turn transcript 触发 other-sticky（不是 long-term），让 notify_msgs
+    # 非空进入 force_block 检查逻辑 — 模拟「Agent 修了 long-term 真根因但本
+    # turn 触发了别的 sticky」场景
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text(json.dumps({
+        "type": "assistant",
+        "message": {"content": [{"type": "text", "text": "这里用了其他词不该 force_block long-term"}]},
+    }) + "\n", encoding="utf-8")
+    payload = json.dumps({
+        "session_id": "force2",
+        "transcript_path": str(transcript),
+    })
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    stop.main()
+    out_raw = capsys.readouterr().out
+    # 输出可能是 {} 或 {"decision": "block", "reason": ...}
+    out = json.loads(out_raw) if out_raw.strip() else {}
+    # 关键 assert：当前 turn 不触发 long-term → force_block 不应包含 long-term
+    if out.get("decision") == "block":
+        reason = out.get("reason", "")
+        assert "long-term-fundamental" not in reason, \
+            f"v0.4.16 fix：当前 turn 不触发 long-term 不该被历史累积 force_block，reason={reason}"
+
+
 def test_stop_hook_uses_gemini_prompt_response_field(monkeypatch, tmp_path, capsys):
     """Gemini AfterAgent payload 给 `prompt_response` 字段 — karma stop.py 适配。
 
