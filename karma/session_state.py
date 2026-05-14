@@ -180,6 +180,17 @@ class SessionState:
         """扫 pending_bg_tasks — 文件存在且非空就读取并 record_bash。
 
         返回成功 catch-up 的任务数。文件还没出现的保留在 pending。
+
+        task #8.1（dogfooding 观察的 race condition）：
+        - 处理后 pending entry 应该从 pending_bg_tasks 移除 (still_pending 没含)
+        - 但若多个 hook 几乎同时跑（如 cat 命令 PostToolUse + 紧跟 git commit
+          PreToolUse），两个 hook 都 load 旧 state → 都跑 catchup → 都处理同一
+          entry → 都 record_bash → ltp 被推到 _next_ts() max(ltp, le) + epsilon
+        - 实际 race 表现：手动 update ltp 到 future 后，下次 hook 把 ltp 拉回
+          到 max(已 update ltp, le) + epsilon — 即 ltp >= le + epsilon
+          但小于 update 的 future 值
+        - 下次 session 修复方向：catchup 用 atomic file lock，或者 record_bash
+          内 _next_ts 用 monotonic counter 而非 max(ltp, le)
         """
         if not self.pending_bg_tasks:
             return 0
