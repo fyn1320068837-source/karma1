@@ -97,6 +97,23 @@ def test_uninstall_all_backend_iterates_each_installed(fake_home, monkeypatch):
     assert cc_wrappers == [], "uninstall all 后 Claude Code wrapper 应清空"
 
 
+def test_uninstall_one_shot_alias(fake_home, monkeypatch, capsys):
+    """`karma uninstall` 是 `uninstall-hooks --backend all` 的一键 alias。
+
+    陌生用户不用记 backend flag 长串 — 想完全卸载就 karma uninstall 一句。
+    """
+    from karma.backends import ClaudeCodeBackend, CodexBackend, GeminiCLIBackend
+    monkeypatch.setattr(ClaudeCodeBackend, "client_installed", lambda self: True)
+    monkeypatch.setattr(CodexBackend, "client_installed", lambda self: False)
+    monkeypatch.setattr(GeminiCLIBackend, "client_installed", lambda self: False)
+    cli.cmd_install_hooks(backend_name="claude-code")
+    # 用 main dispatch 跑 `karma uninstall`（不带 args）
+    rc = cli.main(["uninstall"])
+    assert rc == 0
+    cc_wrappers = list((fake_home / ".claude" / "hooks").glob("karma_*.py"))
+    assert cc_wrappers == [], "karma uninstall 后 wrapper 应清空"
+
+
 def test_install_hooks_unknown_backend_errors(fake_home, capsys):
     """未知 backend 名报错不 silent fail。"""
     rc = cli.cmd_install_hooks(backend_name="not-real-backend")

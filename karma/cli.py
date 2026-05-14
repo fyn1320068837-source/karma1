@@ -12,6 +12,7 @@ Usage:
                                    gemini-cli 写 ~/.gemini/settings.json；
                                    all 装本机检测到的所有 AI 编程客户端
     karma uninstall-hooks [--backend ...]   移除 hook 配置
+    karma uninstall                一键卸所有 backend（= uninstall-hooks --backend all）
     karma doctor                   检查环境 + hook 装机 + 当前生效 config
 
     karma sticky list              列出所有 sticky 规则
@@ -679,6 +680,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_install_hooks(backend_name=_parse_backend_arg(args))
     if cmd == "uninstall-hooks":
         return cmd_uninstall_hooks(backend_name=_parse_backend_arg(args))
+    if cmd == "uninstall":
+        # `karma uninstall` 一键卸所有 backend 的 alias — 陌生用户不用记
+        # `uninstall-hooks --backend all` 长串
+        return cmd_uninstall_hooks(backend_name="all")
     if cmd == "sticky":
         if not args:
             print("Usage: karma sticky <list|edit|remove>", file=sys.stderr)

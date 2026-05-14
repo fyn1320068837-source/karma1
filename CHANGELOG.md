@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+## [0.4.6] — 2026-05-14（patch — `karma uninstall` 一键卸装 alias）
+
+### Added
+
+- **`karma uninstall`** — `karma uninstall-hooks --backend all` 的一键 alias。
+  陌生用户想完全卸装 karma 时不用记 backend flag 长串，一句 `karma uninstall`
+  就清所有 backend（Claude Code / Codex / Gemini）+ 删 wrapper + 从客户端
+  配置移除 karma entry，保留他人 hook（vibe-island / rtk 等）共存。
+
+加 1 条守护测试（`test_uninstall_one_shot_alias`）。
+
+### Test
+
+测试 312 → 313 全过，4 件套全绿。
+
 ## [0.4.5] — 2026-05-14（patch — KARMA_HOME 环境变量 + sub-agent 评审驱动改进）
 
 「同事即将首装」我 spawn 一个 sub-agent 扮演陌生用户跑首装清单**真测试**，
@@ -509,7 +524,8 @@ karma v2 的第一个可发布版本，经历多轮 dogfooding + 4 个 Opus 4.7 
 - `.github/workflows/ci.yml` 跨 ubuntu / macOS × py3.11 / 3.12 跑 lint +
   vulture + pytest + wheel build。
 
-[Unreleased]: https://github.com/jhaizhou-ops/karma/compare/v0.4.5...HEAD
+[Unreleased]: https://github.com/jhaizhou-ops/karma/compare/v0.4.6...HEAD
+[0.4.6]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.4.6
 [0.4.5]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.4.5
 [0.4.4]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.4.4
 [0.4.3]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.4.3
