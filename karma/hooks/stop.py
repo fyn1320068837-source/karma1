@@ -164,9 +164,35 @@ def main() -> int:
         else:
             notify("karma 检测违反", " / ".join(notify_msgs[:3]))
 
-    # keep-pushing 干预：检测到 keep_pushing_no_stop 违反 + 单 turn 内 block 未超阈值
-    # → 输出 decision: block 让 Agent 不真停下，继续生成（推进下一步）
-    # Claude Code Stop hook 协议：decision=block + reason → Agent 看到 reason 继续生成
+    # 机制 2：累积强制 block — 同一 sticky 累积违反次数超阈值 → Stop hook 输出
+    # decision=block，要求 Agent 修真根因或显式让用户介入，不允许继续绕
+    if notify_msgs:
+        try:
+            from karma.config import load as _load_config
+            cfg2 = _load_config()
+            force_threshold = int(cfg2.get("force_block_threshold", 5))
+            force_window = int(cfg2.get("escalate_window_turns", 3))
+        except Exception:
+            force_threshold = 5
+            force_window = 3
+        if force_threshold > 0 and state.turn_count > 0:
+            counts_force = count_recent_turns(session_id, state.turn_count, window_turns=force_window)
+            over_threshold = [sid for sid, n in counts_force.items() if n >= force_threshold]
+            if over_threshold and state.stop_block_count < int(cfg2.get("stop_block_max_per_turn", 3)) if "cfg2" in dir() else 3:
+                state.stop_block_count += 1
+                try:
+                    session_state.save(state)
+                except OSError:
+                    pass
+                reason = (
+                    f"karma 强制干预：累积违反 {over_threshold} 共 {sum(counts_force[s] for s in over_threshold)} 次。"
+                    f"必须 fix 真根因（深挖 pattern / 工程 bug / 协议）或显式让用户介入。"
+                    f"禁止继续绕（手动改 karma 状态 / 临时改 sticky）。"
+                )
+                print(json.dumps({"decision": "block", "reason": reason}, ensure_ascii=False))
+                return 0
+
+    # 机制：keep-pushing 干预 — Agent 沉默式停下时让继续生成
     keep_pushing_hit = any(h.sticky_id == "keep-pushing-no-stop" for h in check_hits) or \
         any(v.sticky_id == "keep-pushing-no-stop" for v in keyword_violations)
     if keep_pushing_hit:

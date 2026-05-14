@@ -289,6 +289,50 @@ def test_post_tool_use_yaml_write_does_not_push_last_edit_ts(monkeypatch, tmp_pa
 
 # ---- Stop hook decision: block 干预 keep-pushing ----
 
+def test_stop_hook_force_blocks_on_accumulated_violations(monkeypatch, tmp_path, capsys):
+    """机制 2：同一 sticky 累积 ≥ force_block_threshold 次 → Stop hook 强制 decision=block。
+
+    Agent 反复违反同一规则却没 fix 真根因 → karma 强制要求修。
+    """
+    _, violations_path = _patch_paths(monkeypatch, tmp_path, sticky_items=[
+        {
+            "id": "long-term-fundamental",
+            "preference": "x",
+            "violation_keywords": ["先打个补丁"],
+        },
+    ])
+    monkeypatch.setattr("karma.session_state.DEFAULT_DIR", tmp_path)
+    # 预设 5 条同 sticky 违反 + 本 session turn=3
+    from karma.violations import Violation, append as v_append
+    items = [
+        Violation(ts=i, session_id="force", sticky_id="long-term-fundamental",
+                  trigger="先打个补丁", snippet=".", turn=t)
+        for i, t in enumerate(range(1, 6))
+    ]
+    v_append(items, path=violations_path)
+    # session_state turn=5（窗口内 5 条都算）
+    state = session_state.SessionState(session_id="force")
+    state.turn_count = 5
+    session_state.save(state, base_dir=tmp_path)
+
+    # transcript 含再次违反字眼
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text(json.dumps({
+        "type": "assistant",
+        "message": {"content": [{"type": "text", "text": "我先打个补丁再说"}]},
+    }) + "\n", encoding="utf-8")
+    payload = json.dumps({
+        "session_id": "force",
+        "transcript_path": str(transcript),
+    })
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    stop.main()
+    out = json.loads(capsys.readouterr().out)
+    assert out.get("decision") == "block", f"累积超阈值应强制 block，实际：{out}"
+    assert "强制" in out.get("reason", "") or "累积" in out.get("reason", ""), \
+        f"reason 应说明强制累积，实际：{out.get('reason', '')}"
+
+
 def test_stop_hook_blocks_when_keep_pushing_violated(monkeypatch, tmp_path, capsys):
     """Agent response 末尾停顿词 + 命中 keep-pushing → Stop hook 输出 decision=block
     让 Agent 不真停下，继续生成。"""
