@@ -25,9 +25,14 @@ _INDIRECT_SHELL_NOQUOTE_RE = re.compile(
     re.IGNORECASE,
 )
 # 反引号命令替换 `cmd` — 内容是真执行的子命令
-_BACKTICK_SUBST_RE = re.compile(r"`([^`\n]+)`")
+# 排除前导反斜杠转义（\` 是字面反引号不展开）
+_BACKTICK_SUBST_RE = re.compile(r"(?<!\\)`([^`\n]+?)(?<!\\)`")
 # $(...) 命令替换 — 内容是真执行的子命令（不支持嵌套，足够覆盖常见场景）
-_DOLLAR_PAREN_SUBST_RE = re.compile(r"\$\(([^()\n]*)\)")
+# 排除前导反斜杠转义（\$( 是字面美元 + 括号，shell 不展开）
+_DOLLAR_PAREN_SUBST_RE = re.compile(r"(?<!\\)\$\(([^()\n]*)\)")
+# 双引号字面 — 双引号内的 $() / 反引号会被 shell 真展开执行，需要提到外层
+# 单引号字面不展开（shell 字面不解析），不在这里处理
+_DOUBLE_QUOTED_RE = re.compile(r'"(?:[^"\\]|\\.)*"')
 # heredoc 多行字符串 — `<<EOF ... EOF` 形式
 # 支持 `<<EOF` / `<<'EOF'` / `<<"EOF"` / `<<-EOF` / `<<~EOF` 几种变体
 # 允许 `<<EOF` 后到换行前有任意非换行字符（如 `> /tmp/x.sh` 重定向）
@@ -67,8 +72,32 @@ def strip_shell_quoted_literals(cmd: str) -> str:
 
     跨 non_blocking + 关键词层共用，统一描述上下文剥离逻辑。
     """
+    # Step 0：先把双引号内的 substitution 「提升」到外层（shell 双引号真行为
+    # 就是展开 $() 和反引号执行，不展开 $'string' 字面）。如果不先提升，后续
+    # _SHELL_QUOTED_RE 会把整个 "..." 连同 substitution 一起剥掉造成漏报。
+    # 实测漏报场景：'echo "result: $(sleep 30)"' 整段被吞 → non_blocking 漏报 sleep。
+    # 单引号字面 shell 不展开（语义就是字面文本），不处理。
+    hoisted_subst: list[str] = []
+
+    def _hoist_subst_in_double_quoted(m: re.Match) -> str:
+        body = m.group(0)[1:-1]  # 去掉两端双引号
+        # body 内的 $() / 反引号 → 内容追加到外层；原位置空字符串
+        def _grab(sub_m: re.Match) -> str:
+            hoisted_subst.append(sub_m.group(1))
+            return ""
+        body = _BACKTICK_SUBST_RE.sub(_grab, body)
+        body = _DOLLAR_PAREN_SUBST_RE.sub(_grab, body)
+        return '"' + body + '"'
+
+    cmd = _DOUBLE_QUOTED_RE.sub(_hoist_subst_in_double_quoted, cmd)
+    if hoisted_subst:
+        cmd = cmd + " ; " + " ; ".join(hoisted_subst)
+
     # 抽 indirect shell 内容到 placeholder（防内部 'x' 引号被 _SHELL_QUOTED_RE 误剥）
     # 三种 indirect 形态都捕获：bash -c '...' / bash -c sleep30 / `cmd` / $(cmd)
+    # 注意：经过 Step 0 后双引号内的 substitution 已经被提取到 cmd 外层，
+    # 这里捕获的反引号 / $() 都是「裸暴露」位置（不在双引号内）— 仍然需要保护
+    # 防止 _SHELL_QUOTED_RE 跨界匹配。
     indirect_contents: list[str] = []
 
     def _capture_indirect_quoted(m: re.Match) -> str:

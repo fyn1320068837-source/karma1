@@ -255,6 +255,53 @@ def test_dollar_paren_subst_inner_real_command_blocked():
     assert hit is not None, "$(...) 内 sleep 30 是真执行"
 
 
+def test_double_quoted_dollar_paren_subst_blocked():
+    """**评审第二轮 critical bug** — 双引号内 $(...) shell 真展开执行，
+    之前 _SHELL_QUOTED_RE 会把整个 "..." 连同 substitution 一起剥掉造成漏报。
+    修：Step 0 先把双引号内 substitution 提到外层。
+    """
+    fn = REGISTRY["non_blocking_parallel"]
+    cmd = 'echo "result: $(sleep 30)"'
+    hit = fn(tool_name="Bash", tool_input={"command": cmd})
+    assert hit is not None, "双引号内 $(...) 真执行，必须命中"
+
+
+def test_double_quoted_backtick_subst_blocked():
+    """同上 — 双引号内反引号也是真执行。"""
+    fn = REGISTRY["non_blocking_parallel"]
+    cmd = 'echo "result: `sleep 30` done"'
+    hit = fn(tool_name="Bash", tool_input={"command": cmd})
+    assert hit is not None, "双引号内 \\`...\\` 真执行，必须命中"
+
+
+def test_single_quoted_subst_not_executed_passes():
+    """单引号字面 shell 不展开 — 'result: $(sleep 30)' 是字面字符串不执行。
+    这条是对偶 — 双引号修复不该让单引号场景被误拦。"""
+    fn = REGISTRY["non_blocking_parallel"]
+    cmd = "echo 'result: $(sleep 30)'"
+    hit = fn(tool_name="Bash", tool_input={"command": cmd})
+    assert hit is None, "单引号字面不展开 substitution，不该拦"
+
+
+def test_escaped_dollar_paren_not_treated_as_subst():
+    """转义 '\\$(...)' 在双引号内是字面美元符 + 括号，shell 不展开为 substitution。
+    本身规则：实际作者 commit message 引用 bug case 字面时被 karma 自拦的 regression
+    — 不该误识别成真 substitution 提升出来扫。
+    """
+    fn = REGISTRY["non_blocking_parallel"]
+    cmd = r'git commit -m "fix: \$(sleep 30) is literal in escaped form"'
+    hit = fn(tool_name="Bash", tool_input={"command": cmd})
+    assert hit is None, "\\$(...) 是转义字面，不展开 substitution，不该拦"
+
+
+def test_escaped_backtick_not_treated_as_subst():
+    """对偶 — 转义反引号 '\\`...\\`' 也是字面不执行。"""
+    fn = REGISTRY["non_blocking_parallel"]
+    cmd = r'echo "literal: \`sleep 30\` text"'
+    hit = fn(tool_name="Bash", tool_input={"command": cmd})
+    assert hit is None, "\\`...\\` 是转义字面，不展开 substitution，不该拦"
+
+
 def test_heredoc_tab_indent_terminator_recognized():
     """`<<-EOF` 带 tab 缩进的 heredoc — bash 会剥 tab，但终结符前可能有 tab。
     之前 _HEREDOC_RE 终结符前不允许空白 → tab 缩进 heredoc 不被识别 → 内容

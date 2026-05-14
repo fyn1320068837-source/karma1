@@ -331,6 +331,36 @@ def test_stop_hook_force_blocks_on_accumulated_violations(monkeypatch, tmp_path,
         f"reason 应说明强制累积，实际：{out.get('reason', '')}"
 
 
+def test_stop_hook_debug_trace_written_when_env_set(monkeypatch, tmp_path, capsys):
+    """KARMA_DEBUG_TRACE=<path> 环境变量启用时 Stop hook 触发应追加一行到 path。
+    评审第二轮发现：v0.2.1 之前补了 KARMA_DEBUG 测试但 KARMA_DEBUG_TRACE 姊妹
+    变量没测过 — 属于 sticky #4「完成要有证据」违反。
+    """
+    trace_path = tmp_path / "trace.log"
+    monkeypatch.setenv("KARMA_DEBUG_TRACE", str(trace_path))
+    _patch_paths(monkeypatch, tmp_path, sticky_items=[])
+    monkeypatch.setattr("karma.session_state.DEFAULT_DIR", tmp_path)
+    payload = json.dumps({"session_id": "trace_test", "transcript_path": ""})
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    stop.main()
+    assert trace_path.exists(), "KARMA_DEBUG_TRACE 设置后应该写 trace 文件"
+    content = trace_path.read_text(encoding="utf-8")
+    assert "trace_test" in content, f"trace 应含 session_id, 实际: {content!r}"
+
+
+def test_stop_hook_no_trace_when_env_unset(monkeypatch, tmp_path, capsys):
+    """KARMA_DEBUG_TRACE 未设时不该写任何 trace（默认完全关，不污染 /tmp）。"""
+    monkeypatch.delenv("KARMA_DEBUG_TRACE", raising=False)
+    _patch_paths(monkeypatch, tmp_path, sticky_items=[])
+    monkeypatch.setattr("karma.session_state.DEFAULT_DIR", tmp_path)
+    payload = json.dumps({"session_id": "no_trace", "transcript_path": ""})
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    stop.main()
+    # tmp_path 下不该有 trace 文件
+    trace_files = list(tmp_path.glob("*trace*"))
+    assert not trace_files, f"未设环境变量不该写 trace: {trace_files}"
+
+
 def test_stop_hook_force_block_exempts_keep_pushing(monkeypatch, tmp_path, capsys):
     """keep-pushing-no-stop 自身豁免 force_block — 语义自相矛盾。
 

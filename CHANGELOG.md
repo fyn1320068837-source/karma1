@@ -4,6 +4,41 @@
 
 ## [Unreleased]
 
+## [0.2.2] — 2026-05-14（patch — 第二轮评审 critical bug fix）
+
+跑了第二轮独立 Opus 4.7 sanity-check 评审 Agent，找出 v0.1.1 修复时漏掉的
+**真 critical 假阴**：
+
+### Fixed
+
+- **`strip_shell_quoted_literals` 双引号内 substitution 漏报（真 bug）** —
+  双引号包 `$(...)` / 反引号 这种 shell 最常见写法之前会被 `_SHELL_QUOTED_RE`
+  整段吞掉（连同 substitution 内容一起剥），导致 `non_blocking_parallel` /
+  `long_term_fundamental` 等 check 全线漏报。v0.1.1 加的守护测试只测**裸**
+  反引号 / `$()`，没覆盖「在双引号内」这个最常见场景。
+  - 修：Step 0 先扫双引号字面，把内部 `$(...)` 和反引号内容「提升」到 cmd
+    外层（shell 双引号真行为就是展开 substitution 执行）；单引号字面不动
+    （shell 单引号语义就是字面文本不展开 — 对偶守护测试 case 验证）。
+  - 反引号 / `$(` regex 加 negative lookbehind 排除转义形式（`\$(` / 反斜杠+反引号
+    是字面 shell 不展开）— 修自身 fix 引入的 regression（commit message 引用
+    bug case 字面时被自拦）。
+  - 加 5 条守护测试覆盖：双引号 `$()` / 双引号反引号 / 单引号对偶 /
+    转义 `$()` 字面 / 转义反引号字面。
+
+### Test / Quality
+
+- `KARMA_DEBUG_TRACE` 加 2 条守护测试（评审第二轮指出 v0.2.1 补了
+  `KARMA_DEBUG` 但姊妹变量 `KARMA_DEBUG_TRACE` 没测过 — sticky #4 违反）。
+- 测试 249 → 256 全过，ruff / mypy / vulture 0 issue。
+
+### Docs
+
+- README 测试数 234 → 252（v0.2.1 实际是 249，本版含 #1 fix 守护测试后 254）。
+- `violation_checks` 表加「默认装？」一列 — 评审第二轮指出 `keep_pushing_no_stop`
+  在 `sticky.dev.example.yaml` / `sticky.dev.minimal.example.yaml` 都没引用,
+  但 README 表里平等列了 8 个让用户以为开箱可用。明示这条是「可选 — 给全权
+  委托型用户，需要自己在 sticky.yaml 加引用」。
+
 ## [0.2.1] — 2026-05-14（patch — 凭假设没验证反查）
 
 按用户「为啥有问题不修好呢」精神持续反查我之前用「假设的成本」推迟过的问题：
@@ -163,7 +198,8 @@ karma v2 的第一个可发布版本，经历多轮 dogfooding + 4 个 Opus 4.7 
 - `.github/workflows/ci.yml` 跨 ubuntu / macOS × py3.11 / 3.12 跑 lint +
   vulture + pytest + wheel build。
 
-[Unreleased]: https://github.com/jhaizhou-ops/karma/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/jhaizhou-ops/karma/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.2.2
 [0.2.1]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.2.1
 [0.2.0]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.2.0
 [0.1.1]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.1.1

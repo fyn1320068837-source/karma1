@@ -181,16 +181,16 @@ karma = **通用 hook 框架** + **场景规则集**。`karma init` 默认装「
 
 **8 个内建 `violation_checks`** 名（从 `karma/checks/` 注册表选）：
 
-| 函数名 | 检测内容 |
-|---|---|
-| `long_term_fundamental` | git commit/push --no-verify 等 / 长 hash 黑白名单字面 / 意图注释「我先打个补丁」 |
-| `non_blocking_parallel` | sleep N / 阻塞 wait / 长任务（docker / cargo / npm install）无 background |
-| `chinese_plain_no_jargon` | 中文占比 < 40% / 英文技术 jargon 列表（剥 code block + inline code） |
-| `loud_failure_with_evidence` | 完成词「fix 了 / done」+ 代码任务上下文 + session 内无测试通过证据 |
-| `no_testset_no_future_leakage` | gold_cases 反喂 / 跨 split 复制 / 长 hash 字面 |
-| `read_before_write` | Edit / Write 前未 Read 过该 file_path（路径规范化等价） |
-| `keep_pushing_no_stop` | response 末尾推进信号 / 问号 / 停顿词 / 默认四路检测 |
-| `bypass_karma_detection` | Bash 命令含 karma 内部字面 + 写操作 → 拦绕开检测 |
+| 函数名 | 默认装？ | 检测内容 |
+|---|---|---|
+| `long_term_fundamental` | ✓ | git commit/push --no-verify 等 / 长 hash 黑白名单字面 / 意图注释「我先打个补丁」 |
+| `non_blocking_parallel` | ✓ | sleep N / 阻塞 wait / 长任务（docker / cargo / npm install）无 background |
+| `chinese_plain_no_jargon` | ✓（仅 dev.example，minimal 砍掉） | 中文占比 < 40% / 英文技术 jargon 列表（剥 code block + inline code） |
+| `loud_failure_with_evidence` | ✓ | 完成词「fix 了 / done」+ 代码任务上下文 + session 内无测试通过证据 |
+| `no_testset_no_future_leakage` | ✓（仅 dev.example，minimal 砍掉） | gold_cases 反喂 / 跨 split 复制 / 长 hash 字面 |
+| `read_before_write` | ✓ | Edit / Write 前未 Read 过该 file_path（路径规范化等价） |
+| `bypass_karma_detection` | ✓ | Bash 命令含 karma 内部字面 + 写操作 → 拦绕开检测 |
+| `keep_pushing_no_stop` | **可选**（自加 sticky 引用） | response 末尾推进信号 / 问号 / 停顿词 / 默认四路检测。给「全权委托型」用户用 — 想开就在 sticky.yaml 加一条 `id: keep-pushing-no-stop` + `violation_checks: [keep_pushing_no_stop]` + 建议 `force_block_exempt: true` |
 
 软上限 10 条，硬上限 12 条（超过 karma 拒绝加载）。
 
@@ -217,4 +217,4 @@ karma = **通用 hook 框架** + **场景规则集**。`karma init` 默认装「
 - [karma v1 归档](https://github.com/jhaizhou-ops/karma-v1) — v1 探索过程与反思
 - HANDOFF.md — 内部开发接力文档（非最终用户文档）
 
-karma v2 已完成 M0-M4（多波 commit + 多轮 dogfooding 修真 bug），234 个测试全绿。验证标准是「开发过程能否减少 Agent 在长任务中的方向漂移」— 而**开发 karma 的过程本身就是它最严酷的自用观察期**。
+karma v2 已完成 M0-M4 + 多轮评审 Agent 交叉评审 + 多轮 dogfooding 修真 bug，252 个测试全绿。验证标准是「开发过程能否减少 Agent 在长任务中的方向漂移」— 而**开发 karma 的过程本身就是它最严酷的自用观察期**。
