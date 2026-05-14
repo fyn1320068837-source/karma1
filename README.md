@@ -398,6 +398,16 @@ karma 是**让你注意自己偏好被 Agent 偏离时收到提示**，不是「
 - [PRD.md](./PRD.md) — 产品需求 + 验证标准
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — 技术架构
 - [CHANGELOG.md](./CHANGELOG.md) — 版本变更
+
+### v3 演化中（2026-05-14 起）
+
+karma v2 「事后审计」架构有天花板 — Agent 容易学到「怎么不被 hook 拦」而不是「真按 sticky 行为」。v3 往「proactive 教练」方向演化，已落地 3 步：
+
+- **v0.4.24 中段注入 anchor** — PostToolUse hook 在每次 tool call 后注入最近触发过的 sticky 简化提醒。Claude Code 协议层验证 `additionalContext` 真接受 — sticky 不再只在 user prompt 头部一次注入
+- **v0.4.25 字面多样性元行为监测** — `karma audit --with-fix-timeline` 加 🎭 字面试探标记。Agent 用多种 snippet 字面变体触发同一 sticky 时（如 keep-pushing 91% 多样性）标出来，让用户看到 Agent 在反向工程绕 check 还是真改行为
+- **v0.4.26→v0.4.27 反思式语气改造** — keep-pushing / chinese-plain 两条表达风格类规则的 suggested_fix 改反思式（自检你是不是真合理停下 / 真技术专名必须保留）。`long-term` 补丁 + `non-blocking` sleep 等工程行为类规则保持命令式（防 Agent 自我合理化）
+
+后续观察方向：跨场景真用户使用后看字面试探多样性是否下降 + 反思式语气是不是被 Agent 学到新一轮套话 anti-pattern。
 - [CLAUDE.md](./CLAUDE.md) — 给 Claude Code 协作的项目宪章
 - [karma v1 归档](https://github.com/jhaizhou-ops/karma-v1) — v1 探索过程与反思
 - HANDOFF.md — 内部开发接力文档（非最终用户文档）
