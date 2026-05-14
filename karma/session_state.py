@@ -89,6 +89,9 @@ class SessionState:
     # session 内 turn 序号 — user_prompt_submit hook 每次 +1
     # 用于按 turn 距离统计漂移（不是人类时钟，对 Agent 注意力更准）
     turn_count: int = 0
+    # Stop hook 本 turn 累积 block 次数 — 防 keep-pushing 干预死循环
+    # 每个 user_prompt_submit 重置 0；累积 ≥ max 后 Stop hook 放 Agent 停
+    stop_block_count: int = 0
 
     def has_read(self, file_path: str) -> bool:
         return file_path in self.read_files
@@ -237,6 +240,7 @@ def load(session_id: str, base_dir: Path | None = None) -> SessionState:
         last_edit_ts=float(d.get("last_edit_ts", 0.0) or 0.0),
         pending_bg_tasks=list(d.get("pending_bg_tasks", []) or []),
         turn_count=int(d.get("turn_count", 0) or 0),
+        stop_block_count=int(d.get("stop_block_count", 0) or 0),
     )
     return state
 
@@ -288,6 +292,7 @@ def save(state: SessionState, base_dir: Path | None = None) -> None:
         "last_edit_ts": state.last_edit_ts,
         "pending_bg_tasks": state.pending_bg_tasks,
         "turn_count": state.turn_count,
+        "stop_block_count": state.stop_block_count,
     }
     # tmp 名加 pid + nanosecond 避免并发 PostToolUse 同 session 写冲突
     import os

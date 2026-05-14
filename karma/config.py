@@ -34,6 +34,9 @@ DEFAULTS: dict[str, Any] = {
     "violations_keep_history": 3,
     "session_state_max_age_days": 30,
     "max_recent_bash": 15,
+    # Stop hook keep-pushing 干预上限 — 单 turn 内最多 block N 次让 Agent 继续
+    # 累积超阈值后真放 Agent 停（防死循环）。0 = 完全关闭干预。
+    "stop_block_max_per_turn": 3,
 }
 
 

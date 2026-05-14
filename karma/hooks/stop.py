@@ -164,6 +164,32 @@ def main() -> int:
         else:
             notify("karma 检测违反", " / ".join(notify_msgs[:3]))
 
+    # keep-pushing 干预：检测到 keep_pushing_no_stop 违反 + 单 turn 内 block 未超阈值
+    # → 输出 decision: block 让 Agent 不真停下，继续生成（推进下一步）
+    # Claude Code Stop hook 协议：decision=block + reason → Agent 看到 reason 继续生成
+    keep_pushing_hit = any(h.sticky_id == "keep-pushing-no-stop" for h in check_hits) or \
+        any(v.sticky_id == "keep-pushing-no-stop" for v in keyword_violations)
+    if keep_pushing_hit:
+        try:
+            from karma.config import load as _load_config
+            block_max = int(_load_config().get("stop_block_max_per_turn", 3))
+        except Exception:
+            block_max = 3
+        if block_max > 0 and state.stop_block_count < block_max:
+            # 干预 — 让 Agent 继续推进
+            state.stop_block_count += 1
+            try:
+                session_state.save(state)
+            except OSError:
+                pass
+            reason = (
+                f"karma 拦截 stop：sticky #7 keep-pushing-no-stop 命中。"
+                f"立即选下个推进点继续做 — 不要停下等用户决定。"
+                f"（本 turn 已干预 {state.stop_block_count}/{block_max} 次）"
+            )
+            print(json.dumps({"decision": "block", "reason": reason}, ensure_ascii=False))
+            return 0
+
     # 也可以通过 additionalContext 让 Claude 看到 — 但 Stop 后 Claude 已停，
     # 主要给下次 UserPromptSubmit 的 sticky 注入加 RECENT_VIOLATION 标记
     print(json.dumps({

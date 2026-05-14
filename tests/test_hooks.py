@@ -285,3 +285,68 @@ def test_post_tool_use_yaml_write_does_not_push_last_edit_ts(monkeypatch, tmp_pa
     post_tool_use.main()
     state = session_state.load("yaml_write", base_dir=tmp_path)
     assert state.last_edit_ts == 0.0, "yaml Write 不该推 last_edit_ts"
+
+
+# ---- Stop hook decision: block 干预 keep-pushing ----
+
+def test_stop_hook_blocks_when_keep_pushing_violated(monkeypatch, tmp_path, capsys):
+    """Agent response 末尾停顿词 + 命中 keep-pushing → Stop hook 输出 decision=block
+    让 Agent 不真停下，继续生成。"""
+    _, violations_path = _patch_paths(monkeypatch, tmp_path, sticky_items=[
+        {
+            "id": "keep-pushing-no-stop",
+            "preference": "不停下",
+            "violation_keywords": [],
+            "violation_checks": ["keep_pushing_no_stop"],
+        },
+    ])
+    monkeypatch.setattr("karma.session_state.DEFAULT_DIR", tmp_path)
+    # 准备 transcript 含「先到这」末尾停顿词
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text(json.dumps({
+        "type": "assistant",
+        "message": {"content": [{"type": "text", "text": "做完了，测试全过。先到这。"}]},
+    }) + "\n", encoding="utf-8")
+    payload = json.dumps({
+        "session_id": "block_test",
+        "transcript_path": str(transcript),
+    })
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    stop.main()
+    out = json.loads(capsys.readouterr().out)
+    assert out.get("decision") == "block", f"应输出 decision=block，实际：{out}"
+    assert "keep-pushing" in out.get("reason", "")
+
+
+def test_stop_hook_respects_block_max(monkeypatch, tmp_path, capsys):
+    """单 turn 内 block 累积超 max → 不再 block，让 Agent 真停（防死循环）。"""
+    _patch_paths(monkeypatch, tmp_path, sticky_items=[
+        {
+            "id": "keep-pushing-no-stop",
+            "preference": "x",
+            "violation_keywords": [],
+            "violation_checks": ["keep_pushing_no_stop"],
+        },
+    ])
+    monkeypatch.setattr("karma.session_state.DEFAULT_DIR", tmp_path)
+    # 预设 session state 已 block 3 次（达到 max）
+    state = session_state.SessionState(session_id="max_block")
+    state.stop_block_count = 3  # default max=3
+    state.turn_count = 1
+    session_state.save(state, base_dir=tmp_path)
+
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text(json.dumps({
+        "type": "assistant",
+        "message": {"content": [{"type": "text", "text": "测试通过。告一段落。"}]},
+    }) + "\n", encoding="utf-8")
+    payload = json.dumps({
+        "session_id": "max_block",
+        "transcript_path": str(transcript),
+    })
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    stop.main()
+    out = json.loads(capsys.readouterr().out)
+    # 已达 max → 不再 block，走正常 additionalContext 输出
+    assert out.get("decision") != "block", "已达 max 应放 Agent 停"
+    assert "hookSpecificOutput" in out

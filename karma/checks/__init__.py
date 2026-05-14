@@ -16,6 +16,7 @@ from typing import Callable, Protocol
 from karma.checks import (
     chinese_plain,
     evidence,
+    keep_pushing,
     long_term,
     non_blocking,
     read_first,
@@ -44,6 +45,7 @@ REGISTRY: dict[str, CheckFn] = {
     "loud_failure_with_evidence": evidence.check,
     "no_testset_no_future_leakage": testset.check,
     "read_before_write": read_first.check,
+    "keep_pushing_no_stop": keep_pushing.check,
 }
 
 

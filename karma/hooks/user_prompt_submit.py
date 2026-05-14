@@ -59,10 +59,12 @@ def main() -> int:
         return 0
 
     # 每 turn 给 session_state.turn_count + 1 — 给后续按 turn 距离的违反统计
+    # 同时重置 stop_block_count（新 user prompt = 新 turn，干预计数清 0）
     session_id = payload.get("session_id", "") or "default"
     try:
         state = session_state.load(session_id)
         state.turn_count += 1
+        state.stop_block_count = 0
         session_state.save(state)
         current_turn = state.turn_count
     except Exception:
