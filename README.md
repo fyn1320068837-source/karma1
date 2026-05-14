@@ -53,6 +53,28 @@ karma install-hooks --backend all      # 本机检测到的所有客户端一次
 karma doctor    # 应看到对应 backend 的 4 个 hook event 全 ✓
 ```
 
+**期望输出片段**（`--backend all` 装齐三家）：
+
+```
+→ Claude Code（claude-code）
+  生成: ~/.claude/hooks/karma_user_prompt_submit.py
+  生成: ~/.claude/hooks/karma_pre_tool_use.py
+  生成: ~/.claude/hooks/karma_post_tool_use.py
+  生成: ~/.claude/hooks/karma_stop.py
+  已配置 ~/.claude/settings.json（4 个 hook event）
+
+→ Codex CLI（codex）
+  Codex features.hooks 已启用 ✓
+  生成: ~/.codex/hooks/karma_user_prompt_submit.py
+  ... (同上)
+
+→ Gemini CLI（gemini-cli）
+  ... (同上)
+```
+
+`karma doctor` 应该每个 backend 的 4 个 event 都 `✓`。如果有 `✗` 重跑
+`karma install-hooks --backend <对应名>`。
+
 **⚠️ 关键最后一步：装完必须重启 AI 客户端 karma 才生效**。Claude Code / Codex /
 Gemini CLI 都是 session 启动时**一次性**读 hook 配置，跑中修改不重载。当前正在
 跑的 session karma 不会触发，重启新 session 即可。
