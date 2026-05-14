@@ -476,6 +476,28 @@ def cmd_doctor() -> int:
         except Exception:
             pass
 
+    # Stop hook 实战触发状态（trace 文件分析）— 验证 Claude Code Stop hook 是否真跑
+    from pathlib import Path as _Path
+    trace = _Path("/tmp/karma_stop_trace.log")
+    if trace.exists():
+        try:
+            lines = trace.read_text(encoding="utf-8").strip().splitlines()
+            real_session_lines = [
+                ln for ln in lines
+                if "session='" in ln and not any(
+                    f"session='{tag}'" in ln for tag in
+                    ("test", "s", "force", "block_test", "max_block", "stop_check", "stop_ok",
+                     "catchup_ups", "read_fail", "read_str_fail", "edit_fail", "bash_fail",
+                     "read_ok", "write_then_edit", "edit_only", "docs_edit", "code_edit", "yaml_write",
+                     "max_block", "no-patch", "test-session", "abc", "abc123", "x")
+                )
+            ]
+            print(f"  Stop hook 触发记录: 总 {len(lines)} 条，真实 session {len(real_session_lines)} 条")
+            if len(real_session_lines) == 0 and len(lines) > 0:
+                print(f"    ⚠️ Stop hook 在真实 session 中没触发 — Claude Code 协议层 limitation")
+        except OSError:
+            pass
+
     # hook 安装检测 — 每个 event 三项：wrapper 存在 / 可执行 / settings.json 含引用
     status = _check_hooks_installed()
     print(f"  hook 安装检测:")
