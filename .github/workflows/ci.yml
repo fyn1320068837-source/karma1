@@ -33,6 +33,9 @@ jobs:
       - name: Dead code scan (vulture, min-confidence 60)
         run: vulture karma/ --min-confidence 60
 
+      - name: Type check (mypy)
+        run: mypy karma/ --ignore-missing-imports
+
       - name: Test
         run: pytest tests/ -q
 

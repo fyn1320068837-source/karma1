@@ -71,7 +71,10 @@ def _karma_event_entry(hook_name_lower: str, event_name: str = "") -> dict:
     且可能导致 hook 不生效）。只对 PreToolUse / PostToolUse / UserPromptSubmit 等
     工具相关 hook 加 matcher: "*"。
     """
-    entry = {"hooks": [{"type": "command", "command": str(_karma_wrapper_path(hook_name_lower))}]}
+    # dict[str, Any]：value 类型异质（list / str），显式标注让类型检查器接受
+    entry: dict[str, object] = {
+        "hooks": [{"type": "command", "command": str(_karma_wrapper_path(hook_name_lower))}]
+    }
     if event_name in ("PreToolUse", "PostToolUse", "UserPromptSubmit"):
         entry["matcher"] = "*"
     return entry

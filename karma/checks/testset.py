@@ -72,7 +72,7 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
     if tool_name not in ("Bash", "Write", "Edit", "NotebookEdit"):
         return None
     # 描述上下文（文档 / 测试目录 / 探针文件）整段豁免
-    is_desc, _ = is_description_context(tool_name, tool_input or {})
+    is_desc, _label = is_description_context(tool_name, tool_input or {})
     if is_desc:
         return None
     text = extract_tool_text(tool_name, tool_input or {})

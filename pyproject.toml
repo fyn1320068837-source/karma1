@@ -38,6 +38,7 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.5",
     "vulture>=2.14",   # 死代码扫描 — 跑 `vulture karma/ --min-confidence 60`
+    "mypy>=1.10",      # 静态类型检查 — 跑 `mypy karma/ --ignore-missing-imports`
 ]
 
 [build-system]
