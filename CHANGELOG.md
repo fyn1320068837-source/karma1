@@ -4,6 +4,41 @@
 
 ## [Unreleased]
 
+## [0.4.14] — 2026-05-14（patch — evidence 两类假阳：chained pytest + heredoc commit prefix）
+
+### 真触发
+
+dogfooding 实测 `loud-failure-with-evidence` 7d 触发 3 次，深挖发现 2 次假阳：
+
+1. **链式 `pytest && git commit`** — pre_tool_use 时 pytest 还没真执行，
+   `has_recent_test=False` → 错拦合法 workflow
+2. **heredoc 包裹的 conventional commit** — `git commit -m "$(cat <<'EOF'
+   chore(release): ...\nEOF\n)"` 被错拦（`_NON_CODE_COMMIT_PREFIX_RE` 只
+   识别 `"chore:"` 紧邻引号形式，不识别 heredoc / `$()` 嵌套包裹）
+
+### Fix
+
+`karma/checks/evidence.py`：
+
+1. **豁免链式测试** — 加 `_CHAINED_TEST_RE` 识别 `pytest|npm test|jest|
+   cargo test|go test|mvn test|gradle test|pnpm/yarn test|tox`。strip
+   引号字面后扫骨架，避免 commit message 里字面提 pytest 误豁免「假声称」。
+
+2. **放宽 conventional prefix 匹配** — `_NON_CODE_COMMIT_PREFIX_RE` 改
+   `git\\s+commit[\\s\\S]*?(?:^|[\\s'"\\n])(docs|chore|style|build|ci|test|
+   refactor)\\s*(?:\\([^)]*\\))?\\s*:` 跨多行匹配（识别 heredoc /
+   `$()` 嵌套）。
+
+### 验证
+
+4 向真测：
+- A. `pytest && git commit` 链 → None ✓（豁免）
+- B. heredoc `chore(release):` commit → None ✓（豁免）
+- C. 真违反无证据无 prefix → 命中 ✓
+- D. commit message 字面提 pytest → 仍命中 ✓（strip 后骨架无 pytest）
+
+324 测试全过；加 3 个守护 case 在 `tests/test_checks.py`。
+
 ## [0.4.13] — 2026-05-14（patch — deep-fix-not-bypass 假阳：python -c 比较运算符不是 shell 重定向）
 
 ### 真触发

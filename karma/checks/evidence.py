@@ -33,8 +33,18 @@ _CONTEXT_WINDOW = 40
 _GIT_COMMIT_RE = re.compile(r"\bgit\s+commit\b", re.IGNORECASE)
 # conventional commit 前缀 — 非代码 commit 不需要测试证据
 # docs/chore/style/refactor 等不改业务行为，不该被 evidence check 拦
+# v0.4.14：放宽匹配让 heredoc / $(cat <<EOF\nchore: ...) 包裹也识别（不要求紧邻引号）
 _NON_CODE_COMMIT_PREFIX_RE = re.compile(
-    r"""git\s+commit[^"']*?["'](?:\s*)(docs|chore|style|build|ci|test)(?:\([^)]*\))?\s*:""",
+    r"""git\s+commit[\s\S]*?(?:^|[\s'"\n])(docs|chore|style|build|ci|test|refactor)\s*"""
+    r"""(?:\([^)]*\))?\s*:""",
+    re.IGNORECASE,
+)
+# v0.4.14：链式 chained 测试命令（pytest && git commit 类） — 用户在同一 Bash
+# 调用里先跑测试再 commit，pre_tool_use 时 pytest 还没真执行 has_recent_test=False
+# 误拦。strip 后命令骨架含测试命令 → 视为「即时证据」豁免。
+_CHAINED_TEST_RE = re.compile(
+    r"\b(pytest|npm\s+test|jest|cargo\s+test|go\s+test|mvn\s+test|gradle\s+test|"
+    r"pnpm\s+test|yarn\s+test|tox)\b",
     re.IGNORECASE,
 )
 
@@ -62,8 +72,15 @@ def check(
     if tool_name == "Bash":
         cmd = (tool_input or {}).get("command", "") or ""
         if _GIT_COMMIT_RE.search(cmd) and not has_recent_test:
-            # conventional commit 非代码类型（docs/chore/style 等）豁免测试证据要求
+            # 豁免 1：conventional commit 非代码类型（docs/chore/style 等）
             if _NON_CODE_COMMIT_PREFIX_RE.search(cmd):
+                return None
+            # 豁免 2（v0.4.14）：cmd 同行含 chained 测试命令（pytest && git commit）—
+            # 用户在一个 Bash 调用里先测后 commit 是合法 workflow。strip 引号字面后
+            # 扫骨架，避免 commit message 里字面提到 pytest 误豁免。
+            from karma.checks.common import strip_shell_quoted_literals
+            cmd_stripped = strip_shell_quoted_literals(cmd)
+            if _CHAINED_TEST_RE.search(cmd_stripped):
                 return None
             return CheckHit(
                 sticky_id=_STICKY_ID,

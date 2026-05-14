@@ -552,6 +552,56 @@ def test_evidence_git_commit_with_test_passes():
     assert hit is None
 
 
+def test_evidence_chained_pytest_commit_exempted():
+    """`pytest && git commit` 链式调用 — pre_tool_use 时 pytest 还没真跑，
+    has_recent_test=False 会误拦。命令骨架含测试命令应视为「即时证据」豁免。
+
+    v0.4.14 dogfooding 真触发：commit v0.4.13 release 时 `pytest && git commit`
+    链被错拦。
+    """
+    fn = REGISTRY["loud_failure_with_evidence"]
+    state = SessionState(session_id="s2")  # 空 state, has_recent_test=False
+    hit = fn(
+        tool_name="Bash",
+        tool_input={"command": ".venv/bin/python -m pytest tests/ -q && git add -A && git commit -m 'fix: stuff'"},
+        session_state=state,
+    )
+    assert hit is None, "pytest 在同一 Bash 链路里先跑应豁免 evidence 拦截"
+
+
+def test_evidence_heredoc_chore_commit_exempted():
+    """heredoc / $(cat <<EOF) 包裹的 conventional commit prefix 也应豁免。
+
+    v0.4.14 dogfooding 真触发：`git commit -m "$(cat <<'EOF'\\nchore(release):
+    ...\\nEOF\\n)"` 被错拦（_NON_CODE_COMMIT_PREFIX_RE 只识别紧邻引号形式）。
+    """
+    fn = REGISTRY["loud_failure_with_evidence"]
+    state = SessionState(session_id="s3")
+    cmd = (
+        "git add scripts/x.sh && git commit -m \"$(cat <<'EOF'\n"
+        "chore(release): scripts/verify-installed.sh 防发版后忘装本机\n"
+        "EOF\n)\""
+    )
+    hit = fn(tool_name="Bash", tool_input={"command": cmd}, session_state=state)
+    assert hit is None, "heredoc 包裹的 chore(release): 应被 conventional prefix 豁免"
+
+
+def test_evidence_pytest_in_commit_msg_not_exempted():
+    """commit message 字面提到 pytest 不算真跑（防误豁免）。
+
+    `_CHAINED_TEST_RE` 扫 strip 后的骨架，commit message 引号字面里的 pytest
+    被剥掉，不会误豁免「假声称跑过测试」类。
+    """
+    fn = REGISTRY["loud_failure_with_evidence"]
+    state = SessionState(session_id="s4")
+    hit = fn(
+        tool_name="Bash",
+        tool_input={"command": "git commit -m \"fix: improve pytest fixture\""},
+        session_state=state,
+    )
+    assert hit is not None, "commit message 字面提 pytest 不算真跑，应命中"
+
+
 # -------- #5 no-testset-no-future-leakage --------
 
 def test_testset_detects_gold_cases_append():
