@@ -31,7 +31,28 @@
 | **M4 user_prompt_submit 强提醒 fallback** | 用户反馈「你又停下来了，自己加的 sticky 也没拦」根因：Claude Code Stop hook 在 user 立刻接 prompt 时**不跑**（user_prompt_submit 优先级覆盖 Stop hook idle 触发）。fallback：user_prompt_submit hook 读 transcript last assistant message 跑 keep_pushing.check，命中（纯陈述完结无推进）→ 注入「强提醒」段告诉本 turn Claude 上次停了，本 turn 必须立即推进。这是 karma 当前能做的最强 keep-pushing 干预（不依赖 Stop hook 协议层 limitation） | 最新 |
 | **M4 Stop hook 不跑 → 撤回错误诊断**（重要错误教训） | 之前结论「Claude Code Stop hook 在 user-continuous 对话不跑」**错** — 用户质疑「stop hook 原理机制咱们没研究清楚」后重派 claude-code-guide 确认：**Stop hook 不支持 matcher 字段**，karma install-hooks 给所有 event 都加 `matcher: '*'` → Stop event 看到 matcher 会无声忽略整个 hook entry → Stop hook 根本没装上 → trace 0 条记录。**真根因**：karma 自身 install-hooks 配置 bug。修：_karma_event_entry 只对 PreToolUse/PostToolUse/UserPromptSubmit 加 matcher，Stop 不加。`karma install-hooks` 重装后修好。教训：单次 trace 0 条记录不能直接断言「协议 limitation」，要查配置先 | 最新 |
 
-## ⚠️ 下个 session 首要验证项 — Stop hook matcher fix 是否真跑
+## ✅ Stop hook matcher fix 已实战验证生效 + 一条经验
+
+**生效证据**：fix 后 Stop hook 真触发 decision=block 干预（用户在 UI 看到了
+karma 强制干预 reason 文案），说明 matcher fix 真根因正确。
+
+**经验（用户当场纠正）**：那次 decision=block 实际是**假阳** —
+触发条件是 violations.jsonl 里有 6 条 `read-before-write` 老违反满足
+force_block_threshold 阈值。深挖发现：
+
+- 这 6 条都是 turn 维度引入**之前**的历史（`turn=None`）
+- Claude Code session compact 不换 session_id，老违反沿用到「新对话」
+- `count_recent_turns` 把 `turn=None` 通过 `.get('turn', 0)` fallback 成 0，
+  恰好落入 `current_turn - window_turns` 这个可能 ≤ 0 的窗口里被计数
+
+但用户明确说 **「太容易下结论这个问题我估计 karma 管不到这么细节和深入的层面」** —
+session compact 跨界 + turn fallback 0 这种边界场景**不该 karma 来管**，
+继续修是过度工程。**只 clear 历史不修代码**（按用户「假阳直接清掉」授权，
+通过官方 `karma violations clear --sticky` 而不是手改 jsonl，否则 sticky #8 自拦）。
+
+教训：发现假阳时先问「这是不是 karma 该管的层面」，不是所有 false positive 都要修 check。
+
+## ⚠️ 下个 session 验证残留项
 
 **背景**：Claude Code 在 session 启动时一次性读 `~/.claude/settings.json` 的 hook 配置，
 session 运行中改不会重载。当前 session 是 fix **之前**启动的 → 整个生命周期都在用旧配置
@@ -70,7 +91,7 @@ cat /tmp/karma_stop_trace.log | grep -v "test-session\|='s'\|='force'\|='block_t
 
 ### 测试状态
 
-`pytest tests/` → **227/227 passed**（M3+M4 加了 152 个新测试）
+`pytest tests/` → **229/229 passed**（M3+M4 加了 154 个新测试，含 Stop matcher 反向约束 2 条）
 - `tests/test_false_negative_regression.py` — 23 个对偶假阴测试
 - `tests/test_cli.py` — 10 个 CLI 测试
 - `tests/test_description_context.py` — 9 个上下文测试
