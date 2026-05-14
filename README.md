@@ -96,51 +96,42 @@ karma 做三件事：
 2. **实时拦截 (PreToolUse hook)** — Agent 调 tool 前扫违反，关键词层 + 工程层（regex pattern）双层检测，命中 deny
 3. **事后扫违反 (Stop hook)** — Agent 回复后扫 transcript，违反写 `~/.claude/karma/violations.jsonl`，下次 user_prompt_submit 标 ⚠️
 
-### 工程精细化（M3 完整版）
+### 反馈机制（一句话概述）
 
-- **描述上下文统一豁免** — `.md` 文档 / `.yaml/.json/.toml` 数据 / `tests/` 目录 / `/tmp/` 探针 / 文件名含 probe/sample 等都豁免，避免「描述触发模式」被误判
-- **shell 引号字面 + heredoc 智能剥** — `git commit -m "..."` 引号内是描述不是执行；`bash <<EOF` heredoc 内是真 shell 命令；`python <<EOF` heredoc 内是数据
-- **background 任务证据自动接入** — `pytest > log.txt &` 跑通后下次 hook 自动读 log 接入「最近测试通过」证据，解决长任务 evidence check 死结
-- **跨语言注释扫描** — Write/Edit 代码注释行 + docstring 扫意图字面（`# 先打个补丁`），代码主体（字符串数据）不扫
+- **stderr 通知 + 桌面通知**（macOS / Linux / Windows）让违反不被错过
+- **按 turn 累积告警**：Agent 注意力漂移按 turn 不按人类时钟（用户离开开会
+  30 分钟回来跟连续操作 30 分钟，Agent 状态完全不同）
+- **Stop hook 真干预**：Agent 沉默式停下时让继续生成下一步（防死循环 safeguard）
+- **累积强制 block**：同规则反复违反 → 要求 fix 真根因或让用户介入；可在
+  sticky 配置 `force_block_exempt: true` 关闭（给「应该继续推进」类规则用）
+- **元层监管**：Bash 命令含 karma 内部状态字面 + 写操作 → 拦「绕开检测」
 
-### 反馈机制
+实现细节（描述上下文豁免 / shell 引号 + heredoc 剥 / background 证据自动接入 /
+跨语言注释扫描 / 8 个工程检测函数实现）详 [ARCHITECTURE.md](./ARCHITECTURE.md)。
 
-- **stderr 通知** — pre_tool_use 拦截时显示 deny reason；stop hook 列违反
-- **桌面通知（macOS / Linux / Windows）** — stop hook 检测违反时弹系统通知（用户离开 stderr 视野时的补充）。`KARMA_NO_NOTIFY=1` 或 `notify_enabled: false` 关
-- **累积告警按 turn 维度** — 最近 N turn 内同 sticky 违反 ≥ M 次 → 升级 🚨 严重通知
-- **⚠️ 标记按 turn 维度** — 最近 N turn 内违反过的 sticky 下次 user_prompt_submit 注入时标红
-- **Stop hook 真干预（keep-pushing）** — Agent 沉默式停下时输出 `decision=block` 让 Agent 不真停下，继续生成下一步。检测逻辑：response 末尾 80 字按豁免优先级判：推进信号（我现在/接下来 + 动词）/ 问号（合理询问决策应鼓励）→ 豁免；停顿语气词（下次 / 先到这 / 告一段落）/ 默认（纯陈述完结无推进无问号 = 真停下）→ 命中。Safeguard：单 turn 内累积 block ≥ N 次后真放停，防死循环。配置：`stop_block_max_per_turn: 3`（0 = 完全关）
-- **Stop hook 累积强制 block** — 同 sticky 累积违反 ≥ `force_block_threshold`（默认 5）次 → Stop hook 强制 decision=block，要求 Agent 修真根因或显式让用户介入，禁止继续绕。可在 sticky.yaml 给单条规则设 `force_block_exempt: true` 关闭累积处罚（用于「应该继续推进」类规则，否则语义自我矛盾）。
-- **bypass_karma 元层监管（sticky #8 deep-fix-not-bypass）** — 工程层 check 扫 Bash 命令含 karma 内部敏感字面（`last_test_pass_ts` / `pending_bg_tasks` / `~/.claude/karma/session-state` 等）+ 写操作 → 命中「绕开 karma 检测」。让 Agent 被拦时深挖根因不许 hack 内部状态。豁免：karma 官方 CLI 命令 / 只读 inspection / commit message 引号字面（描述非执行）。
+### 配置
 
-**为啥按 turn 不按时间**：Agent 注意力漂移按 turn 累积。用户离开开会 30 分钟回来跟连续操作 30 分钟，Agent 状态完全不同 — 按人类时钟错维度。
-
-### 配置（`~/.claude/karma/config.yaml`）
-
-调阈值不用改代码。`karma doctor` 看当前生效值：
-
-```yaml
-notify_enabled: true                # 桌面通知开关
-recent_violation_turns: 5           # ⚠️ 标记窗口（最近 N turn 内违反过的标）
-escalate_window_turns: 3            # 累积告警窗口
-escalate_threshold: 3               # 累积告警次数阈值
-violations_max_lines: 5000          # rotation 触发行数
-violations_keep_history: 3          # 保留几个历史
-session_state_max_age_days: 30      # session-state 清理周期
-max_recent_bash: 15
-```
-
-字段缺失用代码默认值（fail open）。`karma init` 复制模板。
+`~/.claude/karma/config.yaml` 调阈值不用改代码。`karma doctor` 看当前生效值
++ 完整字段表 详 [ARCHITECTURE.md](./ARCHITECTURE.md#配置)。
 
 ## 场景化定位
 
-karma = **通用 hook 框架** + **场景规则集**。
+karma = **通用 hook 框架** + **场景规则集**。`karma init` 默认装「软件开发」场景。
 
-当前默认装的是「**软件开发场景**」预设（`data/sticky.dev.example.yaml`） — 7 条核心方向针对写代码时的注意力漂移：长期方案 / 不阻塞 / 直白中文 / 完成证据 / 不喂测试集 / 不绕开检测 / 先读再写。
+**两套开发场景模板按需选**：
 
-其他场景（写作 / 研究 / 产品 / 设计 / 法律等）需要不同的规则集 — 用户可以自己写 sticky.yaml，或社区贡献更多场景预设。karma 框架本身（hook 注入 / 实时拦截 / 违反检测 / 自动 catchup）跨场景通用。
+| 模板 | 内容 | 适合 |
+|---|---|---|
+| `data/sticky.dev.example.yaml`（默认 7 条） | 长期方案 / 不阻塞 / 直白中文 / 完成证据 / 不喂测试集 / 不绕开检测 / 先读再写 | 中文用户 / ML 或数据 / 评测场景 |
+| `data/sticky.dev.minimal.example.yaml`（5 条精简） | 长期方案 / 不阻塞 / 完成证据 / 不绕开检测 / 先读再写 | 英文母语 / 普通后端 / 前端 / 工具开发 |
 
-工程检测层（`karma/checks/`）也偏开发场景（识别 pytest / Edit / Write / Bash 等开发工具）；其他场景可能需要不同 check 函数集。
+精简版砍掉「直白中文」「不喂测试集」两条场景化规则。装完默认 7 条后想换成
+精简版：`cp data/sticky.dev.minimal.example.yaml ~/.claude/karma/sticky.yaml`。
+
+其他场景（写作 / 研究 / 产品 / 设计 / 法律等）— 用户可自己写 sticky.yaml,
+或社区贡献预设。karma 框架本身（hook 注入 / 实时拦截 / 违反检测）跨场景通用。
+工程检测层 `karma/checks/` 偏开发场景（识别 pytest / Edit / Write / Bash）;
+其他场景可能需要不同 check 函数。
 
 ## karma 不做的事
 
@@ -178,11 +169,28 @@ karma = **通用 hook 框架** + **场景规则集**。
     - non_blocking_parallel
 ```
 
-字段：
-- `id` — kebab-case slug，唯一
-- `preference` — 一句或多行的方向描述（注入 Claude 看到的就是这个）
-- `violation_keywords` — 关键词数组（Bash command + Write/Edit 注释扫）
-- `violation_checks` — 工程层 check 函数名（可选，精确 pattern 检测）
+**字段表**：
+
+| 字段 | 必填 | 含义 |
+|---|---|---|
+| `id` | ✓ | kebab-case slug（如 `long-term-fundamental`），唯一 |
+| `preference` | ✓ | 一句或多行的方向描述。注入 Claude 看到的就是这个，写清楚有例外有决策提示 |
+| `violation_keywords` | ✗ | 关键词数组。Bash command + Write/Edit 代码注释 + Stop hook 扫 Agent response 命中则记违反 |
+| `violation_checks` | ✗ | 工程层 check 函数名数组（见下表），精确 pattern 检测 |
+| `force_block_exempt` | ✗ | bool，默认 false。设 true 关闭累积处罚 — 给「应该继续推进 / 不阻塞」类规则用，否则累积「停下太多」触发 force_block 让 Agent 必须停下会语义自我矛盾 |
+
+**8 个内建 `violation_checks`** 名（从 `karma/checks/` 注册表选）：
+
+| 函数名 | 检测内容 |
+|---|---|
+| `long_term_fundamental` | git commit/push --no-verify 等 / 长 hash 黑白名单字面 / 意图注释「我先打个补丁」 |
+| `non_blocking_parallel` | sleep N / 阻塞 wait / 长任务（docker / cargo / npm install）无 background |
+| `chinese_plain_no_jargon` | 中文占比 < 40% / 英文技术 jargon 列表（剥 code block + inline code） |
+| `loud_failure_with_evidence` | 完成词「fix 了 / done」+ 代码任务上下文 + session 内无测试通过证据 |
+| `no_testset_no_future_leakage` | gold_cases 反喂 / 跨 split 复制 / 长 hash 字面 |
+| `read_before_write` | Edit / Write 前未 Read 过该 file_path（路径规范化等价） |
+| `keep_pushing_no_stop` | response 末尾推进信号 / 问号 / 停顿词 / 默认四路检测 |
+| `bypass_karma_detection` | Bash 命令含 karma 内部字面 + 写操作 → 拦绕开检测 |
 
 软上限 10 条，硬上限 12 条（超过 karma 拒绝加载）。
 

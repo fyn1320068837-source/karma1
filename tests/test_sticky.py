@@ -106,6 +106,34 @@ def test_load_real_example() -> None:
         assert s.violation_checks, f"{s.id} 缺 violation_checks"
 
 
+def test_load_real_minimal_example() -> None:
+    """data/sticky.dev.minimal.example.yaml 5 条真跨用户中性核心 — 砍场景化两条。
+
+    评审 C Agent 真痛点：默认 7 条含 chinese-plain（中文用户偏好）+
+    no-testset（ML 场景）违反 CLAUDE.md「不针对当前用户作弊」原则。这个
+    精简版让英文母语 / 非 ML 用户拿到中性默认。
+    """
+    repo_root = Path(__file__).resolve().parents[1]
+    example = repo_root / "data" / "sticky.dev.minimal.example.yaml"
+    sticky = load(example)
+    assert len(sticky) == 5
+    ids = {s.id for s in sticky}
+    expected = {
+        "long-term-fundamental",
+        "non-blocking-parallel",
+        "loud-failure-with-evidence",
+        "deep-fix-not-bypass",
+        "read-before-write",
+    }
+    assert ids == expected
+    # chinese-plain 和 no-testset-no-future-leakage 不在精简版
+    assert "chinese-plain-no-jargon" not in ids
+    assert "no-testset-no-future-leakage" not in ids
+    # non-blocking-parallel 必须设 force_block_exempt: true（避免语义自相矛盾）
+    nb = next(s for s in sticky if s.id == "non-blocking-parallel")
+    assert nb.force_block_exempt is True
+
+
 def test_format_for_injection_basic() -> None:
     sticky = [
         Sticky(id="r1", preference="方向 1\n  细节"),

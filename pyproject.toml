@@ -1,6 +1,6 @@
 [project]
 name = "karma"
-version = "0.1.1"
+version = "0.2.0"
 description = "Sticky core directional preferences for Claude Code — keep Agent on track in long sessions"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -50,6 +50,7 @@ artifacts = ["data/*.yaml"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "data/sticky.dev.example.yaml" = "data/sticky.dev.example.yaml"
+"data/sticky.dev.minimal.example.yaml" = "data/sticky.dev.minimal.example.yaml"
 "data/config.example.yaml" = "data/config.example.yaml"
 
 [tool.pytest.ini_options]

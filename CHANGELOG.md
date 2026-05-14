@@ -4,6 +4,31 @@
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-05-14（minor — README 重组 + 新增真中性 sticky 模板）
+
+### Added
+
+- **`data/sticky.dev.minimal.example.yaml`** 真中性 5 条核心 sticky 模板：
+  long-term-fundamental / non-blocking-parallel / loud-failure-with-evidence /
+  deep-fix-not-bypass / read-before-write。砍掉默认 7 条里两条场景化规则
+  （chinese-plain-no-jargon 中文用户偏好 / no-testset-no-future-leakage
+  ML 场景）。
+  - 评审 C Agent 真痛点：默认 7 条违反 CLAUDE.md「不针对当前用户作弊」
+    原则。英文母语 / 非 ML 用户可 `cp data/sticky.dev.minimal.example.yaml
+    ~/.claude/karma/sticky.yaml` 切换。
+  - 默认 `karma init` 仍装 7 条（向后兼容现有 0.1.x 用户）。
+
+### Changed
+
+- **README 重组**（评审 C Agent 真痛点：视角错位 — 给「Agent 接力」写不是
+  给陌生用户）：
+  - 砍 30% 实现细节（heredoc 智能剥 / background catchup / 跨语言注释扫描
+    等），移到 ARCHITECTURE.md
+  - 「反馈机制」段改写成核心机制一句话概述，详细规则链 ARCHITECTURE.md
+  - 「场景化定位」段加 2 套模板对比表，让陌生用户知道按场景选
+  - 「sticky.yaml 写法」加完整字段表（含 `force_block_exempt`）+ 8 个内建
+    `violation_checks` 函数名 + 简介表（之前用户写自定义 sticky 完全黑盒）
+
 ## [0.1.1] — 2026-05-14（patch — 评审 Agent B 第 4 条盲区一次修对）
 
 ### Fixed
@@ -117,6 +142,7 @@ karma v2 的第一个可发布版本，经历多轮 dogfooding + 4 个 Opus 4.7 
 - `.github/workflows/ci.yml` 跨 ubuntu / macOS × py3.11 / 3.12 跑 lint +
   vulture + pytest + wheel build。
 
-[Unreleased]: https://github.com/jhaizhou-ops/karma/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/jhaizhou-ops/karma/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.2.0
 [0.1.1]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.1.1
 [0.1.0]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.1.0
