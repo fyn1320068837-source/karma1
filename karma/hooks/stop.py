@@ -32,13 +32,24 @@ _ESCALATE_THRESHOLD = 3
 
 def _read_last_assistant_response(transcript_path: str) -> str:
     """读 transcript JSONL，取最后一条 assistant message 的所有 text content。"""
+    return _read_last_message_text(transcript_path, msg_type="assistant")
+
+
+def _read_last_user_prompt(transcript_path: str) -> str:
+    """v0.4.41: 读 transcript JSONL，取最后一条 user message 的 text content
+    让 keep_pushing.check 能识别用户上 turn 叫停字眼（HANDOFF v3 第三步候选）。
+    """
+    return _read_last_message_text(transcript_path, msg_type="user")
+
+
+def _read_last_message_text(transcript_path: str, msg_type: str) -> str:
+    """通用反向 scan transcript JSONL 找最后一条指定 type message 的 text content。"""
     if not transcript_path:
         return ""
     p = Path(transcript_path)
     if not p.exists():
         return ""
     try:
-        # 反向找最后一条 type=assistant
         lines = p.read_text(encoding="utf-8").splitlines()
         for ln in reversed(lines):
             ln = ln.strip()
@@ -48,7 +59,7 @@ def _read_last_assistant_response(transcript_path: str) -> str:
                 d = json.loads(ln)
             except json.JSONDecodeError:
                 continue
-            if d.get("type") != "assistant":
+            if d.get("type") != msg_type:
                 continue
             msg = d.get("message", {})
             content = msg.get("content")
@@ -97,6 +108,16 @@ def main() -> int:
         or _read_last_assistant_response(payload.get("transcript_path", ""))
     )
 
+    # v0.4.41: 拿用户上 turn prompt 让 keep_pushing.check 识别叫停字眼
+    # 真根因：HANDOFF v3 第三步候选 — keep_pushing 只看 Agent response 末尾，
+    # 看不到 user 上文「不用啦 / 休息吧 / 明天再说」叫停字面 → 反思 hook
+    # 反复触发即使用户已明确叫停（sticky #8 例外条件命中但 check 不知道）。
+    last_user_prompt = (
+        payload.get("user_prompt", "")
+        or payload.get("prompt", "")
+        or _read_last_user_prompt(payload.get("transcript_path", ""))
+    )
+
     try:
         sticky_list = load()
     except StickyConfigError as e:
@@ -119,6 +140,7 @@ def main() -> int:
         hits = run_checks(
             s.violation_checks,
             response=response,
+            user_prompt=last_user_prompt,
             session_state=state,
             sticky_id=s.id,
         )

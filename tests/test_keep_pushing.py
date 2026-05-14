@@ -247,3 +247,41 @@ def test_push_signal_woqu_kan_exempted():
     assert _check("commit 推完。我去看 karma stats 累积违反。") is None
     assert _check("做好了。我去查下个推进点。") is None
     assert _check("OK。接下来去看 force_block 累计。") is None
+
+
+def test_v0441_user_stop_hint_exempts_keep_pushing():
+    """v0.4.41 真根因 fix：user 上 turn 含明确叫停字眼 → 整 turn 豁免反思 hook
+    （HANDOFF v3 第三步候选真落地，今晚多次 dogfooding 真触发）。
+    """
+    fn = REGISTRY["keep_pushing_no_stop"]
+    bare_stop = "好了，这一波我处理好了。"  # 纯陈述无数字证据无问号无停顿词 → 默认命中
+    # 基线：无 user_prompt 时纯陈述完结仍命中
+    assert fn(response=bare_stop) is not None, "无 user_prompt 时纯陈述完结仍命中"
+
+    # 用户上 turn 含叫停字眼 → 豁免
+    stop_hints = [
+        "不用啦感谢，休息吧",
+        "好了好了你走火入魔了",
+        "明天再说吧",
+        "先到这吧",
+        "算了不用了",
+        "晚安",
+        "够了",
+    ]
+    for hint in stop_hints:
+        result = fn(response=bare_stop, user_prompt=hint)
+        assert result is None, f"用户叫停 {hint!r} 应豁免反思 hook: {result}"
+
+
+def test_v0441_user_normal_prompt_no_exempt():
+    """v0.4.41 对偶：user 上 turn 没叫停字眼 → 反思 hook 仍触发不该过宽。"""
+    fn = REGISTRY["keep_pushing_no_stop"]
+    bare_stop = "好了，这一波我处理好了。"  # 纯陈述无数字证据无问号无停顿词 → 默认命中
+    normal_prompts = [
+        "继续推下个候选",
+        "你还能优化什么",
+        "看看 audit 数据",
+    ]
+    for p in normal_prompts:
+        result = fn(response=bare_stop, user_prompt=p)
+        assert result is not None, f"正常 prompt {p!r} 不该豁免: 应仍命中"

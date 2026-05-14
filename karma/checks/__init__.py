@@ -43,6 +43,7 @@ def run_checks(
     tool_name: str = "",
     tool_input: dict | None = None,
     response: str = "",
+    user_prompt: str = "",
     session_state=None,
     sticky_id: str = "",
 ) -> list[CheckHit]:
@@ -69,6 +70,7 @@ def run_checks(
                 tool_name=tool_name,
                 tool_input=tool_input or {},
                 response=response,
+                user_prompt=user_prompt,
                 session_state=session_state,
                 sticky_id=sticky_id,
             )

@@ -4,6 +4,37 @@
 
 ## [Unreleased]
 
+## [0.4.41] — 2026-05-15（fix — keep_pushing 加 user_prompt 上下文叫停检测）
+
+### 真触发
+
+今晚多次 dogfooding：用户明确叫停（「不用啦感谢，休息吧」）但反思 hook 反复触发即使 sticky #8 例外清单字面命中。HANDOFF v3 第三步候选段早记这是 keep_pushing.check 真盲区，今晚被 dogfooding 真触发到忍无可忍。
+
+### 真根因
+
+keep_pushing.check 当前签名 `check(*, response: str = "", **_)` — 只看 Agent response 末尾，**完全看不到 user prompt 上文**。sticky #8 例外条件「用户明确叫停（停 / 不用了 / 明天再说 / 先到这等）→ 才停」字面**清单存在但 check 没去读 user 上文匹配** → 用户「不用啦」明确命中清单字面但 check 不知道仍触发反思 hook。
+
+### 真 fix
+
+按 sticky #1 长期最优雅完整修真根因：
+
+- `karma/hooks/stop.py` 加 `_read_last_user_prompt(transcript_path)` 镜像 `_read_last_assistant_response`，抽公共 `_read_last_message_text(path, msg_type)` 函数复用 reverse scan jsonl 路径
+- `karma/checks/__init__.py` `run_checks` 加 `user_prompt` 入参透传给 check 函数
+- `karma/checks/keep_pushing.py` `check()` 加 `user_prompt: str = ""` 入参 + 新 `_USER_STOP_HINT_RE` 匹配 sticky #8 例外字面（不用啦 / 不用了 / 休息吧 / 明天再说 / 先到这 / 算了 / 停一下 / 停下 / 别推了 / 别继续 / 不再推 / 够了 / 到此为止 / 收尾吧 / 睡吧 / 晚安 / 好了好了 / 走火入魔 等）
+- 用户上 turn 命中任何字面 → 整 turn 豁免 keep-pushing 反思（**最高优先级豁免，早于其他豁免**）
+
+### 验证
+
+加 2 守护测试：
+- `test_v0441_user_stop_hint_exempts_keep_pushing` — 7 个真叫停字眼真豁免（不用啦 / 好了好了 / 明天再说 / 先到这 / 算了 / 晚安 / 够了）
+- `test_v0441_user_normal_prompt_no_exempt` — 对偶：正常 prompt（继续推 / 还能优化什么 / 看看 audit）不该过宽豁免，反思 hook 仍触发
+
+测试 387 → **389 全过** + ruff 干净。
+
+### 真意义
+
+karma 自身设计真完整闭环 — sticky #8 例外条件文本里写的「用户明确叫停」字面清单**真在工程层 enforced**，不是文本声明而已。今晚多次 dogfooding 真触发暴露这真盲区，v0.4.41 让 sticky #8 例外清单从「文本声明」变「工程层真豁免」。
+
 ## [0.4.40] — 2026-05-15（fix — 反思阈值降 + chinese-plain 分母精化 + 「真字狂魔」reactive 治理）
 
 ### 真触发

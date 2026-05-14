@@ -97,10 +97,22 @@ _PUSH_SIGNAL_RE = re.compile(
 _TAIL_WINDOW = 80
 
 
-def check(*, response: str = "", **_):
+# v0.4.41 用户叫停字眼检测 — sticky #8 例外条件「用户明确叫停」清单字面
+# 命中任何字面 → 整 turn 豁免 keep-pushing reflection（用户已明确叫停 Agent
+# 真合理停下，反复反思 hook 是 karma 自身真盲区不该拦）
+_USER_STOP_HINT_RE = __import__("re").compile(
+    r"(?:不用啦|不用了|休息吧|明天再说|先到这|算了|停一下|停下|"
+    r"别推了|别继续|别推进|不再推|够了|到此为止|收尾吧|睡吧|晚安|"
+    r"好了好了|走火入魔|够了别)",
+    __import__("re").IGNORECASE,
+)
+
+
+def check(*, response: str = "", user_prompt: str = "", **_):
     """检测 Agent response 是不是「无下一步陈述完结」型停下。
 
     豁免优先级：
+    0. **用户上 turn 含明确叫停字眼**（v0.4.41）→ 整 turn 豁免（sticky #8 例外）
     1. 推进信号（我现在/立刻 + 动词）→ 豁免（有下一步计划）
     2. 问号（? 或 ？）→ 豁免（合理询问用户决策，鼓励）
     3. 停顿语气词（下次/先到这/告一段落）→ 命中（明确暂停）
@@ -108,6 +120,13 @@ def check(*, response: str = "", **_):
     """
     if not response or not response.strip():
         return None
+
+    # v0.4.41 真根因 fix：用户上 turn 明确叫停字眼 → 整 turn 豁免 keep-pushing
+    # 反思（HANDOFF v3 第三步候选真落地）。今晚多次 dogfooding 真触发 — 用户
+    # 「不用啦 / 休息吧」明确叫停但 keep_pushing.check 看不到 user prompt 上文。
+    if user_prompt and _USER_STOP_HINT_RE.search(user_prompt):
+        return None
+
     text = response.strip()
     tail = text[-_TAIL_WINDOW:]
 
