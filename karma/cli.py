@@ -274,6 +274,27 @@ def cmd_audit() -> int:
                 print(f"  {n:>3}× {sid}{hot}")
         else:
             print(f"=== 本 session 最近 {turns_window} turn 无违反 ✓ (当前 turn={current_turn}) ===")
+        print()
+
+    # 自动改进建议（基于假阳分析）
+    print("=== 改进建议 ===")
+    suggestions: list[str] = []
+    for sid, ctr in by_sticky.items():
+        total = sum(ctr.values())
+        if total < 5:
+            continue
+        for trigger, cnt in ctr.most_common(3):
+            ratio = cnt / total
+            if cnt >= 5 and ratio >= 0.5:
+                suggestions.append(
+                    f"- [{sid}] 触发词 {trigger!r} 占 {ratio*100:.0f}% ({cnt}×)，"
+                    f"考虑收紧 pattern 或精确化关键词"
+                )
+    if suggestions:
+        for s in suggestions:
+            print(s)
+    else:
+        print("(暂无明显假阳重灾区)")
     return 0
 
 
