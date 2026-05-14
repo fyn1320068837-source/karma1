@@ -10,9 +10,7 @@ sticky.yaml 的 violation_checks 字段值对应 REGISTRY 的 key。
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Protocol
-
+from karma.checks._types import CheckFn, CheckHit  # 公共类型，子模块也直接从这里 import
 from karma.checks import (
     bypass_karma,
     chinese_plain,
@@ -24,19 +22,7 @@ from karma.checks import (
     testset,
 )
 
-
-@dataclass(frozen=True)
-class CheckHit:
-    """violation_check 函数的返回 — 一次违反命中。"""
-
-    sticky_id: str
-    trigger: str          # 描述什么触发的（"Bash sleep 30"）
-    snippet: str          # 上下文片段
-    suggested_fix: str    # 给 Agent 看的修复建议
-
-
-class CheckFn(Protocol):
-    def __call__(self, **_) -> CheckHit | None: ...
+__all__ = ["CheckHit", "CheckFn", "REGISTRY", "run_checks"]
 
 
 REGISTRY: dict[str, CheckFn] = {
@@ -63,11 +49,20 @@ def run_checks(
     """跑一组 check 函数，返回所有命中。
 
     缺失的 check 名静默跳过（防 sticky.yaml 写错名 deny 所有 tool）。
+    check 函数自己崩了静默吞错（不阻塞 hook），但 `KARMA_DEBUG=1` 时往
+    stderr 打 traceback 让用户能调试自定义 check / 内部 bug。
     """
+    import os
+    import sys
+    import traceback as _tb
+    debug = bool(os.environ.get("KARMA_DEBUG"))
+
     hits: list[CheckHit] = []
     for name in check_names:
         fn = REGISTRY.get(name)
         if fn is None:
+            if debug:
+                print(f"karma[debug]: 跳过未知 check {name!r}", file=sys.stderr)
             continue
         try:
             hit = fn(
@@ -77,8 +72,14 @@ def run_checks(
                 session_state=session_state,
                 sticky_id=sticky_id,
             )
-        except Exception:
-            # check 函数自己崩了不该阻塞 hook
+        except Exception as e:
+            # check 函数自己崩了不该阻塞 hook（fail open）
+            if debug:
+                print(
+                    f"karma[debug]: check {name!r} 抛异常 {type(e).__name__}: {e}\n"
+                    f"{_tb.format_exc()}",
+                    file=sys.stderr,
+                )
             continue
         if hit:
             hits.append(hit)

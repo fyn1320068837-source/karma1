@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 
+from karma.checks._types import CheckHit
 from karma.checks.common import (
     chinese_char_count,
     strip_code_blocks,
@@ -56,8 +57,6 @@ def check(*, response: str = "", **_):
     natural = strip_code_blocks(response)
     if not natural.strip():
         return None  # 全是代码 - 不算 jargon 对话
-
-    from karma.checks import CheckHit
 
     # === Check 1: 自然语言中文占比 ===
     total = total_visible_char_count(natural)

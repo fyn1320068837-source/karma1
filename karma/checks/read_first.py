@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from karma.checks._types import CheckHit
+
 _STICKY_ID = "read-before-write"
 
 
@@ -34,7 +36,6 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, session_state=
     if session_state.has_read(file_path):
         return None
 
-    from karma.checks import CheckHit
     return CheckHit(
         sticky_id=_STICKY_ID,
         trigger=f"未 Read 就 {tool_name} {file_path}",

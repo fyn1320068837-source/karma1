@@ -169,37 +169,64 @@ def append(violations: list[Violation], path: Path | None = None) -> None:
         rotate_if_needed(path)  # config 加载失败 fallback 用 module-level defaults
 
 
+def _scan_tail_jsonl(path: Path, tail_lines: int):
+    """真 tail 读 jsonl 尾部 N 行（不是 read_text + 切片），逐行 yield 解析 dict。
+
+    用 `collections.deque(f, maxlen=N)` 流式只保留尾部 N 行，避免大文件
+    全文件读入内存。当前 rotation 阈值 5000 行内差异不大，但消除潜在隐患。
+    解析失败的行静默跳过。
+    """
+    if not path.exists():
+        return
+    try:
+        from collections import deque
+        with path.open(encoding="utf-8") as f:
+            tail = deque(f, maxlen=tail_lines)
+    except OSError:
+        return
+    for line in tail:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            yield json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+
+def _extract_turn(d: dict) -> int | None:
+    """读 violation dict 的 turn 字段。
+
+    老格式（turn 维度引入前）无 turn key → 返回 None 让调用方跳过；
+    不要用 `.get('turn', 0)` fallback 0，否则落入当前 turn 窗口造成假阳。
+    """
+    turn_raw = d.get("turn")
+    if turn_raw is None:
+        return None
+    try:
+        return int(turn_raw)
+    except (ValueError, TypeError):
+        return None
+
+
 def recent(
     path: Path | None = None,
     window_sec: int = RECENT_WINDOW_SEC,
     now: int | None = None,
     tail_lines: int = 500,
 ) -> dict[str, int]:
-    """返回最近违反过的 sticky_id → 最近 ts dict。
-
-    只读尾部 N 行（违反频率不会太高，500 行够）。
-    """
+    """返回最近违反过的 sticky_id → 最近 ts dict（按人类时钟）。"""
     if path is None:
         path = DEFAULT_PATH
-    if not path.exists():
-        return {}
     now = now or int(time.time())
     cutoff = now - window_sec
     out: dict[str, int] = {}
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()[-tail_lines:]
-    except OSError:
-        return {}
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
+    for d in _scan_tail_jsonl(path, tail_lines):
         try:
-            d = json.loads(line)
             ts = int(d.get("ts", 0))
-            sid = d.get("sticky_id", "")
-        except (json.JSONDecodeError, ValueError):
+        except (ValueError, TypeError):
             continue
+        sid = d.get("sticky_id", "")
         if ts >= cutoff and sid:
             out[sid] = max(out.get(sid, 0), ts)
     return out
@@ -211,32 +238,18 @@ def count_recent(
     now: int | None = None,
     tail_lines: int = 500,
 ) -> dict[str, int]:
-    """返回 window_sec 内每条 sticky_id 的违反**次数**计数。
-
-    跟 `recent` 区别：recent 返回最新 ts，本函数返回累积 count。
-    用于累积警报判定（如 30 分钟内同 sticky ≥ 3 次升级严重度）。
-    """
+    """返回 window_sec 内每条 sticky_id 的违反**次数**（按人类时钟）。"""
     if path is None:
         path = DEFAULT_PATH
-    if not path.exists():
-        return {}
     now = now or int(time.time())
     cutoff = now - window_sec
     out: dict[str, int] = {}
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()[-tail_lines:]
-    except OSError:
-        return {}
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
+    for d in _scan_tail_jsonl(path, tail_lines):
         try:
-            d = json.loads(line)
             ts = int(d.get("ts", 0))
-            sid = d.get("sticky_id", "")
-        except (json.JSONDecodeError, ValueError):
+        except (ValueError, TypeError):
             continue
+        sid = d.get("sticky_id", "")
         if ts >= cutoff and sid:
             out[sid] = out.get(sid, 0) + 1
     return out
@@ -256,31 +269,16 @@ def recent_turns(
     """
     if path is None:
         path = DEFAULT_PATH
-    if not path.exists():
-        return {}
     cutoff_turn = current_turn - window_turns
     out: dict[str, int] = {}
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()[-tail_lines:]
-    except OSError:
-        return {}
-    for line in lines:
-        line = line.strip()
-        if not line:
+    for d in _scan_tail_jsonl(path, tail_lines):
+        if d.get("session_id") != session_id:
             continue
-        try:
-            d = json.loads(line)
-            sid = d.get("sticky_id", "")
-            sess = d.get("session_id", "")
-            turn_raw = d.get("turn")
-            if turn_raw is None:
-                # 老格式没 turn 字段（turn 维度引入前）— 跳过，不要 fallback 成 0
-                # 让它落入「当前 turn 窗口」造成假阳
-                continue
-            turn = int(turn_raw)
-        except (json.JSONDecodeError, ValueError, TypeError):
+        sid = d.get("sticky_id", "")
+        if not sid:
             continue
-        if sess != session_id or not sid:
+        turn = _extract_turn(d)
+        if turn is None:
             continue
         if turn >= cutoff_turn:
             out[sid] = max(out.get(sid, 0), turn)
@@ -300,31 +298,16 @@ def count_recent_turns(
     """
     if path is None:
         path = DEFAULT_PATH
-    if not path.exists():
-        return {}
     cutoff_turn = current_turn - window_turns
     out: dict[str, int] = {}
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()[-tail_lines:]
-    except OSError:
-        return {}
-    for line in lines:
-        line = line.strip()
-        if not line:
+    for d in _scan_tail_jsonl(path, tail_lines):
+        if d.get("session_id") != session_id:
             continue
-        try:
-            d = json.loads(line)
-            sid = d.get("sticky_id", "")
-            sess = d.get("session_id", "")
-            turn_raw = d.get("turn")
-            if turn_raw is None:
-                # 老格式没 turn 字段（turn 维度引入前）— 跳过，否则 fallback 成 0
-                # 会被当前 turn 窗口（可能 cutoff ≤ 0）误数，触发 force_block 假阳
-                continue
-            turn = int(turn_raw)
-        except (json.JSONDecodeError, ValueError, TypeError):
+        sid = d.get("sticky_id", "")
+        if not sid:
             continue
-        if sess != session_id or not sid:
+        turn = _extract_turn(d)
+        if turn is None:
             continue
         if turn >= cutoff_turn:
             out[sid] = out.get(sid, 0) + 1

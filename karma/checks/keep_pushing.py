@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import re
 
+from karma.checks._types import CheckHit
+
 _STICKY_ID = "keep-pushing-no-stop"
 
 # 末尾问号（中英文）— 限定 response 最后 80 字（多数「停下问」signal 在末尾）
@@ -79,8 +81,6 @@ def check(*, response: str = "", **_):
         return None
     text = response.strip()
     tail = text[-_TAIL_WINDOW:]
-
-    from karma.checks import CheckHit
 
     # 豁免 1：明确推进信号
     if _PUSH_SIGNAL_RE.search(tail):

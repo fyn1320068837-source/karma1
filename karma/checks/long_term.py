@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 
+from karma.checks._types import CheckHit
 from karma.checks.common import extract_tool_text
 from karma.checks.description_context import is_description_context
 
@@ -119,7 +120,6 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
     for pat, desc, fix in patterns:
         m = pat.search(text)
         if m:
-            from karma.checks import CheckHit
             snippet = text[max(0, m.start() - 30): m.end() + 30].strip()
             return CheckHit(
                 sticky_id=_STICKY_ID,

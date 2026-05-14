@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import re
 
+from karma.checks._types import CheckHit
+
 _STICKY_ID = "loud-failure-with-evidence"
 
 _COMPLETION_RE = re.compile(
@@ -53,7 +55,6 @@ def check(
     session_state=None,
     **_,
 ):
-    from karma.checks import CheckHit
 
     has_recent_test = bool(session_state and session_state.has_recent_test_pass())
 

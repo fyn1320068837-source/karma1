@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 
+from karma.checks._types import CheckHit
 from karma.checks.common import strip_shell_quoted_literals
 
 _STICKY_ID = "non-blocking-parallel"
@@ -81,8 +82,6 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
     is_bg = bool((tool_input or {}).get("run_in_background"))
     # 扫命令骨架，跳过引号字面（commit message / echo 引号内容不是执行意图）
     cmd = strip_shell_quoted_literals(cmd_raw)
-
-    from karma.checks import CheckHit
 
     m = _SLEEP_RE.search(cmd)
     if m:

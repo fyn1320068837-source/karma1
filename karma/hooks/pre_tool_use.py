@@ -133,6 +133,8 @@ def main() -> int:
             f"建议：{top.suggested_fix}"
         )
         _deny(reason)
+        # 🛑 = pre_tool_use 拦截阻止 Agent 做事；stop hook 用 ⚠️ 表事后告警
+        # （语义差异化刻意保留：🛑 阻止动作 / ⚠️ 已发生需关注）
         print(
             f"🛑 karma: {top.sticky_id} (tool={tool_name}) — {top.trigger}",
             file=sys.stderr,

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import re
 
+from karma.checks._types import CheckHit
 from karma.checks.common import strip_shell_quoted_literals
 
 _STICKY_ID = "deep-fix-not-bypass"
@@ -82,8 +83,6 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
     has_internal = bool(_KARMA_INTERNAL_RE.search(cmd_stripped))
     has_state_path = bool(_KARMA_STATE_PATH_RE.search(cmd_stripped))
     has_write = bool(_WRITE_OP_RE.search(cmd_stripped))
-
-    from karma.checks import CheckHit
 
     if (has_internal or has_state_path) and has_write:
         m1 = _KARMA_INTERNAL_RE.search(cmd_stripped)
