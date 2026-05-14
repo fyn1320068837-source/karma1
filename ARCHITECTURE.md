@@ -164,7 +164,7 @@ append-only，行数超 5000 自动 rotation（`.1` `.2` `.3` 保留 3 个历史
 
 性能：< 30ms。
 
-### Stop hook（response 扫违反）
+### Stop hook（response 扫违反 + 真干预）
 
 时机：Agent 响应完成（这条 turn 结束）。
 
@@ -175,9 +175,13 @@ append-only，行数超 5000 自动 rotation（`.1` `.2` `.3` 保留 3 个历史
 
 实现：`karma/hooks/stop.py`
 1. 读 transcript_path JSONL，找最后一条 `type=assistant` 取所有 text content
-2. 扫 violation_keywords 关键词层 + 工程层 violation_checks（chinese_plain / evidence 主要在这层）
-3. 命中违反写 `violations.jsonl` + stderr 通知
-4. 输出 `additionalContext` 给下次 UserPromptSubmit 看（实际下次 sticky 注入会读 recent violations 自动加 ⚠️）
+2. 扫 violation_keywords 关键词层 + 工程层 violation_checks（chinese_plain / evidence / keep_pushing 主要在这层）
+3. 命中违反写 `violations.jsonl` + stderr 通知 + 桌面通知 + 累积告警
+4. **keep-pushing-no-stop 命中 → 输出 `{"decision": "block", "reason": "..."}`** 让 Agent
+   不真停下继续生成（真干预 sticky #7「不主动停」）。Safeguard：单 turn 内累积 block ≥ N
+   次（config `stop_block_max_per_turn` 默认 3）后放 Agent 真停，防死循环
+5. 否则输出 `additionalContext` 给下次 UserPromptSubmit 看（实际下次 sticky 注入会读
+   recent violations 自动加 ⚠️）
 
 性能：< 200ms。
 
@@ -193,6 +197,7 @@ append-only，行数超 5000 自动 rotation（`.1` `.2` `.3` 保留 3 个历史
 | `loud_failure_with_evidence` | 完成证据 | 完成词 / weak claim 在代码任务上下文 + 无测试证据 |
 | `no_testset_no_future_leakage` | 不喂测试集 | gold_cases 反喂 / 跨 split 复制 / 长 hash 在比较或赋值位置 |
 | `read_before_write` | 先读再写 | Edit/Write 前未 Read 该 file_path（Write 新文件豁免） |
+| `keep_pushing_no_stop` | 不主动停 | response 末尾 80 字含问号 / 停顿语气词（下次 / 先到这 / 告一段落 等）+ 无推进信号 → 疑似停下等用户 |
 
 每个 check 函数签名：`def check(*, tool_name, tool_input, response, session_state, **_) -> CheckHit | None`。
 
