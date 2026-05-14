@@ -61,13 +61,25 @@ karma 4 hook 是否真注册 + 输入 prompt 看是否真触发。
 不是 karma 的 bug — 是 codex / gemini 客户端调度行为只能在真 TUI 验证。
 
 **2026-05-14 真根因找到**（用户挑战「这几天 vibe island 一直调 codex hook」
-驱动深挖）：[GitHub codex issue #21639](https://github.com/openai/codex/issues/21639)
-明确 **codex Desktop App 0.129+ 起 hook 调度 regression** — 配在
-`.codex/hooks.json` 的 hook 不再触发（不论 karma / vibe-island / 其他）。
-作者本机 codex 0.130 + Desktop App 用户 = 正好命中这个上游 bug 窗口。
+驱动深挖 — sub-agent 真起 codex CLI TUI 用 pty.fork() 跑通看到的）：
 
-karma 装机层 + 5 个 wrapper + sticky 注入 + 协议适配全验证生效，但 codex
-Desktop App 不调度 wrapper 是 OpenAI 端 regression。**等 OpenAI 修。**
+**codex 0.130 新加 hook approval gate** — 所有新装的 hook 默认 quarantined,
+必须 TUI 内交互式 `/hooks` 审批后才执行。codex TUI 启动横幅显示
+`⚠ 8 hooks need review before they can run. Open /hooks to review them.`
+（karma 4 + vibe-island 4 = 8 个全在等审批）。
+
+这是 codex 0.130 安全设计**不是 bug**，但需要用户手动审批一次才生效。
+karma 装机层 + 5 个 wrapper + sticky 注入 + 协议适配全验证生效，**codex
+不调度 wrapper 是 0.130 approval gate** 拦的，不是 Desktop App regression
+（之前 issue #21639 是另一回事 — 仅 Desktop App 还有自己的 regression）。
+
+sub-agent 附带发现：codex CLI 0.130 panic 真根因「byte index u64 wrap」
+触发条件是逐字符 stdin 注入；用位置参数 `codex "<prompt>"` 绕过 panic 但
+hook 仍被 approval gate 拦。
+
+**用户体验影响**：karma 装完同事第一次跑 codex 会看到 `⚠ N hooks need
+review` 横幅，必须 TUI 输 `/hooks` 逐条 approve karma 4 个 wrapper 才真
+生效。README + 给同事 AI prompt 块已加这关键一步。
 
 ## ✅ Stop hook matcher fix 已实战验证生效 + 一条 karma 管不到的元认知盲区
 

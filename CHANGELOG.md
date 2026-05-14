@@ -4,6 +4,46 @@
 
 ## [Unreleased]
 
+## [0.4.9] — 2026-05-14（patch — codex 0.130 hook approval gate 最终真根因）
+
+sub-agent 用 `pty.fork()` 真起 codex CLI TUI（绕过主作者 expect 失败 / codex
+panic 的两个坑）找到**最终真根因**：
+
+### 真发现：codex 0.130 hook approval gate
+
+codex 0.130 起所有新装 hook **默认 quarantined**（待审批），必须 TUI 内
+交互式 `/hooks` 命令手动 approve 后才执行。TUI 启动横幅显示 `⚠ N hooks
+need review before they can run. Open /hooks to review them.`
+
+这是 codex 0.130 **安全设计不是 bug**（防恶意 hook 自动执行），但带来真
+用户体验影响：karma 装完后 codex 不会自动调度 wrapper，**第一次 TUI 必须
+手动审批 4 个 karma wrapper**。
+
+之前所有「装机就绪但 hook 不触发」的真根因都是这个 approval gate —
+不是 v0.4.8 推断的 Desktop App regression（#21639 是另一个独立问题）。
+
+### Docs
+
+- README 客户端表 codex 行更新：装完必须 TUI 内 `/hooks` 审批 4 个 wrapper
+- README「让 AI 帮你装」段加 codex 0.130 approval gate 关键最后一步（含
+  TUI 命令示例 `> /hooks` 跟 approve 流程）
+- HANDOFF 同步真根因 + sub-agent 附带发现（codex CLI panic 「byte index
+  u64 wrap」用位置参数绕过）
+
+### 验证方法（给同事真终端跑）
+
+```bash
+codex                # 起 CLI TUI（不是 Desktop App）
+                     # 看到「⚠ N hooks need review」横幅
+> /hooks             # 交互审批 karma 4 个 wrapper
+> /quit              # 退出
+# 之后再跑任何 codex 命令 karma hook 真触发
+```
+
+### Test
+
+测试 314 全过，4 件套全绿。
+
 ## [0.4.8] — 2026-05-14（patch — CI fix + codex Desktop App 上游 regression 真根因记录）
 
 ### Fixed
@@ -598,7 +638,8 @@ karma v2 的第一个可发布版本，经历多轮 dogfooding + 4 个 Opus 4.7 
 - `.github/workflows/ci.yml` 跨 ubuntu / macOS × py3.11 / 3.12 跑 lint +
   vulture + pytest + wheel build。
 
-[Unreleased]: https://github.com/jhaizhou-ops/karma/compare/v0.4.8...HEAD
+[Unreleased]: https://github.com/jhaizhou-ops/karma/compare/v0.4.9...HEAD
+[0.4.9]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.4.9
 [0.4.8]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.4.8
 [0.4.7]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.4.7
 [0.4.6]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.4.6

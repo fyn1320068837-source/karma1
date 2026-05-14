@@ -63,11 +63,20 @@ karma 解决的就是这个 — 不让你的最高优先级方向被淹没。
 完成后告诉我：⚠️ 必须重启 AI 客户端 karma 才生效。fish shell 用户第 2 步
 用 activate.fish。想隔离试用：装前 `export KARMA_HOME=~/karma-test`。
 
-⚠️ **codex 上游 bug**：codex **Desktop App** 0.129+ 起 hook 调度 regression
-（[issue #21639](https://github.com/openai/codex/issues/21639)，仅 Desktop App
-**CLI 不受影响**）。想验证 karma 在 codex 真生效：**用终端跑 `codex`**（不是
-Desktop App）— CLI TUI 真触发 hook。Desktop App 等 OpenAI 修。Claude Code
-这条线现版本任何用法都真生效。
+⚠️ **codex 0.130 hook approval gate（最关键一步！）**：codex 0.130 起所有新
+装的 hook 默认在「待审批」状态不执行。装完 karma 后**必须**：
+
+```bash
+codex                  # 起终端 TUI（不是 Desktop App，Desktop App 还有 regression）
+                       # 会看到 ⚠ N hooks need review 横幅
+> /hooks               # 在 TUI 输入这条命令
+                       # 逐条 approve karma 4 个 wrapper（user_prompt_submit /
+                       # pre_tool_use / post_tool_use / stop）
+> /quit
+```
+
+审批后 karma 在 codex CLI 才真触发。Claude Code 这条线没 approval gate
+任何用法都真生效。
 ````
 
 AI 会逐步检查环境、克隆代码、装依赖、装 hook、验证、提醒你重启客户端。
@@ -259,7 +268,7 @@ karma v0.4+ 支持 **3 家 AI 编程客户端 hook 协议**（基类抽象，加
 | 客户端 | 配置文件 | 启用方式 | 实测状态 |
 |---|---|---|---|
 | Claude Code | `~/.claude/settings.json` | 默认启用 | ✓ v0.1.0 起 |
-| Codex CLI | `~/.codex/hooks.json` | `karma install-hooks --backend codex`<br/>自动启用 `[features] hooks = true` | ✓ v0.3.0 装机层<br/>⚠️ **codex Desktop App 0.129+ 上游 regression 不调度 hook**（[issue #21639](https://github.com/openai/codex/issues/21639)，仅 Desktop App，**CLI 不受影响**）— 用 `codex` 终端命令跑 TUI 真触发；用 Desktop App 等 OpenAI 修。 |
+| Codex CLI | `~/.codex/hooks.json` | `karma install-hooks --backend codex`<br/>自动启用 `[features] hooks = true` | ✓ v0.3.0 装机层<br/>⚠️ **codex 0.130 新加 hook approval gate** — 装完 karma 4 个 hook 默认在「待审批」状态不执行。**必须**第一次跑 `codex` TUI 输入 `/hooks` 手动审批 4 个 karma wrapper 才真触发。codex 启动会显示 `⚠ N hooks need review before they can run`。<br/>另：codex Desktop App 0.129+ 还有 [regression issue #21639](https://github.com/openai/codex/issues/21639)。 |
 | Gemini CLI | `~/.gemini/settings.json` | `karma install-hooks --backend gemini-cli` | ✓ v0.4.0 起 |
 
 加新客户端 backend 看 [karma/backends/HOWTO.md](./karma/backends/HOWTO.md) —
