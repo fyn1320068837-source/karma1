@@ -230,6 +230,41 @@ def test_non_blocking_wait_blocking_blocked():
         assert hit is not None, f"裸 wait 应拦: {cmd!r}"
 
 
+def test_non_blocking_python_c_sleep_literal_exempted():
+    """v0.4.18：python -c "..." 内的 sleep 字面是字符串数据不是真 shell sleep。
+
+    dogfooding 实测假阳率 60%：karma 自测 _SLEEP_RE 探针
+    `python3 -c "for c in ['sleep 5']: ..."` 被错算真 sleep。
+    fix：命令头是宿主语言 + -c 时跳 sleep 检测（同 deep-fix v0.4.13 _WRITE_OP_RE 根因）。
+    真 python 等待用 time.sleep 不是裸 sleep 字面。
+    """
+    fn = REGISTRY["non_blocking_parallel"]
+    cmd = 'python3 -c "for c in [\'sleep 5\', \'sleep 30\']: print(c)"'
+    assert fn(tool_name="Bash", tool_input={"command": cmd}) is None
+    # node / ruby / perl -c 同样豁免
+    for cmd in [
+        'node -e "console.log(\'sleep 30\')"',
+        'ruby -e "puts \'sleep 5\'"',
+    ]:
+        assert fn(tool_name="Bash", tool_input={"command": cmd}) is None, \
+            f"宿主语言 -c 应豁免 sleep 字面: {cmd!r}"
+
+
+def test_non_blocking_python_c_wait_identifier_exempted():
+    """v0.4.18：python -c "..." 内的 _WAIT_RE / wait_fn 等 identifier 字面命中
+    \\bwait\\b 是真假阳（python identifier 不是 shell wait 命令）。同 sleep 根因。
+    """
+    fn = REGISTRY["non_blocking_parallel"]
+    cmd = 'python3 -c "from karma.checks.non_blocking import _WAIT_RE; print(_WAIT_RE)"'
+    assert fn(tool_name="Bash", tool_input={"command": cmd}) is None
+
+
+def test_non_blocking_real_bash_sleep_still_caught():
+    """对偶守护：宿主语言豁免不影响真 shell sleep 拦截。"""
+    fn = REGISTRY["non_blocking_parallel"]
+    assert fn(tool_name="Bash", tool_input={"command": "sleep 30 && echo done"}) is not None
+
+
 def test_non_blocking_kubectl_wait_passes():
     """评审 B Agent 真痛点：kubectl wait / docker wait / aws cloudformation wait
     是 CI/CD 合法同步原语，不该拦。"""

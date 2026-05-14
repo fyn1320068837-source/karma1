@@ -4,6 +4,53 @@
 
 ## [Unreleased]
 
+## [0.4.18] — 2026-05-14（patch — non-blocking python -c sleep/wait 假阳：复用 v0.4.13 根因）
+
+### 真触发
+
+dogfooding 实测 `non-blocking-parallel` 7d 5 次假阳率 60%。HANDOFF 候选第 1
+件治理：karma 自测 `_SLEEP_RE` 探针 `python3 -c "for c in ['sleep 5']: ..."`
+被错算真 shell sleep；`python -c "from x import _WAIT_RE"` identifier 字面
+被错算 shell wait。
+
+### 真根因
+
+跟 deep-fix v0.4.13 `_WRITE_OP_RE` 同根因：`strip_shell_quoted_literals`
+保留 `python -c` 内容（设计上拦 `bash -c 'rm karma'` 类绕过），但 python
+代码里的 `sleep` / `wait` 字面是 identifier / 字符串数据不是 shell 真调用。
+
+### Fix
+
+`karma/checks/non_blocking.py` 加 `_LANG_C_HEAD_RE`（跟 bypass_karma.py
+v0.4.13 完全一致）：
+
+```python
+_LANG_C_HEAD_RE = re.compile(
+    r"\b(?:python\d?|node|ruby|perl)\s+-[ce]\b",
+    re.IGNORECASE,
+)
+```
+
+sleep + wait 检测前先看 `is_lang_c = bool(_LANG_C_HEAD_RE.search(cmd_raw))`，
+是宿主语言 -c 时跳过这两类检测。
+
+### 已知 limitation
+
+`python -c "import time; time.sleep(30)"` 类真 python 睡眠也豁免（按 sleep
+字面只在 shell 上下文有意义的设计）。真 python 等待应该用 background +
+回调而不是 time.sleep，这条 limitation 接受 — 用户 python 代码内逻辑由
+其他工具检测（karma v2 边界）。
+
+### 验证
+
+- python -c 内 sleep 字面 → None ✓
+- python -c 内 _WAIT_RE identifier → None ✓
+- node / ruby / perl -c 同等豁免 ✓
+- 裸 shell `sleep 30 && echo done` → 命中 ✓
+- kubectl/docker wait 等合法子命令仍豁免 ✓
+
+330 测试全过；加 3 个守护 case 在 `tests/test_checks.py`。
+
 ## [0.4.17] — 2026-05-14（feat — audit --with-fix-timeline dogfooding 闭环视图）
 
 ### 真价值

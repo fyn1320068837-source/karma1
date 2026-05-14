@@ -18,6 +18,15 @@ _STICKY_ID = "non-blocking-parallel"
 
 # sleep 0 是 no-op 不阻塞（也常用于 yield 调度），只拦 sleep N (N >= 1)
 _SLEEP_RE = re.compile(r"\bsleep\s+([1-9]\d*|0?\.\d+|[1-9]\d*\.\d+)", re.IGNORECASE)
+# v0.4.18：宿主语言 -c/-e flag 命令头识别 — 跟 deep-fix v0.4.13 同根因 fix。
+# python/node/ruby/perl -c 内的 `sleep` 字面是字符串数据不是 shell 真 sleep
+# 调用（python 真睡用 time.sleep / subprocess，不是裸 sleep 字面）。
+# 真触发：karma 自测 _SLEEP_RE 探针 python3 -c "for c in ['sleep 5']: ..."
+# 被错算真 sleep。dogfooding 假阳率 60% (5 次中 3 次)。
+_LANG_C_HEAD_RE = re.compile(
+    r"\b(?:python\d?|node|ruby|perl)\s+-[ce]\b",
+    re.IGNORECASE,
+)
 # wait 命令检测 — 见 _is_blocking_wait 函数
 # 拦 shell 内置 wait（裸 / 接 PID / 接 $!）。豁免有合法 wait 子命令的工具
 # （kubectl wait / docker wait / aws cloudformation wait / gcloud / az）。
@@ -83,8 +92,14 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
     # 扫命令骨架，跳过引号字面（commit message / echo 引号内容不是执行意图）
     cmd = strip_shell_quoted_literals(cmd_raw)
 
+    # v0.4.18：命令头是宿主语言 + -c/-e 时跳 sleep 检测 — python/node 等代码
+    # 里的 sleep 字面是字符串数据不是真 shell 调用。真 python 等待用 time.
+    # sleep(N) / subprocess.run("sleep") 这种 — `sleep` 裸字面在 python 代码
+    # 里只是 identifier 不会真执行。同 v0.4.13 deep-fix 拆 _WRITE_OP_RE 根因。
+    is_lang_c = bool(_LANG_C_HEAD_RE.search(cmd_raw))
+
     m = _SLEEP_RE.search(cmd)
-    if m:
+    if m and not is_lang_c:
         return CheckHit(
             sticky_id=_STICKY_ID,
             trigger=f"Bash sleep 命令: {m.group()!r}",
@@ -93,7 +108,9 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
                           "需要等条件成立时用 Monitor + until 循环。",
         )
 
-    if _is_blocking_wait(cmd):
+    # v0.4.18：wait 检测也豁免宿主语言 -c — python 代码里 `_WAIT_RE` / `wait_fn`
+    # 等 identifier 字面命中 \bwait\b 是真假阳。同 sleep 根因。
+    if _is_blocking_wait(cmd) and not is_lang_c:
         return CheckHit(
             sticky_id=_STICKY_ID,
             trigger="Bash wait 命令阻塞",
