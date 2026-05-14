@@ -38,6 +38,37 @@ def _read_settings(home: Path) -> dict:
 
 # ---- install-hooks ----
 
+def test_init_default_installs_7_sticky(fake_home, capsys):
+    """karma init 默认装 7 条 dev.example。"""
+    import karma.sticky
+    monkeypatch_path = fake_home / ".claude" / "karma" / "sticky.yaml"
+    # cmd_init 用 module-level STICKY_PATH，需要 patch
+    import unittest.mock
+    with unittest.mock.patch.object(cli, "STICKY_PATH", monkeypatch_path):
+        with unittest.mock.patch.object(karma.sticky, "DEFAULT_PATH", monkeypatch_path):
+            rc = cli.cmd_init(minimal=False)
+    assert rc == 0
+    assert monkeypatch_path.exists()
+    sticky_list = karma.sticky.load(monkeypatch_path)
+    assert len(sticky_list) == 7
+
+
+def test_init_minimal_installs_5_sticky(fake_home, capsys):
+    """karma init --minimal 装 5 条真中性核心（评审 C Agent 「跨用户合理」原则）。"""
+    import karma.sticky
+    monkeypatch_path = fake_home / ".claude" / "karma" / "sticky.yaml"
+    import unittest.mock
+    with unittest.mock.patch.object(cli, "STICKY_PATH", monkeypatch_path):
+        with unittest.mock.patch.object(karma.sticky, "DEFAULT_PATH", monkeypatch_path):
+            rc = cli.cmd_init(minimal=True)
+    assert rc == 0
+    sticky_list = karma.sticky.load(monkeypatch_path)
+    assert len(sticky_list) == 5
+    ids = {s.id for s in sticky_list}
+    assert "chinese-plain-no-jargon" not in ids
+    assert "no-testset-no-future-leakage" not in ids
+
+
 def test_install_hooks_creates_wrappers(fake_home, capsys):
     rc = cli.cmd_install_hooks()
     assert rc == 0

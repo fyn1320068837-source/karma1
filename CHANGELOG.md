@@ -4,6 +4,22 @@
 
 ## [Unreleased]
 
+## [0.2.3] — 2026-05-14（patch — karma init --minimal flag）
+
+### Added
+
+- **`karma init --minimal`** 显式 flag 装 5 条真中性核心模板（评审 C Agent
+  第二轮指出 minimal 模板存在但默认 7 条对英语母语用户仍是持续假阳源）。
+  - 评审建议过「`karma init` 检测系统 locale 自动选」— 实测后否决：
+    `locale.getlocale()` 在 macOS 默认返回 `en_US` 但用户实际可能是中文，
+    自动猜错率高。改用显式 flag 让用户自己选（显式优于隐式）。
+  - 默认 `karma init` 仍装 7 条向后兼容；末尾打印 `--minimal` 提示让英文
+    用户知道有选项。
+  - 加 2 条守护测试（`test_init_default_installs_7_sticky` /
+    `test_init_minimal_installs_5_sticky`）。
+
+测试 256 → 258 全过。
+
 ## [0.2.2] — 2026-05-14（patch — 第二轮评审 critical bug fix）
 
 跑了第二轮独立 Opus 4.7 sanity-check 评审 Agent，找出 v0.1.1 修复时漏掉的
@@ -198,7 +214,8 @@ karma v2 的第一个可发布版本，经历多轮 dogfooding + 4 个 Opus 4.7 
 - `.github/workflows/ci.yml` 跨 ubuntu / macOS × py3.11 / 3.12 跑 lint +
   vulture + pytest + wheel build。
 
-[Unreleased]: https://github.com/jhaizhou-ops/karma/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/jhaizhou-ops/karma/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.2.3
 [0.2.2]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.2.2
 [0.2.1]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.2.1
 [0.2.0]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.2.0

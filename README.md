@@ -125,8 +125,15 @@ karma = **通用 hook 框架** + **场景规则集**。`karma init` 默认装「
 | `data/sticky.dev.example.yaml`（默认 7 条） | 长期方案 / 不阻塞 / 直白中文 / 完成证据 / 不喂测试集 / 不绕开检测 / 先读再写 | 中文用户 / ML 或数据 / 评测场景 |
 | `data/sticky.dev.minimal.example.yaml`（5 条精简） | 长期方案 / 不阻塞 / 完成证据 / 不绕开检测 / 先读再写 | 英文母语 / 普通后端 / 前端 / 工具开发 |
 
-精简版砍掉「直白中文」「不喂测试集」两条场景化规则。装完默认 7 条后想换成
-精简版：`cp data/sticky.dev.minimal.example.yaml ~/.claude/karma/sticky.yaml`。
+精简版砍掉「直白中文」「不喂测试集」两条场景化规则。**装时显式选**：
+
+```bash
+karma init              # 默认 7 条完整开发场景
+karma init --minimal    # 5 条真中性核心（英文母语 / 非 ML 用户）
+```
+
+显式 flag 比自动 locale 检测可靠 — 实测 `locale.getlocale()` 在 macOS 默认
+返回 `en_US` 但用户实际可能是中文，猜错率高。
 
 其他场景（写作 / 研究 / 产品 / 设计 / 法律等）— 用户可自己写 sticky.yaml,
 或社区贡献预设。karma 框架本身（hook 注入 / 实时拦截 / 违反检测）跨场景通用。
