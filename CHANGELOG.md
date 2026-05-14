@@ -4,6 +4,42 @@
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-05-14（patch — 抽 JsonHooksBackend 共用基类降未来 backend 成本）
+
+### Refactor
+
+从 vibe-island 实证清单（claude / codex / gemini / cursor / factory / qoder /
+copilot / codebuddy / kimi 9 家客户端）学到「多客户端同模式」— 抽通用
+`JsonHooksBackend` 基类，让加新 backend 变成「填表」工作而不是写整套：
+
+- **`karma/backends/_json_hooks.py`** 通用基类，提供 90% 共用实现：
+  client_installed / hooks_dir / settings_path / load_settings / save_settings /
+  is_karma_entry / 默认 build_event_entry / 默认 pre_install_setup（空）。
+- 3 个现有 backend 重构成继承基类，只填**类属性**：
+  - `name` / `display_name` / `_CONFIG_DIR_NAME` / `_SETTINGS_FILENAME` /
+    `_CLIENT_CMD` / `_HOOK_EVENTS`
+- 子类**可选 override**：`build_event_entry`（不同 matcher / timeout）、
+  `pre_install_setup`（Codex 启用 features.hooks）。
+
+**未来加新 backend 模板**：
+
+```python
+class CursorBackend(JsonHooksBackend):
+    name = "cursor"
+    display_name = "Cursor"
+    _CONFIG_DIR_NAME = ".cursor"
+    _SETTINGS_FILENAME = "hooks.json"
+    _CLIENT_CMD = "cursor"
+    _HOOK_EVENTS = {"UserPromptSubmit": "user_prompt_submit", ...}
+```
+
+3 行类属性 + 4 行 event 映射就装好一个新 backend。
+
+### Code quality
+
+- 3 个 backend 文件共减少 ~130 行重复代码（370 → 240 含基类）。
+- 4 件套全绿：299 测试 / ruff / mypy（karma + tests） / vulture 0 issue。
+
 ## [0.4.0] — 2026-05-14（minor — 第三个 backend：Gemini CLI 适配）
 
 ### Added — Gemini CLI 装机支持
@@ -351,7 +387,8 @@ karma v2 的第一个可发布版本，经历多轮 dogfooding + 4 个 Opus 4.7 
 - `.github/workflows/ci.yml` 跨 ubuntu / macOS × py3.11 / 3.12 跑 lint +
   vulture + pytest + wheel build。
 
-[Unreleased]: https://github.com/jhaizhou-ops/karma/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/jhaizhou-ops/karma/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.4.1
 [0.4.0]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.4.0
 [0.3.0]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.3.0
 [0.2.4]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.2.4
