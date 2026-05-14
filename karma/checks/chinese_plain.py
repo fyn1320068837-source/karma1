@@ -23,6 +23,18 @@ from karma.checks.common import (
 
 _STICKY_ID = "chinese-plain-no-jargon"
 
+# URL 全英文但是结构性内容（不是 jargon 话术）— 算 ratio 时先剥
+# 覆盖 https/http/带 markdown 链接 [text](url) 形式
+_URL_RE = re.compile(
+    r"\[(?:[^\]]*)\]\((?:https?://[^)]+)\)"  # markdown link [text](url)
+    r"|https?://\S+"                           # 裸 URL
+    r"|`?(?:[\w.-]+@[\w.-]+\.[a-z]{2,})`?"      # email
+)
+
+# markdown 表格 — 整行 `| ... | ... |` 是结构性数据不是 jargon 话术
+# 含分隔行 `|---|---|` 跟正常 cell 行
+_TABLE_ROW_RE = re.compile(r"^\s*\|.*\|\s*$", re.MULTILINE)
+
 # 常见 jargon 术语 — 软件开发场景的英文技术词（用户偏好直白中文时拦）
 # 边界要求避免 e.g. `recall` 误匹配 `recalls` / `dispatch` 误匹配 `dispatcher`
 # 包括：ML 词 + 通用编程词（并发 / 设计模式 / 异步 / 分布式）
@@ -58,17 +70,23 @@ def check(*, response: str = "", **_):
     if not natural.strip():
         return None  # 全是代码 - 不算 jargon 对话
 
+    # 先剥**结构性内容**（URL / email / markdown 表格行）— 这些不是 jargon
+    # 话术，算 ratio 时不该计入。dogfooding 真触发：response 含 GitHub release
+    # URL 35+ 字符 + 多行表格把中文占比从 ~50% 拉低到 15-28%。
+    natural_for_ratio = _URL_RE.sub("", natural)
+    natural_for_ratio = _TABLE_ROW_RE.sub("", natural_for_ratio)
+
     # === Check 1: 自然语言中文占比 ===
-    total = total_visible_char_count(natural)
-    chinese = chinese_char_count(natural)
-    english_words = len(re.findall(r"\b[a-zA-Z][a-zA-Z\-]{2,}\b", natural))
+    total = total_visible_char_count(natural_for_ratio)
+    chinese = chinese_char_count(natural_for_ratio)
+    english_words = len(re.findall(r"\b[a-zA-Z][a-zA-Z\-]{2,}\b", natural_for_ratio))
     if total > 50 and english_words >= _MIN_ENGLISH_WORDS_FOR_RATIO:
         ratio = chinese / max(total, 1)
         if ratio < _MIN_CHINESE_RATIO:
             return CheckHit(
                 sticky_id=_STICKY_ID,
                 trigger=f"自然语言中文占比 {ratio*100:.0f}% < {_MIN_CHINESE_RATIO*100:.0f}%",
-                snippet=natural[:150],
+                snippet=natural_for_ratio[:150],
                 suggested_fix="用直白中文回应。英文术语需要时短解释一下，不堆 jargon。",
             )
 

@@ -349,6 +349,48 @@ def test_chinese_plain_detects_low_chinese_ratio():
     assert hit is not None
 
 
+def test_chinese_plain_url_not_counted_in_ratio():
+    """URL 全英文但是结构性内容（不是 jargon 话术）— 算 ratio 时先剥。
+
+    dogfooding 实测真触发：发 release 汇报 'v0.3.0 发布 — https://github.com/.../tag/v0.3.0'
+    URL 35+ 字符把中文占比从主体内容的 ~50% 拉低到 28% 误命中。修后 URL 先剥
+    再算 ratio。
+    """
+    fn = REGISTRY["chinese_plain_no_jargon"]
+    response = (
+        "v0.3.0 已发布到 https://github.com/jhaizhou-ops/karma/releases/tag/v0.3.0 "
+        "看这个链接拿 release notes。本轮做了 codex backend 适配，跑通了实测。"
+    )
+    hit = fn(response=response)
+    assert hit is None, f"URL 不该拉低中文比例造假阳: {hit}"
+
+
+def test_chinese_plain_markdown_table_not_counted_in_ratio():
+    """markdown 表格也是结构性内容（数据 / 名称），不算自然语言话术。"""
+    fn = REGISTRY["chinese_plain_no_jargon"]
+    response = """本轮真完成清单：
+
+| Release | 真做 |
+|---|---|
+| v0.3.0 | Codex CLI backend |
+| v0.4.0 | Gemini CLI backend |
+
+跨平台测试全过。"""
+    hit = fn(response=response)
+    assert hit is None, f"表格不该拉低中文比例造假阳: {hit}"
+
+
+def test_chinese_plain_real_jargon_still_blocked():
+    """对偶：URL/表格剥不能让真 jargon 漏报。"""
+    fn = REGISTRY["chinese_plain_no_jargon"]
+    response = (
+        "使用 retrieval embedding tokenizer hyperparameter softmax "
+        "orchestrator dispatcher 实现 baseline。"
+    )
+    hit = fn(response=response)
+    assert hit is not None, "真 jargon 仍要拦"
+
+
 def test_chinese_plain_jargon_in_parenthesis_list_exempted():
     """jargon 在括号列表里（描述 jargon 不是用 jargon）→ 豁免。
     例：「扩通用编程词（mutex / orchestrator / dispatcher / observer）」

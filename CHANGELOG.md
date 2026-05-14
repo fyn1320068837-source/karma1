@@ -4,6 +4,28 @@
 
 ## [Unreleased]
 
+## [0.4.3] — 2026-05-14（patch — chinese-plain 表格 / URL 假阳修）
+
+### Fixed
+
+`chinese_plain_no_jargon` 假阳 — markdown 表格 / URL 把中文占比拉低误命中。
+
+**实测触发场景**：作者发 release 汇报响应含 `https://github.com/.../tag/v0.3.0`
+URL 35+ 字符全英文 + markdown 表格 `| v0.3.0 | Codex CLI backend |` 字面全
+英文，把主体中文占比从 ~50% 拉低到 15-28% 触发 force_block（累积 5 次 ≥ 阈值）。
+
+但 URL / 表格是**结构性内容**不是 jargon 话术。修：算 ratio 前先剥：
+
+- `_URL_RE` 剥裸 URL + markdown 链接 `[text](url)` + email
+- `_TABLE_ROW_RE` 剥整行 markdown 表格（`| ... | ... |` + `|---|` 分隔行）
+
+加 3 条守护测试：URL 剥 / 表格剥 / 真 jargon 对偶（用了真 jargon 仍拦
+保证不放过真违反）。
+
+### Test
+
+测试 304 → 307 全过，4 件套全绿。
+
 ## [0.4.2] — 2026-05-14（patch — dogfooding 实测发现 bypass_karma 假阳）
 
 ### Fixed
@@ -415,7 +437,8 @@ karma v2 的第一个可发布版本，经历多轮 dogfooding + 4 个 Opus 4.7 
 - `.github/workflows/ci.yml` 跨 ubuntu / macOS × py3.11 / 3.12 跑 lint +
   vulture + pytest + wheel build。
 
-[Unreleased]: https://github.com/jhaizhou-ops/karma/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/jhaizhou-ops/karma/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.4.3
 [0.4.2]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.4.2
 [0.4.1]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.4.1
 [0.4.0]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.4.0
