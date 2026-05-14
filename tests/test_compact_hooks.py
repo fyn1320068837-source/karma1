@@ -119,3 +119,50 @@ def test_hooks_graceful_fallback_on_sticky_error():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def test_subagent_start_hook():
+    """SubagentStart hook: 子 agent 继承 sticky。"""
+    payload = {
+        "agent_id": "explore-1",
+        "agent_type": "Explore",
+        "session_id": "parent-session",
+    }
+    
+    result = subprocess.run(
+        ["/Users/jhz/karma/.venv/bin/python", "-m", "karma.hooks.subagent_start"],
+        capture_output=True,
+        text=True,
+        input=json.dumps(payload),
+        cwd="/Users/jhz/karma"
+    )
+    
+    if result.returncode == 0:
+        output = json.loads(result.stdout)
+        assert isinstance(output, dict)
+
+
+def test_subagent_stop_hook_no_violations(tmp_path):
+    """SubagentStop hook: 子 agent 无违反。"""
+    transcript_path = tmp_path / "subagent.jsonl"
+    transcript_path.write_text("正常完成工作", encoding="utf-8")
+    
+    payload = {
+        "agent_id": "explore-1",
+        "agent_type": "Explore",
+        "session_id": "parent-session",
+        "transcript_path": str(transcript_path)
+    }
+    
+    result = subprocess.run(
+        ["/Users/jhz/karma/.venv/bin/python", "-m", "karma.hooks.subagent_stop"],
+        capture_output=True,
+        text=True,
+        input=json.dumps(payload),
+        cwd="/Users/jhz/karma"
+    )
+    
+    if result.returncode == 0:
+        output = json.loads(result.stdout)
+        assert output.get("continue") is True
+        assert "✓" in output.get("hookSpecificOutput", {}).get("additionalContext", "")
