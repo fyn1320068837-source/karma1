@@ -11,9 +11,11 @@ _INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
 
 # shell 引号字面 — git commit -m "..." / echo "..." 的内容是描述/数据不是执行意图
 _SHELL_QUOTED_RE = re.compile(r"""'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*\"""")
-# 间接 shell 执行 — bash -c '...' / sh -c "..." 内是真要执行的子命令
+# 间接 shell / 解释器执行 — bash -c '...' / sh -c "..." / python -c '...' 等
+# 引号内是真要执行的子命令 / 代码，剥引号时要保留扫
+# 包括 shell 解释器 + 编程语言 -c flag（python/node/ruby/perl 等）
 _INDIRECT_SHELL_RE = re.compile(
-    r"\b(?:bash|sh|zsh|dash|ksh)\s+-c\s+(['\"])(.*?)\1",
+    r"\b(?:bash|sh|zsh|dash|ksh|python\d?|node|ruby|perl)\s+-c\s+(['\"])(.*?)\1",
     re.IGNORECASE | re.DOTALL,
 )
 # heredoc 多行字符串 — `<<EOF ... EOF` 形式
@@ -46,16 +48,22 @@ def strip_shell_quoted_literals(cmd: str) -> str:
     """剥 shell 命令里的引号字面 + 部分 heredoc 内容，保留命令骨架。
 
     特殊处理：
-    - `bash -c '...'` / `sh -c '...'` 后引号是真执行子命令，剥时保留内容。
+    - `bash -c '...'` / `python -c '...'` 等 -c flag 后引号是真执行代码，
+      剥时保留内容（用 placeholder 防被后续 _SHELL_QUOTED_RE 内部引号字面误剥）。
     - heredoc 区分头部：
         * `bash <<EOF ... EOF` / `sh <<EOF ... EOF` → 内容是 shell 命令保留扫
         * `python <<EOF ... EOF` / `cat <<EOF ... EOF` → 内容是数据剥掉
 
     跨 non_blocking + 关键词层共用，统一描述上下文剥离逻辑。
     """
-    def _keep_indirect(m: re.Match) -> str:
-        return " " + m.group(2) + " "
-    cmd = _INDIRECT_SHELL_RE.sub(_keep_indirect, cmd)
+    # 抽 indirect shell 内容到 placeholder（防内部 'x' 引号被 _SHELL_QUOTED_RE 误剥）
+    indirect_contents: list[str] = []
+
+    def _capture_indirect(m: re.Match) -> str:
+        indirect_contents.append(m.group(2))
+        return f"\x00INDIRECT_{len(indirect_contents) - 1}\x00"
+
+    cmd = _INDIRECT_SHELL_RE.sub(_capture_indirect, cmd)
 
     def _maybe_strip_heredoc(m: re.Match) -> str:
         head_cmd = _heredoc_prefix_command(cmd[:m.start()])
@@ -66,7 +74,11 @@ def strip_shell_quoted_literals(cmd: str) -> str:
         return ""
 
     cmd = _HEREDOC_RE.sub(_maybe_strip_heredoc, cmd)
-    return _SHELL_QUOTED_RE.sub("", cmd)
+    cmd = _SHELL_QUOTED_RE.sub("", cmd)
+    # 替回 indirect 内容（含内部所有字面）
+    for i, content in enumerate(indirect_contents):
+        cmd = cmd.replace(f"\x00INDIRECT_{i}\x00", " " + content + " ")
+    return cmd
 
 
 def extract_tool_text(tool_name: str, tool_input: dict) -> str:

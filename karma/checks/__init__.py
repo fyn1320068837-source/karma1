@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Callable, Protocol
 
 from karma.checks import (
+    bypass_karma,
     chinese_plain,
     evidence,
     keep_pushing,
@@ -46,6 +47,7 @@ REGISTRY: dict[str, CheckFn] = {
     "no_testset_no_future_leakage": testset.check,
     "read_before_write": read_first.check,
     "keep_pushing_no_stop": keep_pushing.check,
+    "bypass_karma_detection": bypass_karma.check,
 }
 
 
