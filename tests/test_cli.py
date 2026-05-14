@@ -19,10 +19,19 @@ from karma.backends import ClaudeCodeBackend
 
 @pytest.fixture
 def fake_home(tmp_path, monkeypatch):
-    """指向 tmp 的伪 home — 让 cli 写到 tmp 不污染真实 home。"""
+    """指向 tmp 的伪 home — 让 cli 写到 tmp 不污染真实 home。
+
+    CI 隔离：默认 mock `ClaudeCodeBackend.client_installed = True` 让测试
+    不依赖 CI 环境是否真装 claude（v0.4.7 加 client_installed 门槛后所有
+    cli.cmd_install_hooks() 测试都会查这个）。需要测「客户端没装」场景的测试
+    自己 monkeypatch 覆盖即可。
+    """
     monkeypatch.setenv("HOME", str(tmp_path))
-    # cli 模块里的 KARMA_DIR 是 module-level Path.home() 缓存，需重 patch
     monkeypatch.setattr(cli, "KARMA_DIR", tmp_path / ".claude" / "karma")
+    from karma.backends import ClaudeCodeBackend, CodexBackend, GeminiCLIBackend
+    monkeypatch.setattr(ClaudeCodeBackend, "client_installed", lambda self: True)
+    monkeypatch.setattr(CodexBackend, "client_installed", lambda self: False)
+    monkeypatch.setattr(GeminiCLIBackend, "client_installed", lambda self: False)
     return tmp_path
 
 
