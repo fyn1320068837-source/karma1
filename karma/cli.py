@@ -350,6 +350,17 @@ def cmd_stats() -> int:
             f"{sid:<35} {n:>6} {week.get(sid, 0):>6} "
             f"{recent_turns_count.get(sid, 0):>14} {recent_str:>20}"
         )
+    # 未触发的 sticky 显示 ✓ 让作者看到正面证据（哪些规则没违反）
+    try:
+        from karma.sticky import load as _load_sticky
+        all_sticky_ids = {s.id for s in _load_sticky()}
+        untriggered = sorted(all_sticky_ids - set(total))
+        if untriggered:
+            print(f"\n=== 未触发的 sticky（✓ 没违反过）===")
+            for sid in untriggered:
+                print(f"  ✓ {sid}")
+    except Exception:
+        pass
     return 0
 
 
