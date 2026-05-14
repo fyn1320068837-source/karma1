@@ -112,6 +112,71 @@ def test_stop_no_transcript_no_op(monkeypatch, tmp_path, capsys):
     assert json.loads(captured.out) == {}
 
 
+def test_post_tool_use_smart_reinject_when_recent_violation(monkeypatch, tmp_path, capsys):
+    """v0.4.24 真生效守护：PostToolUse 在最近 N turn 有 sticky 触发时注入中段
+    提醒作 anchor — proactive 锚定真信道。
+
+    dogfooding 真触发：本回合 system-reminder 真显示 `[karma 中段提醒]` 字面，
+    证明 Claude Code 真接受 PostToolUse additionalContext。
+    """
+    _, violations_path = _patch_paths(monkeypatch, tmp_path, sticky_items=[
+        {
+            "id": "long-term-fundamental",
+            "preference": "用最根本、最长期、最普适、最优雅的方案。\n不打补丁、不硬编码。",
+            "violation_keywords": ["先打个补丁"],
+        },
+    ])
+    monkeypatch.setattr("karma.session_state.DEFAULT_DIR", tmp_path)
+    # 预设 2 条最近 turn 违反
+    from karma.violations import Violation, append as v_append
+    v_append([Violation(
+        ts=1, session_id="anchor_test", sticky_id="long-term-fundamental",
+        trigger="先打个补丁", snippet=".", turn=5,
+    )], path=violations_path)
+    state = session_state.SessionState(session_id="anchor_test")
+    state.turn_count = 5
+    session_state.save(state, base_dir=tmp_path)
+
+    payload = json.dumps({
+        "session_id": "anchor_test",
+        "tool_name": "Bash",
+        "tool_input": {"command": "ls"},
+        "tool_response": "",
+    })
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    rc = post_tool_use.main()
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert "hookSpecificOutput" in out, "最近违反时应注入 reinject context"
+    ctx = out["hookSpecificOutput"]["additionalContext"]
+    assert "long-term-fundamental" in ctx, "context 应包含触发过的 sticky id"
+    assert "中段提醒" in ctx, "应有「中段提醒」标记"
+
+
+def test_post_tool_use_no_reinject_when_clean(monkeypatch, tmp_path, capsys):
+    """v0.4.24 对偶守护：最近 N turn 无触发时 → 不注入 reinject 省 token。"""
+    _, _ = _patch_paths(monkeypatch, tmp_path, sticky_items=[
+        {"id": "long-term-fundamental", "preference": "x", "violation_keywords": ["先打个补丁"]},
+    ])
+    monkeypatch.setattr("karma.session_state.DEFAULT_DIR", tmp_path)
+    state = session_state.SessionState(session_id="clean_test")
+    state.turn_count = 3  # 但 violations.jsonl 是空的
+    session_state.save(state, base_dir=tmp_path)
+
+    payload = json.dumps({
+        "session_id": "clean_test",
+        "tool_name": "Bash",
+        "tool_input": {"command": "ls"},
+        "tool_response": "",
+    })
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    rc = post_tool_use.main()
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    # 没违反 → 空响应不注入（省 token）
+    assert out == {}, f"无最近违反时不该注入 context: {out}"
+
+
 def test_post_tool_use_write_records_read(monkeypatch, tmp_path, capsys):
     """Write 文件后 post_tool_use 既 record_edit 也 record_read —
     Agent 写过的内容自己知道，后续 Edit 同文件不该被 read_first 多余拦。

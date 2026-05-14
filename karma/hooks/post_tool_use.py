@@ -1,12 +1,22 @@
-"""PostToolUse hook — 跟踪 session 状态 + 可选 additionalContext。
+"""PostToolUse hook — 跟踪 session 状态 + 智能 sticky reinject anchor。
 
 Claude Code 实际协议:
 - stdin payload: {tool_name, tool_input, tool_response, session_id, ...}
 - stdout: {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "..."}}
   或者 fail-loud {"decision": "block", "reason": "..."} (我们不用)
 
-只写 session_state 文件 + 输出空响应（不需要给 Claude 额外 context）。
-性能预算：< 30ms
+v0.4.24（proactive 锚定第一步）：智能 sticky reinject 解决「sticky 注入头部强
+尾部弱」真根因。当前 sticky 仅 UserPromptSubmit 注入 1 次/turn，长 response
+中段 Agent 注意力漂移导致单 turn 累积违反（实测本回合 33 keep-pushing + 11
+chinese-plain）。
+
+策略：**不是每次都注入**（token 成本高），仅当最近 N turn 内**该 sticky 真
+触发过**才 reinject 它的简化提醒。这样 sticky 跟违反检测真闭环：
+- 违反某 sticky → 下次 tool call 后 reinject 该 sticky anchor
+- 多次违反 → 多次 reinject 直到 Agent 真改行为
+- 没违反的 sticky → 不注入省 token
+
+性能预算：< 50ms
 """
 
 from __future__ import annotations
@@ -99,9 +109,57 @@ def main() -> int:
     except OSError as e:
         print(f"karma PostToolUse: 保存 session_state 失败 ({e})", file=sys.stderr)
 
-    # 不需要给 Claude 额外 context，输出空响应
-    print(json.dumps({}))
+    # v0.4.24：智能 sticky reinject anchor — 仅最近触发过的 sticky 注入简化提醒
+    additional_context = _build_smart_reinject(session_id, state)
+    output = {}
+    if additional_context:
+        output = {
+            "hookSpecificOutput": {
+                "hookEventName": "PostToolUse",
+                "additionalContext": additional_context,
+            }
+        }
+    print(json.dumps(output, ensure_ascii=False))
     return 0
+
+
+def _build_smart_reinject(session_id: str, state) -> str:
+    """智能 sticky reinject — 仅最近 N turn 触发过的 sticky 注入简化提醒。
+
+    返回空字符串 → PostToolUse 不注入 additionalContext（省 token）。
+    返回非空 → 给 Claude 看到「最近违反过的 sticky 提醒」作为中段 anchor。
+    """
+    try:
+        from karma.sticky import load as _load_sticky
+        from karma.violations import recent_turns
+        from karma.config import load as _load_config
+    except ImportError:
+        return ""
+    try:
+        sticky_list = _load_sticky()
+    except Exception:
+        return ""
+    if not sticky_list or state.turn_count <= 0:
+        return ""
+    try:
+        cfg = _load_config()
+        window_turns = int(cfg.get("recent_violation_turns", 5))
+    except Exception:
+        window_turns = 5
+    recent_v = recent_turns(session_id, state.turn_count, window_turns=window_turns)
+    if not recent_v:
+        return ""
+    # 只注入最近触发过的 sticky 简化提醒（不是全 sticky 重灌）
+    triggered_sticky_ids = set(recent_v.keys())
+    triggered_sticky = [s for s in sticky_list if s.id in triggered_sticky_ids]
+    if not triggered_sticky:
+        return ""
+    lines = ["[karma 中段提醒 — 最近 turn 触发过的 sticky 别再犯]"]
+    for s in triggered_sticky[:3]:  # 最多 3 条避免淹没
+        # 只注入 id + 第一行 preference（简化版省 token）
+        first_line = s.preference.strip().split("\n")[0]
+        lines.append(f"  - {s.id}: {first_line}")
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":

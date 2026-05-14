@@ -4,6 +4,61 @@
 
 ## [Unreleased]
 
+## [0.4.24] — 2026-05-14（feat — karma v3 真第一步：PostToolUse 中段 sticky reinject 锚定）
+
+### 真突破
+
+dogfooding 真验证 Claude Code PostToolUse hook 真接受 `additionalContext`
+字段 — system-reminder 真显示 `[karma 中段提醒 — 最近 turn 触发过的 sticky
+别再犯]` 字面。**karma v3 proactive 锚定真路径真打通**。
+
+之前 PRD 假设「单 turn 内 sticky reinject 没干净信道」是错的（按 sticky #4
+真诚响亮承认）— dogfooding 真测后推翻假设。
+
+### 真根因痛点
+
+本回合 33 次 keep-pushing + 11 次 chinese-plain 累积违反 → 真根本不是
+check regex 不准（前面 5 个 release 已经精化了），是 **sticky 注入头部强
+尾部弱** — sticky 仅在 UserPromptSubmit 一次注入，长 response 中段 Agent
+注意力漂移没机制拉回来。
+
+### Feat
+
+`karma/hooks/post_tool_use.py` 加 `_build_smart_reinject()`：
+
+- 每次 tool 调用后看最近 N turn (默认 5) 内**真触发过**的 sticky
+- 触发过的 sticky 注入简化版（id + 第一行 preference），最多 3 条
+- 没触发过的 sticky **不注入** — 省 token 不淹没
+- session_state turn_count = 0 / 没违反过 → 输出空 `{}` passthrough
+
+### 设计原则
+
+「**reactive 检测 → proactive 锚定**」真闭环：违反某 sticky → 下次
+tool call 后该 sticky reinject → Agent 中段持续看到提醒 → 多次违反就
+多次 reinject 直到 Agent 真改行为。
+
+不是「每次 tool call 都重灌全 sticky」（token 成本高），是「**只 reinject
+真需要提醒的 sticky**」。
+
+### 真生效证据
+
+dogfooding 实测：本回合写这个 fix 时，每次 Edit/Bash/Read 调用后我都看到
+system-reminder 真显示 `[karma 中段提醒]` + 当前最近触发过的 3 条 sticky
+（non-blocking / chinese-plain / loud-failure）。这是 karma v3 第一次**真**
+中段锚定。
+
+### 验证
+
+344 测试全过（含 2 个新守护测试函数 — reinject + 对偶守护）。
+真用户 dogfooding：本回合写完这个 fix 后期 keep-pushing / chinese-plain
+触发率应该自然降低（v3 第一步效果观察）。但按 sticky #5 反喂边界教训
+**不当 truth 用** — 真验证靠跨场景真用户长期使用。
+
+### 跟前面 v0.4.X 对比
+
+之前 v0.4.11~22 都是 **reactive fix**（拦得更准），v0.4.24 是 **proactive
+第一步**（锚定让 Agent 自然不忘 sticky）。这是 karma v2 → v3 演化的真起点。
+
 ## [0.4.23] — 2026-05-14（patch — v0.4.22 紧急补发：tag 误指向 v0.4.21 内容）
 
 ### 真触发
