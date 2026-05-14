@@ -85,11 +85,11 @@ def test_load_rejects_over_hard_max(tmp_path: Path) -> None:
 
 
 def test_load_real_example() -> None:
-    """data/sticky.dev.example.yaml 必须能加载，且是 6 条种子 sticky（开发场景预设）。"""
+    """data/sticky.dev.example.yaml 必须能加载，且是 7 条种子 sticky（开发场景预设）。"""
     repo_root = Path(__file__).resolve().parents[1]
     example = repo_root / "data" / "sticky.dev.example.yaml"
     sticky = load(example)
-    assert len(sticky) == 6
+    assert len(sticky) == 7
     ids = {s.id for s in sticky}
     expected = {
         "long-term-fundamental",
@@ -97,6 +97,7 @@ def test_load_real_example() -> None:
         "chinese-plain-no-jargon",
         "loud-failure-with-evidence",
         "no-testset-no-future-leakage",
+        "deep-fix-not-bypass",  # M4 末加 — 监管 Agent 绕开 karma 的元层规则
         "read-before-write",
     }
     assert ids == expected

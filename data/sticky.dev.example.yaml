@@ -92,6 +92,21 @@
   violation_checks:
     - no_testset_no_future_leakage
 
+- id: deep-fix-not-bypass
+  preference: |
+    karma 拦截发生时，先停下深挖**为什么拦** — 是真违反还是 karma 自身 bug。
+    禁止通过手动改 ~/.claude/karma/session-state/ / 临时改 sticky.yaml /
+    hack 字面 等方式绕开检测。
+    经典 anti-pattern：被拦 → 手动改内部状态让 commit 通过。
+    正确做法：被拦 → 看 trigger → 深挖 pattern 或系统 bug → 修真根因。
+    例外：用户明确说「绕一下先 commit」→ 才能绕。
+  violation_keywords:
+    - 强制接证据
+    - 手动接入
+    - hack 让 commit
+  violation_checks:
+    - bypass_karma_detection
+
 - id: read-before-write
   preference: |
     加代码前先读：上游调用、相关 exports、共享 utils、已有约定。
