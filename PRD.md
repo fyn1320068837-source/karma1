@@ -114,12 +114,19 @@ karma 只做**「核心方向永驻 + 违反检测」**这一件事。
 
 ### M3 完整化补充（v0 MVP 之上的工程精细化）
 
-- **描述上下文统一豁免**（`karma/checks/description_context.py`）— `.md` / tests/ / `/tmp/` / probe-sample 命名文件下「描述触发模式」不算执行意图
+- **描述上下文统一豁免**（`karma/checks/description_context.py`）— `.md` / `.yaml` / `.json` / tests/ / `/tmp/` / probe-sample 命名文件下「描述触发模式」不算执行意图
 - **shell 引号字面 + heredoc 智能剥** — `git commit -m "..."` 引号字面是描述；`bash <<EOF` heredoc 内是 shell 命令保留扫；`python <<EOF` heredoc 内是数据剥
-- **background 任务证据自动接入** — `pytest > log.txt &` 后下次 hook 触发 catchup_pending_bg 读 log 接进 last_test_pass_ts，解决 evidence check 看不到 background 通过的死结
-- **`has_recent_test_pass` 新语义** — 「自最近一次代码改动以来跑过测试且通过」（时间戳比较代替最近 5 条 Bash 计数）
-- **post_tool_use 跳过失败 tool** — Read 失败不 record_read 防 read_first 检测被绕过
+- **background 任务证据自动接入** — `pytest > log.txt &` 后下次 hook 触发 catchup_pending_bg 读 log 接进 last_test_pass_ts
+- **`has_recent_test_pass` 新语义** — 「自最近一次代码改动以来跑过测试且通过」
+- **post_tool_use 跳过失败 tool** — Read 失败不 record_read 防 read_first 被绕过
 - **跨语言注释 + docstring 扫描** — `# / // / -- / """ / ''' / /* */` 都被关键词层 Write/Edit 扫覆盖
+
+### 反馈机制 + 配置系统
+
+- **桌面通知**（`karma/notify.py`）— 跨平台（macOS osascript / Linux notify-send / Windows msg），stop hook 检测违反时补充 stderr 视野外提示
+- **累积告警按 turn 维度** — 最近 N turn 内同 sticky 违反 ≥ M 次 → 🚨 严重通知（窗口 / 阈值可配）。按 turn 而非人类时钟 — Agent 注意力漂移按 turn 累积，用户离开开会跟连续操作 Agent 状态完全不同
+- **配置系统**（`karma/config.py` + `~/.claude/karma/config.yaml`）— 所有阈值集中可调（notify 开关 / rotation / purge / escalate）；fail open（文件缺失 / 字段为 null 用 DEFAULTS）
+- **`karma doctor` 显示当前生效配置** — 让用户看清现在所有阈值
 
 ## 验证标准（v0）
 

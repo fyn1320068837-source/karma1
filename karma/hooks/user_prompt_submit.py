@@ -13,9 +13,10 @@ from __future__ import annotations
 import json
 import sys
 
+from karma import session_state
 from karma.session_state import purge_old_states
 from karma.sticky import StickyConfigError, format_for_injection, load
-from karma.violations import recent
+from karma.violations import recent, recent_turns
 
 
 def _output_passthrough() -> None:
@@ -57,7 +58,28 @@ def main() -> int:
         _output_passthrough()
         return 0
 
-    recent_v = recent()
+    # 每 turn 给 session_state.turn_count + 1 — 给后续按 turn 距离的违反统计
+    session_id = payload.get("session_id", "") or "default"
+    try:
+        state = session_state.load(session_id)
+        state.turn_count += 1
+        session_state.save(state)
+        current_turn = state.turn_count
+    except Exception:
+        current_turn = 0
+
+    # ⚠️ 标记 — 按 turn 距离查最近违反（不是人类时钟）
+    # 默认 5 turn 内违反过的 sticky 标 ⚠️。窗口可配。
+    try:
+        from karma.config import load as _load_config
+        cfg = _load_config()
+        window_turns = int(cfg.get("recent_violation_turns", 5))
+    except Exception:
+        window_turns = 5
+    if current_turn > 0:
+        recent_v = recent_turns(session_id, current_turn, window_turns=window_turns)
+    else:
+        recent_v = recent()  # 早期 fallback 用人类时钟（首次 install 没 turn 计数）
     additional_context = format_for_injection(sticky_list, recent_v)
 
     print(json.dumps({

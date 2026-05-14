@@ -17,10 +17,11 @@ from karma import session_state
 from karma.checks import run_checks
 from karma.notify import notify
 from karma.sticky import StickyConfigError, load
-from karma.violations import Violation, append, count_recent, detect
+from karma.violations import Violation, append, count_recent, count_recent_turns, detect
 
 # 累积告警 default 阈值（fallback，实际从 karma.config 读）
-_ESCALATE_WINDOW_SEC = 1800
+# 优先用 turn 维度（更符合 Agent 漂移视角）；ts 维度保留为 fallback
+_ESCALATE_WINDOW_TURNS = 3
 _ESCALATE_THRESHOLD = 3
 
 
@@ -97,7 +98,7 @@ def main() -> int:
         )
         check_hits.extend(hits)
 
-    keyword_violations = detect(response, sticky_list, session_id=session_id)
+    keyword_violations = detect(response, sticky_list, session_id=session_id, turn=state.turn_count)
 
     if not check_hits and not keyword_violations:
         print(json.dumps({}))
@@ -108,7 +109,7 @@ def main() -> int:
     for h in check_hits:
         all_records.append(Violation(
             ts=int(time.time()), session_id=session_id, sticky_id=h.sticky_id,
-            trigger=h.trigger, snippet=h.snippet,
+            trigger=h.trigger, snippet=h.snippet, turn=state.turn_count,
         ))
     seen_ids = {h.sticky_id for h in check_hits}
     for v in keyword_violations:
@@ -141,15 +142,19 @@ def main() -> int:
         try:
             from karma.config import load as _load_config
             cfg = _load_config()
-            window_sec = cfg["escalate_window_sec"]
+            window_turns = int(cfg.get("escalate_window_turns", _ESCALATE_WINDOW_TURNS))
             threshold = cfg["escalate_threshold"]
         except Exception:
-            window_sec = _ESCALATE_WINDOW_SEC
+            window_turns = _ESCALATE_WINDOW_TURNS
             threshold = _ESCALATE_THRESHOLD
         hit_sticky_ids = {h.sticky_id for h in check_hits} | {
             v.sticky_id for v in keyword_violations if v.sticky_id not in seen_ids
         }
-        counts = count_recent(window_sec=window_sec)
+        # 按 turn 距离统计（不是人类时钟）— Agent 漂移按 turn 累积
+        if state.turn_count > 0:
+            counts = count_recent_turns(session_id, state.turn_count, window_turns=window_turns)
+        else:
+            counts = count_recent(window_sec=1800)  # 早期 fallback
         escalated_ids = [sid for sid in hit_sticky_ids if counts.get(sid, 0) >= threshold]
         if escalated_ids:
             notify(

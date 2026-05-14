@@ -93,10 +93,36 @@ karma 做三件事：
 
 ### 工程精细化（M3 完整版）
 
-- **描述上下文统一豁免** — `.md` 文档 / `tests/` 目录 / `/tmp/` 探针 / 文件名含 probe/sample 等都豁免，避免「描述触发模式」被误判
+- **描述上下文统一豁免** — `.md` 文档 / `.yaml/.json/.toml` 数据 / `tests/` 目录 / `/tmp/` 探针 / 文件名含 probe/sample 等都豁免，避免「描述触发模式」被误判
 - **shell 引号字面 + heredoc 智能剥** — `git commit -m "..."` 引号内是描述不是执行；`bash <<EOF` heredoc 内是真 shell 命令；`python <<EOF` heredoc 内是数据
 - **background 任务证据自动接入** — `pytest > log.txt &` 跑通后下次 hook 自动读 log 接入「最近测试通过」证据，解决长任务 evidence check 死结
 - **跨语言注释扫描** — Write/Edit 代码注释行 + docstring 扫意图字面（`# 先打个补丁`），代码主体（字符串数据）不扫
+
+### 反馈机制
+
+- **stderr 通知** — pre_tool_use 拦截时显示 deny reason；stop hook 列违反
+- **桌面通知（macOS / Linux / Windows）** — stop hook 检测违反时弹系统通知（用户离开 stderr 视野时的补充）。`KARMA_NO_NOTIFY=1` 或 `notify_enabled: false` 关
+- **累积告警按 turn 维度** — 最近 N turn 内同 sticky 违反 ≥ M 次 → 升级 🚨 严重通知
+- **⚠️ 标记按 turn 维度** — 最近 N turn 内违反过的 sticky 下次 user_prompt_submit 注入时标红
+
+**为啥按 turn 不按时间**：Agent 注意力漂移按 turn 累积。用户离开开会 30 分钟回来跟连续操作 30 分钟，Agent 状态完全不同 — 按人类时钟错维度。
+
+### 配置（`~/.claude/karma/config.yaml`）
+
+调阈值不用改代码。`karma doctor` 看当前生效值：
+
+```yaml
+notify_enabled: true                # 桌面通知开关
+recent_violation_turns: 5           # ⚠️ 标记窗口（最近 N turn 内违反过的标）
+escalate_window_turns: 3            # 累积告警窗口
+escalate_threshold: 3               # 累积告警次数阈值
+violations_max_lines: 5000          # rotation 触发行数
+violations_keep_history: 3          # 保留几个历史
+session_state_max_age_days: 30      # session-state 清理周期
+max_recent_bash: 15
+```
+
+字段缺失用代码默认值（fail open）。`karma init` 复制模板。
 
 ## 场景化定位
 

@@ -29,6 +29,8 @@ class Violation:
     sticky_id: str
     trigger: str
     snippet: str
+    turn: int = 0  # session 内 turn 序号（user_prompt_submit 每次 +1）。
+                   # 0 = 旧记录 / unknown，新写入应填实际 turn。
 
     def to_json(self) -> str:
         return json.dumps({
@@ -37,6 +39,7 @@ class Violation:
             "sticky_id": self.sticky_id,
             "trigger": self.trigger,
             "snippet": self.snippet,
+            "turn": self.turn,
         }, ensure_ascii=False)
 
 
@@ -45,10 +48,12 @@ def detect(
     sticky_list: list[Sticky],
     session_id: str = "unknown",
     now: int | None = None,
+    turn: int = 0,
 ) -> list[Violation]:
     """扫 response 看违反哪些 sticky。
 
     简单 substring 匹配（不区分大小写）。同一 sticky 多关键词命中只记第一个。
+    turn = session 内 turn 序号，用于按 turn 距离统计漂移（不是人类时钟）。
     """
     if not response or not sticky_list:
         return []
@@ -68,6 +73,7 @@ def detect(
                 sticky_id=s.id,
                 trigger=kw,
                 snippet=response[start:end],
+                turn=turn,
             ))
             break  # 同一 sticky 多关键词命中只记第一个
     return out
@@ -219,6 +225,85 @@ def count_recent(
     return out
 
 
+def recent_turns(
+    session_id: str,
+    current_turn: int,
+    window_turns: int = 5,
+    path: Path | None = None,
+    tail_lines: int = 500,
+) -> dict[str, int]:
+    """返回**本 session** 最近 window_turns 内违反过的 sticky_id → 最近 turn dict。
+
+    跟 recent() 区别：按 turn 距离而不是 ts。这是「Agent 漂移」的对应视角 —
+    漂移按 turn 累积，不按人类时钟（用户去开会 30 分钟回来 Agent 状态没变）。
+    """
+    if path is None:
+        path = DEFAULT_PATH
+    if not path.exists():
+        return {}
+    cutoff_turn = current_turn - window_turns
+    out: dict[str, int] = {}
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()[-tail_lines:]
+    except OSError:
+        return {}
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            d = json.loads(line)
+            sid = d.get("sticky_id", "")
+            sess = d.get("session_id", "")
+            turn = int(d.get("turn", 0))
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if sess != session_id or not sid:
+            continue
+        if turn >= cutoff_turn:
+            out[sid] = max(out.get(sid, 0), turn)
+    return out
+
+
+def count_recent_turns(
+    session_id: str,
+    current_turn: int,
+    window_turns: int = 3,
+    path: Path | None = None,
+    tail_lines: int = 500,
+) -> dict[str, int]:
+    """返回本 session 最近 window_turns 内每条 sticky_id 的违反**次数**。
+
+    用于累积警报按 turn 判定（如 3 turn 内同 sticky ≥ 3 次升级严重度）。
+    """
+    if path is None:
+        path = DEFAULT_PATH
+    if not path.exists():
+        return {}
+    cutoff_turn = current_turn - window_turns
+    out: dict[str, int] = {}
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()[-tail_lines:]
+    except OSError:
+        return {}
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            d = json.loads(line)
+            sid = d.get("sticky_id", "")
+            sess = d.get("session_id", "")
+            turn = int(d.get("turn", 0))
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if sess != session_id or not sid:
+            continue
+        if turn >= cutoff_turn:
+            out[sid] = out.get(sid, 0) + 1
+    return out
+
+
 def load_all(path: Path | None = None) -> list[Violation]:
     """读全部 violations（CLI stats 用）。"""
     if path is None:
@@ -238,6 +323,7 @@ def load_all(path: Path | None = None) -> list[Violation]:
                 sticky_id=d["sticky_id"],
                 trigger=d.get("trigger", ""),
                 snippet=d.get("snippet", ""),
+                turn=int(d.get("turn", 0)),
             ))
         except (json.JSONDecodeError, KeyError, ValueError):
             continue

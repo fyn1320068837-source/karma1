@@ -106,7 +106,7 @@ def main() -> int:
             content = extract_tool_text(tool_name, tool_input)
             scan_text = extract_natural_language(content)
     if scan_text.strip():
-        keyword_violations = detect(scan_text, sticky_list, session_id=session_id)
+        keyword_violations = detect(scan_text, sticky_list, session_id=session_id, turn=state.turn_count)
 
     if not check_hits and not keyword_violations:
         _allow()
@@ -121,6 +121,7 @@ def main() -> int:
             sticky_id=top.sticky_id,
             trigger=top.trigger,
             snippet=top.snippet,
+            turn=state.turn_count,
         )])
         sticky_pref = next((s.preference for s in sticky_list if s.id == top.sticky_id), "")
         reason = (

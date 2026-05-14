@@ -222,3 +222,66 @@ def test_count_recent_no_file(tmp_path: Path) -> None:
     from karma.violations import count_recent
     out = count_recent(tmp_path / "no.jsonl")
     assert out == {}
+
+
+# ---- turn-based recent / count ----
+
+def test_recent_turns_filters_by_session_and_turn_window(tmp_path: Path) -> None:
+    """recent_turns 只统计本 session 最近 N turn 内的违反。"""
+    from karma.violations import recent_turns
+    p = tmp_path / "violations.jsonl"
+    # 不同 session + 不同 turn
+    items = [
+        Violation(ts=1000, session_id="a", sticky_id="r1", trigger="x", snippet=".", turn=1),
+        Violation(ts=1100, session_id="a", sticky_id="r1", trigger="x", snippet=".", turn=2),
+        Violation(ts=1200, session_id="a", sticky_id="r2", trigger="x", snippet=".", turn=5),
+        Violation(ts=1300, session_id="b", sticky_id="r3", trigger="x", snippet=".", turn=3),  # 别的 session
+    ]
+    append(items, path=p)
+    # session a，当前 turn=6，窗口 3 → 只算 turn >= 3 的
+    out = recent_turns("a", current_turn=6, window_turns=3, path=p)
+    assert "r2" in out
+    assert out["r2"] == 5
+    assert "r1" not in out  # turn 1/2 在窗口外
+    assert "r3" not in out  # 别的 session
+
+
+def test_count_recent_turns_by_session(tmp_path: Path) -> None:
+    """count_recent_turns 数本 session 内 N turn 内违反次数。"""
+    from karma.violations import count_recent_turns
+    p = tmp_path / "violations.jsonl"
+    items = [
+        Violation(ts=1000, session_id="a", sticky_id="r1", trigger="x", snippet=".", turn=5),
+        Violation(ts=1100, session_id="a", sticky_id="r1", trigger="x", snippet=".", turn=6),
+        Violation(ts=1200, session_id="a", sticky_id="r1", trigger="x", snippet=".", turn=7),
+        Violation(ts=1300, session_id="a", sticky_id="r1", trigger="x", snippet=".", turn=2),  # 窗口外
+        Violation(ts=1400, session_id="b", sticky_id="r1", trigger="x", snippet=".", turn=7),  # 别 session
+    ]
+    append(items, path=p)
+    # session a, current_turn=7, window=3 → 算 turn >= 4 的
+    out = count_recent_turns("a", current_turn=7, window_turns=3, path=p)
+    assert out["r1"] == 3  # turn 5/6/7
+
+
+def test_violation_dataclass_has_turn_field():
+    """Violation 加 turn 字段，default 0 兼容旧记录。"""
+    v = Violation(ts=1, session_id="s", sticky_id="r", trigger="x", snippet=".")
+    assert v.turn == 0
+    v2 = Violation(ts=1, session_id="s", sticky_id="r", trigger="x", snippet=".", turn=42)
+    assert v2.turn == 42
+
+
+def test_violation_to_json_includes_turn():
+    import json as _json
+    v = Violation(ts=1, session_id="s", sticky_id="r", trigger="x", snippet=".", turn=7)
+    d = _json.loads(v.to_json())
+    assert d["turn"] == 7
+
+
+def test_load_all_handles_missing_turn_field(tmp_path: Path):
+    """旧 jsonl 没 turn 字段 → 读取时 default 0。"""
+    p = tmp_path / "violations.jsonl"
+    p.write_text('{"ts":1,"session_id":"s","sticky_id":"r","trigger":"x","snippet":"."}\n')
+    out = load_all(p)
+    assert len(out) == 1
+    assert out[0].turn == 0

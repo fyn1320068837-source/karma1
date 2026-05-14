@@ -86,6 +86,9 @@ class SessionState:
     last_edit_ts: float = 0.0        # 最近一次代码 Edit/Write 的时间戳（0 = 本 session 未改代码）
     # background 任务 pending list — 启动时无真实输出，等下次 hook 触发 catchup 读 output file
     pending_bg_tasks: list[dict] = field(default_factory=list)
+    # session 内 turn 序号 — user_prompt_submit hook 每次 +1
+    # 用于按 turn 距离统计漂移（不是人类时钟，对 Agent 注意力更准）
+    turn_count: int = 0
 
     def has_read(self, file_path: str) -> bool:
         return file_path in self.read_files
@@ -233,6 +236,7 @@ def load(session_id: str, base_dir: Path | None = None) -> SessionState:
         last_test_pass_ts=float(d.get("last_test_pass_ts", 0.0) or 0.0),
         last_edit_ts=float(d.get("last_edit_ts", 0.0) or 0.0),
         pending_bg_tasks=list(d.get("pending_bg_tasks", []) or []),
+        turn_count=int(d.get("turn_count", 0) or 0),
     )
     return state
 
@@ -283,6 +287,7 @@ def save(state: SessionState, base_dir: Path | None = None) -> None:
         "last_test_pass_ts": state.last_test_pass_ts,
         "last_edit_ts": state.last_edit_ts,
         "pending_bg_tasks": state.pending_bg_tasks,
+        "turn_count": state.turn_count,
     }
     # tmp 名加 pid + nanosecond 避免并发 PostToolUse 同 session 写冲突
     import os

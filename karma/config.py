@@ -24,7 +24,11 @@ DEFAULT_PATH = Path.home() / ".claude" / "karma" / "config.yaml"
 
 DEFAULTS: dict[str, Any] = {
     "notify_enabled": True,
-    "escalate_threshold": 3,
+    # 按 turn 距离统计 — Agent 注意力漂移按 turn 累积（不是人类时钟）
+    "recent_violation_turns": 5,    # ⚠️ 标记窗口（最近 N turn 内违反过的 sticky 标）
+    "escalate_window_turns": 3,     # 累积告警窗口
+    "escalate_threshold": 3,        # 累积告警触发次数
+    # 旧 _sec 字段保留兼容 — 不再使用，但用户配置文件含也不报错
     "escalate_window_sec": 1800,
     "violations_max_lines": 5000,
     "violations_keep_history": 3,
