@@ -116,7 +116,9 @@ def check(*, response: str = "", **_):
                 sticky_id=_STICKY_ID,
                 trigger=f"自然语言中文占比 {ratio*100:.0f}% < {_MIN_CHINESE_RATIO*100:.0f}%",
                 snippet=natural_for_ratio[:150],
-                suggested_fix="用直白中文回应。英文术语需要时短解释一下，不堆 jargon。",
+                suggested_fix="想想这段英文比例是有真合理原因（引用项目专名 / 标准技术词 / "
+                              "复制粘贴他人内容）还是习惯堆 jargon？合理就保留；不合理就换"
+                              "汉字（如「精度」「召回率」「分发器」等）。",
             )
 
     # === Check 2: 术语命中且后续无「括号内中文解释」 ===
@@ -160,7 +162,9 @@ def check(*, response: str = "", **_):
             sticky_id=_STICKY_ID,
             trigger=f"术语 {m.group()!r} 后无括号内中文解释",
             snippet=jargon_scan_text[max(0, m.start() - 20): m.end() + _JARGON_CONTEXT_RADIUS],
-            suggested_fix=f"用了 {m.group()} 后用括号给中文解释（如 `precision (精度)`），或者直接用「精度 / 召回率」等汉字。",
+            suggested_fix=f"自检一下：{m.group()} 是真技术专名必须保留（项目名 / 论文术语 / "
+                          f"标准接口名）还是可以换汉字？必须用就用括号配中文短解释（如 "
+                          f"`precision (精度)`）；能换就直接用「精度 / 召回率」等汉字。",
         )
 
     return None

@@ -253,9 +253,11 @@ def main() -> int:
             except OSError:
                 pass
             reason = (
-                f"karma 拦截 stop：sticky #7 keep-pushing-no-stop 命中。"
-                f"立即选下个推进点继续做 — 不要停下等用户决定。"
-                f"（本 turn 已干预 {state.stop_block_count}/{block_max} 次）"
+                f"karma stop hook 反思提醒 [keep-pushing-no-stop]：本 response 末尾没下一步"
+                f"推进信号。请自检 — 你是真有问题需要用户判断（如果是就明确问出来），"
+                f"还是知道要做什么但停下来等用户反馈（如果是就继续推进不停）？"
+                f"任务真饱和也算合理停下，但明说卡在哪让用户知道。"
+                f"（本 turn 已提醒 {state.stop_block_count}/{block_max} 次）"
             )
             print(json.dumps({"decision": "block", "reason": reason}, ensure_ascii=False))
             return 0

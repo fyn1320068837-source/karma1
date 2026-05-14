@@ -143,8 +143,9 @@ def check(*, response: str = "", **_):
             sticky_id=_STICKY_ID,
             trigger=f"response 末尾含停顿语气 {m_stop.group()!r} — 明确表达暂停",
             snippet=tail[:200],
-            suggested_fix="去掉「下次/先到这/告一段落」等停顿词，直接说明现在去做啥。"
-                          "汇报跟推进并行：写完汇报立刻开始下个 tool 调用。",
+            # v0.4.26 反思式语气改造：尊重 Agent 自主判断，不激发对抗
+            suggested_fix="想想这次停顿是合理的（真任务饱和 / 有问题需要用户判断）还是"
+                          "偷懒？合理就明说原因让用户知道你停在哪一步；不合理就接着推进。",
         )
 
     # 豁免 3（晚于停顿词检测）：成功汇报（数字证据 + 通过词）— 跟 sticky #4
@@ -159,6 +160,8 @@ def check(*, response: str = "", **_):
         sticky_id=_STICKY_ID,
         trigger="response 纯陈述完结，无推进信号 / 无询问决策 — 真停下，没下一步计划",
         snippet=tail[:200],
-        suggested_fix="response 末尾加「我接下来去做 X」类下一步计划，"
-                      "或直接开始下个 tool 调用。陈述完结无下一步 = 停下了。",
+        # v0.4.26 反思式语气：尊重 Agent 自主判断
+        suggested_fix="自检一下：你是有问题需要用户判断方向（如果是就明确问出来），"
+                      "还是知道要做什么但停下了（如果是就继续推进）？任务真饱和也算合理"
+                      "停下，但明说让用户知道现在卡在哪。",
     )
