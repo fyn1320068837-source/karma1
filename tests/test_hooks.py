@@ -318,6 +318,33 @@ def test_stop_hook_blocks_when_keep_pushing_violated(monkeypatch, tmp_path, caps
     assert "keep-pushing" in out.get("reason", "")
 
 
+def test_user_prompt_submit_runs_catchup(monkeypatch, tmp_path, capsys):
+    """UserPromptSubmit hook 也跑 catchup_pending_bg — task #8 task 完成后
+    第一个 hook 触发时接证据，覆盖 PostToolUse 之外场景。"""
+    _patch_paths(monkeypatch, tmp_path, sticky_items=[
+        {"id": "test-rule", "preference": "x"},
+    ])
+    monkeypatch.setattr("karma.session_state.DEFAULT_DIR", tmp_path)
+    # 准备 pending_bg_tasks + 文件
+    log = tmp_path / "bg.log"
+    log.write_text("===== 10 passed in 0.1s =====")
+    state = session_state.SessionState(session_id="catchup_ups")
+    state.pending_bg_tasks = [{
+        "cmd": "pytest tests/",
+        "output_file": str(log),
+        "started_ts": 0,
+    }]
+    session_state.save(state, base_dir=tmp_path)
+
+    payload = json.dumps({"prompt": "hi", "session_id": "catchup_ups"})
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    user_prompt_submit.main()
+
+    state_after = session_state.load("catchup_ups", base_dir=tmp_path)
+    assert state_after.pending_bg_tasks == [], "UserPromptSubmit 应跑 catchup 清 pending"
+    assert state_after.has_recent_test_pass(), "catchup 后应有测试通过证据"
+
+
 def test_stop_hook_respects_block_max(monkeypatch, tmp_path, capsys):
     """单 turn 内 block 累积超 max → 不再 block，让 Agent 真停（防死循环）。"""
     _patch_paths(monkeypatch, tmp_path, sticky_items=[
