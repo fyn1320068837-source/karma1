@@ -263,6 +263,42 @@ def test_count_recent_turns_by_session(tmp_path: Path) -> None:
     assert out["r1"] == 3  # turn 5/6/7
 
 
+def test_recent_turns_skips_legacy_no_turn_field(tmp_path: Path) -> None:
+    """老格式没 turn 字段 → 跳过，不要 fallback 成 0 落入当前窗口造成假阳。
+
+    真实场景：Claude Code session compact 不换 session_id，turn 维度引入前的
+    老违反沿用到「新对话」开头 turn_count=1 时，window=3 → cutoff=-2 →
+    fallback 0 落入窗口 → 触发 force_block 假阳（dogfooding 实际踩过）。
+    """
+    import json
+    from karma.violations import recent_turns
+    p = tmp_path / "violations.jsonl"
+    # 手写老格式（无 turn 字段，模拟 turn 维度引入前的历史）
+    legacy = {"ts": 1000, "session_id": "a", "sticky_id": "r1",
+              "trigger": "x", "snippet": "."}
+    p.write_text(json.dumps(legacy) + "\n", encoding="utf-8")
+    # current_turn=1, window=3, cutoff=-2 — 如果 fallback 0 会被数到
+    out = recent_turns("a", current_turn=1, window_turns=3, path=p)
+    assert "r1" not in out, "无 turn 字段的老违反不应被当前窗口数到"
+
+
+def test_count_recent_turns_skips_legacy_no_turn_field(tmp_path: Path) -> None:
+    """同上 — count_recent_turns 也要跳过无 turn 字段的老违反。"""
+    import json
+    from karma.violations import count_recent_turns
+    p = tmp_path / "violations.jsonl"
+    # 模拟 6 条老违反（force_block 阈值 5）
+    legacy_lines = [
+        json.dumps({"ts": 1000 + i, "session_id": "a", "sticky_id": "r1",
+                    "trigger": "x", "snippet": "."}) for i in range(6)
+    ]
+    p.write_text("\n".join(legacy_lines) + "\n", encoding="utf-8")
+    out = count_recent_turns("a", current_turn=1, window_turns=3, path=p)
+    assert out.get("r1", 0) == 0, (
+        "6 条老违反（无 turn 字段）不应数到 → 不应触发 force_block 假阳"
+    )
+
+
 def test_violation_dataclass_has_turn_field():
     """Violation 加 turn 字段，default 0 兼容旧记录。"""
     v = Violation(ts=1, session_id="s", sticky_id="r", trigger="x", snippet=".")

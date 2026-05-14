@@ -255,8 +255,13 @@ def recent_turns(
             d = json.loads(line)
             sid = d.get("sticky_id", "")
             sess = d.get("session_id", "")
-            turn = int(d.get("turn", 0))
-        except (json.JSONDecodeError, ValueError):
+            turn_raw = d.get("turn")
+            if turn_raw is None:
+                # 老格式没 turn 字段（turn 维度引入前）— 跳过，不要 fallback 成 0
+                # 让它落入「当前 turn 窗口」造成假阳
+                continue
+            turn = int(turn_raw)
+        except (json.JSONDecodeError, ValueError, TypeError):
             continue
         if sess != session_id or not sid:
             continue
@@ -294,8 +299,13 @@ def count_recent_turns(
             d = json.loads(line)
             sid = d.get("sticky_id", "")
             sess = d.get("session_id", "")
-            turn = int(d.get("turn", 0))
-        except (json.JSONDecodeError, ValueError):
+            turn_raw = d.get("turn")
+            if turn_raw is None:
+                # 老格式没 turn 字段（turn 维度引入前）— 跳过，否则 fallback 成 0
+                # 会被当前 turn 窗口（可能 cutoff ≤ 0）误数，触发 force_block 假阳
+                continue
+            turn = int(turn_raw)
+        except (json.JSONDecodeError, ValueError, TypeError):
             continue
         if sess != session_id or not sid:
             continue
