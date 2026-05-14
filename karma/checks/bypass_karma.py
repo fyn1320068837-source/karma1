@@ -57,6 +57,11 @@ _PYTHON_OR_SHELL_WRITE_RE = re.compile(
     r"write_text\s*\(|write\s*\("
     r"|\.unlink\b|\.replace\b"            # Python unlink / replace
     r"|json\.dump|p\.write"
+    # v0.4.22：补 python 调 shell 真绕过接口（v0.4.13 漏拦真根因）
+    r"|os\.(?:system|remove|unlink|rmdir|rename|popen)\b"
+    r"|subprocess\.(?:run|call|Popen|check_output|check_call)\b"
+    r"|shutil\.(?:rmtree|move|copy|copy2|copyfile)\b"
+    r"|Path\([^)]*\)\.(?:unlink|rmdir|rename|replace|write)"
     r")",
     re.IGNORECASE,
 )

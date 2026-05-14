@@ -47,6 +47,13 @@ _CHAINED_TEST_RE = re.compile(
     r"pnpm\s+test|yarn\s+test|tox)\b",
     re.IGNORECASE,
 )
+# v0.4.22：pytest 假证据 flag — 跑了 pytest 但没真跑测试用例。v0.4.14 过宽漏拦。
+# --collect-only / --no-collect-only / --co 都是不真跑 case 模式。
+_FAKE_TEST_FLAG_RE = re.compile(
+    r"--collect-only|--no-collect-only|--co\b|--setup-only|--setup-plan|"
+    r"--fixtures-per-test|--help|-h\b|--version|-V\b",
+    re.IGNORECASE,
+)
 
 
 def _in_code_task_context(response: str, match) -> bool:
@@ -78,9 +85,10 @@ def check(
             # 豁免 2（v0.4.14）：cmd 同行含 chained 测试命令（pytest && git commit）—
             # 用户在一个 Bash 调用里先测后 commit 是合法 workflow。strip 引号字面后
             # 扫骨架，避免 commit message 里字面提到 pytest 误豁免。
+            # v0.4.22：但要排除 pytest --collect-only / --help 等假证据 flag。
             from karma.checks.common import strip_shell_quoted_literals
             cmd_stripped = strip_shell_quoted_literals(cmd)
-            if _CHAINED_TEST_RE.search(cmd_stripped):
+            if _CHAINED_TEST_RE.search(cmd_stripped) and not _FAKE_TEST_FLAG_RE.search(cmd_stripped):
                 return None
             return CheckHit(
                 sticky_id=_STICKY_ID,

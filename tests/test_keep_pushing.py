@@ -82,7 +82,9 @@ def test_pure_statement_no_push_no_question_blocked():
     注：成功汇报（数字 + 通过词）有专门豁免（跟 sticky #4 鼓励的「完成要有
     证据」一致），所以这里用「目前情况如此」类纯文字陈述，没数字证据。
     """
-    hit = _check("commit ffcbd07 已推 origin/main。目前情况就这样了。")
+    # v0.4.22：「就这样了」加入 _STOP_HINT_RE 后会被更精准识别为停顿语气而非
+    # 「纯陈述无推进」。两种 trigger 都算成功识别真停下。
+    hit = _check("commit ffcbd07 已推 origin/main。目前情况看起来差不多。")
     assert hit is not None
     assert "纯陈述" in hit.trigger or "无推进" in hit.trigger
 
@@ -180,6 +182,21 @@ def test_explicit_user_handoff_exempted():
     ]
     for c in cases:
         assert _check(c) is None, f"显式让用户介入合法 stop 应豁免: {c!r}"
+
+
+def test_v422_soft_stop_hints_blocked():
+    """v0.4.22：v0.4.19/20 漏拦的柔性停顿语气 — 「OK 就这样了」/「今天到此为止」
+    /「就到这」/「搞不定了」类应拦。
+    """
+    cases = [
+        "做了 A B C。OK 就这样了。",
+        "改不动了。今天到此为止。",
+        "改完。就这样吧。",
+        "试了几次。搞不定了。算了吧。",
+    ]
+    for c in cases:
+        hit = _check(c)
+        assert hit is not None, f"柔性停顿语气应拦: {c!r}"
 
 
 def test_v420_push_signal_in_middle_tail_pure_statement_exempted():

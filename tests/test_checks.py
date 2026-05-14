@@ -230,6 +230,35 @@ def test_non_blocking_wait_blocking_blocked():
         assert hit is not None, f"裸 wait 应拦: {cmd!r}"
 
 
+def test_non_blocking_python_real_time_sleep_caught():
+    """v0.4.22：v0.4.18 fix 过宽 — python -c 内 time.sleep / asyncio.sleep /
+    subprocess sleep 真阻塞前端应拦。"""
+    fn = REGISTRY["non_blocking_parallel"]
+    real_block_cases = [
+        ('python -c "import time; ' + 'time.sleep(60)' + '"', "time.sleep"),
+        ('python -c "import asyncio; ' + 'asyncio.sleep(30)' + '"', "asyncio.sleep"),
+        ('python -c "import subprocess; subprocess.run(\'sleep 30\', shell=True)"', "subprocess sleep"),
+        ('python -c "import os; os.system(\'sleep 30\')"', "os.system sleep"),
+    ]
+    for cmd, label in real_block_cases:
+        hit = fn(tool_name="Bash", tool_input={"command": cmd})
+        assert hit is not None, f"python 真阻塞 {label} 应命中: {cmd!r}"
+
+
+def test_evidence_pytest_collect_only_not_exempted():
+    """v0.4.22：v0.4.14 fix 过宽 — pytest --collect-only 等假证据 flag 不该豁免。"""
+    fn = REGISTRY["loud_failure_with_evidence"]
+    state = SessionState(session_id="s5")
+    fake_test_cases = [
+        "pytest --collect-only && git commit -m fix",
+        "pytest --help && git commit -m fix",
+        "pytest --version && git commit -m fix",
+    ]
+    for cmd in fake_test_cases:
+        hit = fn(tool_name="Bash", tool_input={"command": cmd}, session_state=state)
+        assert hit is not None, f"假证据 flag 不该豁免: {cmd!r}"
+
+
 def test_non_blocking_python_c_sleep_literal_exempted():
     """v0.4.18：python -c "..." 内的 sleep 字面是字符串数据不是真 shell sleep。
 
@@ -413,6 +442,24 @@ def test_chinese_plain_markdown_table_not_counted_in_ratio():
 跨平台测试全过。"""
     hit = fn(response=response)
     assert hit is None, f"表格不该拉低中文比例造假阳: {hit}"
+
+
+def test_chinese_plain_table_with_3plus_jargons_blocked():
+    """v0.4.22：v0.4.15 fix 过宽 — 表格 cell 里堆 ≥ 3 个 jargon 是真话术应拦。
+
+    用户视角 case：表格里堆 retrieval / reranker / transformer / embedding /
+    baseline 等真技术话术不是项目术语引用，应该拦。
+    """
+    fn = REGISTRY["chinese_plain_no_jargon"]
+    response = (
+        "方案对比：\n\n"
+        "| 方案 | 描述 |\n"
+        "|---|---|\n"
+        "| A | 用 retrieval 加 reranker 做精排，比 baseline 强 |\n"
+        "| B | 用 transformer encoder 加 attention 做 embedding |\n"
+    )
+    hit = fn(response=response)
+    assert hit is not None, "表格 cell 里堆 3+ 个 jargon 真话术应拦"
 
 
 def test_chinese_plain_jargon_in_table_cell_exempted():

@@ -4,6 +4,95 @@
 
 ## [Unreleased]
 
+## [0.4.23] — 2026-05-14（patch — v0.4.22 紧急补发：tag 误指向 v0.4.21 内容）
+
+### 真触发
+
+按 sticky #4 失败响亮发现：v0.4.22 release tag 实际**指向 v0.4.21 commit 内容**，
+v0.4.22 该有的反喂自审 fix（5 类 check 过宽治理）**一行代码都没真 push**。
+
+### 真根因
+
+v0.4.22 commit 那次被 karma 自己拦了（命令字面含 `time.sleep(60)` 真阻塞 pattern
+被 pre_tool_use hook 拦）。但后续的 `git tag v0.4.22 && git push --tags && gh
+release create` 命令基于**没含 fix 改动的 head** 跑成功了，导致：
+
+- GitHub v0.4.22 release tag 存在
+- 但 tag 指向的 commit 是 v0.4.21 的
+- 9 个文件改动留在 working tree 没 commit
+- 用户装 v0.4.22 拿到的是 v0.4.21 内容
+
+### Fix
+
+不动错的 v0.4.22 tag（避免 destructive 操作改已发布版本），发 v0.4.23 把
+v0.4.22 应有的真代码真发出去。
+
+v0.4.22 在 CHANGELOG 保留作为「该有但没真发」的历史记录，README / install
+指引都跳到 v0.4.23。
+
+### 真教训
+
+karma 自己的 pre_tool_use hook 拦命令导致 commit 失败 → 但 shell `&&` 链
+继续跑后面 tag/push/release → 产生「tag 指向错 commit」幽灵 release。这是
+shell `&&` 短路行为跟 karma 拦截语义的真冲突。
+
+下次 commit + tag + release 类链式命令应该用 `set -e` 或者拆开跑保证前一步
+失败不继续。或者 karma hook 应该返回 exit code 让 shell `&&` 真短路。
+
+## [0.4.22] — 2026-05-14（patch — 反喂自审：v0.4.13~20 多个 fix 过宽真漏拦修复）
+
+**⚠️ 此版本 tag 误指向 v0.4.21 commit 内容，真代码在 v0.4.23 补发。**
+
+### 真触发（用户问 + 自审）
+
+用户问「全修成 0 了会不会造成真阳被误判成假阳了」 — 触发 sticky #5「反喂边界」
++ 真阳召回率反思。重新按**用户视角**构造真违反 case 跑现行 check，发现本回合
+6 个 fix 中 5 个真过宽，**多个真阳被错豁免**：
+
+| Fix | 真漏拦 case | 严重度 |
+|---|---|---|
+| v0.4.13 deep-fix | `python -c "os.system('rm karma')"` → None | **真绕过漏拦** ⚠️ |
+| v0.4.14 evidence | `pytest --collect-only && git commit` → None | 假证据漏拦 |
+| v0.4.15 chinese-plain | 表格 cell 堆多 jargon 话术 → None | 真话术漏拦 |
+| v0.4.18 non-blocking | `python -c "time.sleep(60)"` → None | 真阻塞漏拦 |
+| v0.4.19/20 keep-pushing | 「OK 就这样了 / 今天到此为止」→ None | 柔性停顿漏拦 |
+
+### 真根因
+
+audit 修后 0 触发**不代表 fix 真根因正确** — 可能只是把真阳吃了。这是经典
+sticky #5「**靠 audit 数据评估 fix 效果 = 反喂思维**」陷阱。之前的「闭环视图」
+结论过乐观。
+
+### Fix（4 类集中修）
+
+1. **`bypass_karma.py` 加 python 调 shell 真绕过接口**：`os.system / subprocess.
+   run / shutil.rmtree / Path().unlink` 等扩进 `_PYTHON_OR_SHELL_WRITE_RE`。
+   v0.4.13「python -c 跳 shell `>` 重定向」豁免不再放任真绕过过。
+2. **`non_blocking.py` 加 `_PYTHON_REAL_BLOCK_RE`** 识别 python 真阻塞：
+   `time.sleep(N≥1) / asyncio.sleep / subprocess sleep / os.system sleep`。
+   v0.4.18「python -c 跳 sleep」豁免不再放任真 python 阻塞过。
+3. **`chinese_plain.py` 加 jargon 密度判定**：jargon ≥ 3 个时用未剥表格的 natural
+   扫（堆 jargon 是话术）；< 3 个用剥表格的 natural_for_ratio 扫（单引用是项目
+   术语）。v0.4.15「表格 cell 全豁免」过宽修正。
+4. **`evidence.py` 加 `_FAKE_TEST_FLAG_RE`** 识别 pytest 假证据 flag：`--collect
+   -only / --help / --version` 等不算真跑测试。
+5. **`keep_pushing.py` `_STOP_HINT_RE` 加柔性停顿**：「今天到此 / 到此为止 /
+   就这样了 / 就这样吧 / 搞不定了 / 算了吧」等。`_PUSH_SIGNAL_RE` 加 `(?!\\s*[
+   吧行])` 排除「下次 X 吧」类推卸语气（部分覆盖，「下次 X 这事吧」 5 字隔开
+   仍漏，接受 limitation）。
+
+### 验证
+
+342 测试全过；加 6 个新守护测试函数共 12 个 assert 真违反 case。
+
+### 教训
+
+**sticky #5「不能用测试集反喂」**真深刻 — 不能靠「修后 audit 数据 0 触发」当 fix
+有效证据，那是反喂思维。真验证只能：
+1. 按**用户视角**真构造真违反 case 跑现行 check 看是不是漏拦
+2. 真用户跨场景使用 + 报真阳漏拦 case
+3. 不靠自己造的对偶守护测试（那是 confirmation bias）
+
 ## [0.4.21] — 2026-05-14（feat — audit --format md 输出 markdown 表格）
 
 ### 真价值

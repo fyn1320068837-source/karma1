@@ -191,6 +191,24 @@ def test_python_c_real_write_still_caught():
     assert _check(cmd) is not None, "python -c 内 .write 真绕过应命中"
 
 
+def test_python_os_system_real_bypass_caught():
+    """v0.4.22：v0.4.13 fix 过宽 — python -c 内 os.system 真调 shell 绕过应拦。"""
+    cmd = """python -c "import os; os.system('rm ~/.claude/karma/session-state.json')\""""
+    assert _check(cmd) is not None, "python os.system 真绕过应命中"
+
+
+def test_python_subprocess_real_bypass_caught():
+    """v0.4.22：python -c 内 subprocess.run 真调 shell 绕过应拦。"""
+    cmd = """python -c "import subprocess; subprocess.run(['rm', '~/.claude/karma/sticky.yaml'])\""""
+    assert _check(cmd) is not None, "python subprocess 真绕过应命中"
+
+
+def test_python_pathlib_unlink_real_bypass_caught():
+    """v0.4.22：python -c 内 Path(x).unlink() 真绕过应拦。"""
+    cmd = """python -c "from pathlib import Path; Path('~/.claude/karma/violations.jsonl').unlink()\""""
+    assert _check(cmd) is not None, "Path.unlink 真绕过应命中"
+
+
 def test_shell_redir_real_bypass_still_caught():
     """shell `>` 重定向真写 karma 文件 — 命令头不是宿主语言时仍扫。"""
     cmd = "echo '{}' > ~/.claude/karma/session-state.json"
