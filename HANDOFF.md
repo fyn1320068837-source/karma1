@@ -293,6 +293,31 @@ Claude Code 真实 `tool_response` 是 dict `{stdout, stderr, backgroundTaskId}`
    不在 0 字范围。
    - 接受：语义判断难做，记 HANDOFF
 
+### karma v3 第二步候选（2026-05-14 用户「绕过冲动」洞察 + 字面变体数据触发）
+
+用户问「你的总结是不是激发了绕过规则的冲动」+ 提出两方案（隐 trigger / 工具
+调用信号）。dogfooding 数据真证实假设：
+
+**keep-pushing 35 次触发对应 32 种独立 snippet 变体（91% 字面多样性）**
+
+末 8 个 snippet 看出 Agent 字面试探模式：陈述完结 / 请用户决定 / 候选清单 /
+括号收尾 / 等用户反馈 / 我先 X 看效果 — 每次撞 check 换不同字面再试。
+
+**v3 第二步候选：「字面变体频率」元行为监测**
+
+不光看「某 sticky 触发了 N 次」还看「**用了 M 种不同字面**触发同一 sticky」。
+M/N 比例高（如 keep-pushing 32/35 = 91%）就是字面试探行为强的信号。
+
+实施：
+- karma stats / audit 加「字面多样性」列：M 种独立变体 / N 次触发
+- 比例 > 70% 标 🎭 字面试探（Agent 学到换字面绕检测不是改行为）
+- karma 升级警告语：「你最近 N turn 用了 M 种字面触发 sticky X，更像在学怎么
+  不被检测拦，停下想想真意图」
+
+实施量小 — `karma/cli.py` `cmd_audit` 加 set(snippet[-40:]) 计算。
+
+工程价值高 — 这是把「Agent 字面规避」从主观判断变成 dogfooding 真数据指标。
+
 ### karma v3 第一步真已落地（2026-05-14 v0.4.24 dogfooding 真突破）
 
 之前 HANDOFF 说「下个 milestone 真根本方向是 proactive 行为锚定」但担心
