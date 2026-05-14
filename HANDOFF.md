@@ -247,6 +247,53 @@ Claude Code 真实 `tool_response` 是 dict `{stdout, stderr, backgroundTaskId}`
 
 避开 M2.2 时的「描述字面假阳」和 M3 第一波「全放又漏真违反」的两端 — 注释里写「先打个补丁」是真意图表达扫，代码主体字面赋值（数据）不扫。
 
+### karma 设计层 4 类深层矛盾（2026-05-14 dogfooding 深度自省）
+
+本 session 6 个 release 治理（v0.4.11~16）触发的真深层问题清单。每条都有
+真实假阳 case 跟设计思考，下个 session 接手时持续观察：
+
+**矛盾 1：惩罚 vs 鼓励的哲学错位**
+- 真触发：chinese-plain 累积 8 次 force_block → v0.4.15 修真根因 → 仍按
+  最近 3 turn 累积重复 force_block，Agent 修了真根因没法解除卡死
+- 真根因：karma 当前是纯惩罚系统，缺「修真根因后自动恢复」反馈环
+- 部分 fix：v0.4.16 加「当前 turn 真触发」条件 + scripts/verify-installed.sh
+  防 hook 跑旧字节码。本质闭环已实现（修 check → 重装 → 当前 turn 0
+  触发 → force_block 自动解除）
+- 残余待治理：更显式的 evolution log 记每次 fix 的真根因 + 时间，让 audit
+  视图能区分 fix 前 / fix 后违反
+
+**矛盾 2：karma 自指悖论**
+- 真触发清单：`v0.4.11` 版本号字面 / `force_block` 项目标识符 / 表格 cell
+  里的 `embedding` jargon / `python -c "...> cutoff..."` 比较运算符 /
+  `pytest && git commit` 链式 — 都是 karma 项目自己讨论自己时撞到
+- 真根因：sticky 设计 always-on 全局规则，没区分「karma 项目自身」vs
+  「用户真业务」vs「文档 / 测试」场景
+- 已做：v0.4.11/13/14/15 逐 check 内容层精化（剥版本号 / 标识符 / 表格 /
+  python 比较 / 链式测试）
+- **不该做**：「karma 项目自身场景识别」是给作者自用的局部 hack，违反
+  CLAUDE.md「karma 默认必须跨用户合理」原则。逐 check 内容层精化才是
+  真普适（任何用户讨论项目术语 / 写表格汇报 / 跑探针都受益）
+
+**矛盾 3：字面检测 vs 语义意图根本不可调和**
+- 真触发：`>` 字面 — shell 重定向 vs python 比较；`sleep` 字面 — shell
+  真等待 vs python 字符串数据；jargon 字面 — 真术语堆砌 vs 表格 cell
+  引用
+- 真根因：karma v2 严格不用大模型（v1→v2 明确边界），regex 字面永远
+  分不清「字面相同 / 语义不同」
+- **接受的工程代价**：按 v2 边界**坚定不引入 LLM**（memory 里
+  `feedback-karma-v2-no-llm-firm` 明确）。路径只能是不断扩剥离 +
+  黑白名单，每个 fix 解决一类下一类还在等
+- 不该做：调本机小模型语义层兜底（违反 v2 边界）
+
+**矛盾 4：sticky 之间互相打架没冲突仲裁**
+- 真冲突对：#8 不停下推进 vs #1 不范围蔓延 / #7 显式让用户介入 vs #8
+  不停下问 / #4 完整证据（数字 / 表格） vs #3 直白中文（被拉低比例）
+- 部分 fix：现有 `force_block_exempt` 字段给「行为反向」sticky 用（keep-
+  pushing 越 force_block 越自相矛盾，所以 exempt）
+- **不该做**：加 sticky priority 字段是预防性机制没真实 case 驱动，违反
+  sticky #1 「不超出任务需要」。多数冲突是 Agent 自己读 sticky 时的判
+  断问题，不是 check 触发后的仲裁问题
+
 ## 下个 session 接手指引
 
 ### 7+1 条 sticky 完整定位
