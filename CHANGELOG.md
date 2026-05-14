@@ -4,6 +4,76 @@
 
 ## [Unreleased]
 
+## [0.4.31] — 2026-05-14（fix — subagent_start.py ensure_ascii bug + 加守护测试）
+
+### 真触发
+
+v0.4.30 装机后真跑子 Agent，主动跑 wrapper 真行为验证发现 subagent_start.py
+没用 `ensure_ascii=False`，子 Agent 收到的 additionalContext 是
+`\\u4e2d\\u6587` 类 unicode 转义乱码看不懂。subagent_stop.py 是新写的用了
+`ensure_ascii=False` ✓，subagent_start.py 是早期 stub 没改。
+
+### 修
+
+- `karma/hooks/subagent_start.py` 用 `ensure_ascii=False` 输出真中文 +
+  passthrough 抽公共函数 + 文本表达跟其他 hook 风格统一（去 emoji + 用
+  `[karma 子 Agent 继承父 session 的核心方向]` 格式跟 SessionStart baseline
+  对齐）
+- 加 `test_subagent_hooks_output_real_chinese_not_unicode_escape` 守护测试
+  检查 raw stdout 不含 `\\u4e` / `\\u5e` 类 unicode 转义字面 — 永防 ensure_ascii
+  bug 复发
+
+测试 351 → 352 + ruff 干净 + 真装机后 wrapper 真输出真中文验证通过。
+
+### 教训
+
+装机层 「真触发」证据收集要直接跑 wrapper 看真输出 stdout，不能只看「主
+Agent UI 显示了 system-reminder」 — 不同 hook event additionalContext 注入
+位置不同（SessionStart / PostToolUse 进 system-reminder UI；SubagentStart
+进子 Agent context；SubagentStop 进主 Agent context 但不一定显示成 UI 提醒）。
+直接 manual run wrapper 才是真协议层验证。
+
+## [0.4.30] — 2026-05-14（feat — karma v3 第六步：SubagentStart/Stop 装机 + 删 PostCompact 幽灵代码）
+
+### 真触发
+
+v0.4.29 后接力 session，子 Agent 调研 Claude Code 协议查实：
+
+- **PostCompact 协议层不支持 `additionalContext`** — v0.4.29 留的 post_compact.py
+  整段是「幽灵代码」（输出会被 Claude Code 静默丢），不是 karma 实现 bug 是
+  Claude Code 协议设计本身。两端夹击 compact 失忆已由 PreCompact 落盘 +
+  SessionStart(source=compact) 读盘覆盖（v0.4.29 落地），PostCompact 路径走
+  不通
+- **SubagentStart / SubagentStop 真支持 `additionalContext`** — Claude Code
+  支持这两个 hook event 让 sticky 跨子 Agent 边界传递
+
+### 真落地
+
+- `karma/hooks/post_compact.py` **删** — 幽灵代码，留着是技术债
+- `karma/hooks/subagent_start.py` 装 — 子 Agent 启动时注入 sticky baseline
+  到子 Agent 上下文（注入位置是子 Agent 不是主 Agent）让子 Agent 跑长任务
+  也按这些方向
+- `karma/hooks/subagent_stop.py` 重写 — 早期 stub 用 substring match 扫子
+  Agent transcript 假阳爆发（子 Agent 在分析问题里写「先打个补丁」字面也算
+  违反），改成纯透明度提醒 + sticky id 回声「子 Agent X 已完成，sticky 仍
+  生效，接结果时自检」。真违反检测交给主 Agent 处理子 Agent 结果时的
+  PreToolUse / PostToolUse / Stop 三道 hook 自然兜
+- `karma/backends/claude_code.py` `_HOOK_EVENTS` 加 SubagentStart / SubagentStop —
+  install-hooks 现装 8 个 hook event（v0.4.29 是 6 个）
+
+### 顺手治理
+
+- `tests/test_cli.py` 3 处 `len(...) == 6` 硬编码改 `len(_HOOK_EVENTS)`
+  动态算 — v0.4.28 / v0.4.29 / v0.4.30 三次加 hook 都得改这数字是反 pattern，
+  按 sticky #1 长期根本永久消除
+- `tests/test_locale_detect.py` 加 autouse fixture 清所有 LC_* 环境变量 —
+  作者本机 LC_MESSAGES=en_US.UTF-8 干扰 setenv 类测试假 hit en，main 上历史
+  fail 顺手修真根因
+- README / ARCHITECTURE / PRD 同步「8 个 hook event」+ 装机示例输出加新
+  wrapper 名 + v3 第六步演化条目 + 测试数 351
+
+测试 304 → 351 全过 + ruff 干净 + vulture 0 死代码。
+
 ## [0.4.29] — 2026-05-14（feat — karma v3 第五步：PreCompact 落盘 + 两端夹击 compact 失忆 / CI 修）
 
 ### 真触发

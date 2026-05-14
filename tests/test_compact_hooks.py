@@ -114,7 +114,7 @@ def test_subagent_start_hook():
         "agent_type": "Explore",
         "session_id": "parent-session",
     }
-    
+
     result = subprocess.run(
         ["/Users/jhz/karma/.venv/bin/python", "-m", "karma.hooks.subagent_start"],
         capture_output=True,
@@ -122,10 +122,39 @@ def test_subagent_start_hook():
         input=json.dumps(payload),
         cwd="/Users/jhz/karma"
     )
-    
+
     if result.returncode == 0:
         output = json.loads(result.stdout)
         assert isinstance(output, dict)
+
+
+def test_subagent_hooks_output_real_chinese_not_unicode_escape():
+    """SubagentStart / SubagentStop hook 必须用 ensure_ascii=False 输出真中文 —
+    早期 stub subagent_start.py 没加 ensure_ascii=False 导致子 Agent 收到一坨
+    `\\u4e2d\\u6587` 转义看不懂（v0.4.31 fix）。守护永不复发。
+    """
+    payload = json.dumps({
+        "agent_id": "test",
+        "agent_type": "Explore",
+        "session_id": "x",
+    })
+    for hook_name in ("subagent_start", "subagent_stop"):
+        result = subprocess.run(
+            ["/Users/jhz/karma/.venv/bin/python", "-m", f"karma.hooks.{hook_name}"],
+            capture_output=True,
+            text=True,
+            input=payload,
+            cwd="/Users/jhz/karma"
+        )
+        assert result.returncode == 0, f"{hook_name} 退出非零: {result.stderr}"
+        # 关键守护：raw stdout 不该含 `\u4e` 类 unicode 转义字面（ensure_ascii=True
+        # 输出 `\\u4e2d` 6 字符 ascii 序列 — 子 Agent 看到这种乱码看不懂）
+        assert "\\u4e" not in result.stdout, (
+            f"{hook_name} 输出含 \\u 转义说明用了 ensure_ascii=True — 应改 False"
+        )
+        assert "\\u5e" not in result.stdout, (
+            f"{hook_name} 输出含 \\u 转义说明用了 ensure_ascii=True — 应改 False"
+        )
 
 
 def test_subagent_stop_hook_emits_reminder():

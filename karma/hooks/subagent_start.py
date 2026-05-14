@@ -1,13 +1,18 @@
-"""SubagentStart hook — Subagent 启动时继承父 sticky 约束。
+"""SubagentStart hook — 子 Agent 启动时注入 sticky baseline（karma v3 第六步）。
 
 Claude Code 协议:
 - stdin payload: {agent_id, agent_type, session_id, transcript_path, ...}
-- stdout: {"hookSpecificOutput": {"hookEventName": "SubagentStart", "additionalContext": "..."}}
+- stdout: {"hookSpecificOutput": {"hookEventName": "SubagentStart",
+           "additionalContext": "..."}}
+- additionalContext 注入到子 Agent 的上下文（不是主 Agent）— 让子 Agent 在
+  隔离 context 中仍按 sticky 方向跑
 
-策略：
-- 将父 session sticky 信息通过 additionalContext 传给子 agent
-- 子 agent 在隔离 context 中仍遵守父 sticky 约束
-- v0.6.0 first pass：简单序列化 sticky 摘要
+设计（v0.4.30 first pass）：
+- 简单序列化 sticky 摘要（id + 第一行 preference）传给子 Agent
+- 用 ensure_ascii=False 输出真中文（早期 stub 没加，子 Agent 收到 `\\uXXXX`
+  转义乱码看不懂）
+
+Fail open：异常 / 配置坏 → passthrough 不阻塞子 Agent 启动。
 """
 
 from __future__ import annotations
@@ -18,40 +23,41 @@ import sys
 from karma.sticky import load as load_sticky
 
 
+def _passthrough() -> None:
+    print(json.dumps({}))
+
+
 def main() -> int:
     try:
         _payload = json.load(sys.stdin)
     except json.JSONDecodeError as e:
         print(f"karma SubagentStart: 输入 JSON 解析失败 ({e})", file=sys.stderr)
-        print(json.dumps({}))
+        _passthrough()
         return 0
 
     try:
         sticky_list = load_sticky()
     except Exception as e:
         print(f"karma SubagentStart: sticky 加载失败 ({e})", file=sys.stderr)
-        print(json.dumps({}))
+        _passthrough()
         return 0
-    
+
     if not sticky_list:
-        print(json.dumps({}))
+        _passthrough()
         return 0
-    
-    # 序列化 sticky 约束传给子 agent
-    sticky_context = "📋 子 Agent 继承的核心方向：\n"
+
+    lines = ["[karma 子 Agent 继承父 session 的核心方向]"]
     for s in sticky_list:
         first_line = s.preference.strip().split("\n")[0]
-        sticky_context += f"  • {s.id}: {first_line}\n"
-    
-    sticky_context += "\n这些约束在子 Agent 中也会生效。违反时主 Agent 会收到通知。"
-    
+        lines.append(f"  - {s.id}: {first_line}")
+    lines.append("这些方向在子 Agent 跑任务时也按这些行为。违反时主 Agent 会收到 SubagentStop 透明度提醒。")
+
     print(json.dumps({
         "hookSpecificOutput": {
             "hookEventName": "SubagentStart",
-            "additionalContext": sticky_context
+            "additionalContext": "\n".join(lines),
         }
-    }))
-    
+    }, ensure_ascii=False))
     return 0
 
 
