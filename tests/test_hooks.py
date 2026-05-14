@@ -362,6 +362,64 @@ def test_stop_hook_blocks_when_keep_pushing_violated(monkeypatch, tmp_path, caps
     assert "keep-pushing" in out.get("reason", "")
 
 
+def test_user_prompt_submit_injects_strong_reminder_when_last_response_stopped(
+    monkeypatch, tmp_path, capsys,
+):
+    """user_prompt_submit hook 检测上一 response 末尾无推进信号 → 注入强提醒。
+
+    这是 Stop hook 「user 立刻接 prompt 时不跑」协议 limitation 的 fallback fix。
+    """
+    _patch_paths(monkeypatch, tmp_path, sticky_items=[
+        {"id": "keep-pushing-no-stop", "preference": "x",
+         "violation_checks": ["keep_pushing_no_stop"]},
+    ])
+    monkeypatch.setattr("karma.session_state.DEFAULT_DIR", tmp_path)
+    # transcript last assistant = 「完成了。」纯陈述无推进
+    transcript = tmp_path / "trans.jsonl"
+    transcript.write_text(json.dumps({
+        "type": "assistant",
+        "message": {"content": [{"type": "text", "text": "完成了，commit 推上。"}]},
+    }) + "\n", encoding="utf-8")
+    payload = json.dumps({
+        "session_id": "stop_check",
+        "transcript_path": str(transcript),
+        "prompt": "hi",
+    })
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    user_prompt_submit.main()
+    out = json.loads(capsys.readouterr().out)
+    ctx = out.get("hookSpecificOutput", {}).get("additionalContext", "")
+    assert "强提醒" in ctx or "keep-pushing" in ctx, \
+        f"上一 response 无推进信号应注入强提醒：{ctx}"
+
+
+def test_user_prompt_submit_no_reminder_when_last_response_has_push(
+    monkeypatch, tmp_path, capsys,
+):
+    """上一 response 含推进信号（我接下来 X）→ 不注入强提醒。"""
+    _patch_paths(monkeypatch, tmp_path, sticky_items=[
+        {"id": "keep-pushing-no-stop", "preference": "x",
+         "violation_checks": ["keep_pushing_no_stop"]},
+    ])
+    monkeypatch.setattr("karma.session_state.DEFAULT_DIR", tmp_path)
+    transcript = tmp_path / "trans.jsonl"
+    transcript.write_text(json.dumps({
+        "type": "assistant",
+        "message": {"content": [{"type": "text",
+                                  "text": "完成了，commit 推上。我接下来去做下一步推进。"}]},
+    }) + "\n", encoding="utf-8")
+    payload = json.dumps({
+        "session_id": "stop_ok",
+        "transcript_path": str(transcript),
+        "prompt": "hi",
+    })
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    user_prompt_submit.main()
+    out = json.loads(capsys.readouterr().out)
+    ctx = out.get("hookSpecificOutput", {}).get("additionalContext", "")
+    assert "强提醒" not in ctx, "上一 response 有推进信号不该注入强提醒"
+
+
 def test_user_prompt_submit_runs_catchup(monkeypatch, tmp_path, capsys):
     """UserPromptSubmit hook 也跑 catchup_pending_bg — task #8 task 完成后
     第一个 hook 触发时接证据，覆盖 PostToolUse 之外场景。"""

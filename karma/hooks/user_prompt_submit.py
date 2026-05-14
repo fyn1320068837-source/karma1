@@ -87,6 +87,47 @@ def main() -> int:
         recent_v = recent()  # 早期 fallback 用人类时钟（首次 install 没 turn 计数）
     additional_context = format_for_injection(sticky_list, recent_v)
 
+    # 额外检测：上一 response 末尾是否含推进信号（fallback for Stop hook
+    # 在 user 立刻接 prompt 时不跑的协议 limitation）
+    # 如果上一 response default 命中 keep_pushing → 注入强提醒
+    transcript_path = payload.get("transcript_path", "")
+    if transcript_path:
+        try:
+            from pathlib import Path as _Path
+            from karma.checks.keep_pushing import check as _kp_check
+            tp = _Path(transcript_path)
+            if tp.exists():
+                # 反向找 last assistant message
+                lines = tp.read_text(encoding="utf-8").splitlines()
+                last_text = ""
+                for ln in reversed(lines):
+                    try:
+                        d = json.loads(ln.strip())
+                    except json.JSONDecodeError:
+                        continue
+                    if d.get("type") != "assistant":
+                        continue
+                    msg = d.get("message", {})
+                    content = msg.get("content", [])
+                    if isinstance(content, list):
+                        parts = [c.get("text", "") for c in content
+                                 if isinstance(c, dict) and c.get("type") == "text"]
+                        last_text = "\n".join(parts)
+                    elif isinstance(content, str):
+                        last_text = content
+                    break
+                if last_text:
+                    hit = _kp_check(response=last_text)
+                    if hit:
+                        additional_context += (
+                            f"\n\n[karma 强提醒 — sticky #7/#8 keep-pushing 检测]\n"
+                            f"上一 response 末尾没推进信号 / 没询问决策 = 你上次停下了。\n"
+                            f"本 turn 完成第一波后**立即**选下一推进点开始，不要再停下汇报完等我反馈。\n"
+                            f"格式：[做的事] + [我接下来去做 X] + 立即下个 tool 调用。"
+                        )
+        except Exception:
+            pass
+
     print(json.dumps({
         "hookSpecificOutput": {
             "hookEventName": "UserPromptSubmit",
