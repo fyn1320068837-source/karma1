@@ -58,6 +58,8 @@
     - 我先看着
   violation_checks:
     - non_blocking_parallel
+  # 「不阻塞」语义跟 force_block「累积太多必须停下让用户介入」自相矛盾 — 豁免
+  force_block_exempt: true
 
 - id: chinese-plain-no-jargon
   preference: |
