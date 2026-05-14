@@ -27,6 +27,15 @@ _LANG_C_HEAD_RE = re.compile(
     r"\b(?:python\d?|node|ruby|perl)\s+-[ce]\b",
     re.IGNORECASE,
 )
+# v0.4.22：python -c 内真阻塞接口 — `time.sleep(N)` / `subprocess.run('sleep', shell=True)`
+# / `asyncio.sleep(N)` 等。v0.4.18 修过宽漏拦真 python 阻塞。
+_PYTHON_REAL_BLOCK_RE = re.compile(
+    r"\btime\.sleep\s*\(\s*[1-9]\d*"          # time.sleep(N) N >= 1
+    r"|\basyncio\.sleep\s*\(\s*[1-9]\d*"        # asyncio.sleep
+    r"|\bsubprocess\.(?:run|call|Popen)\s*\([^)]*[\"']sleep\s+[1-9]"  # subprocess 调 sleep
+    r"|\bos\.system\s*\([^)]*[\"']sleep\s+[1-9]",  # os.system 调 sleep
+    re.IGNORECASE,
+)
 # wait 命令检测 — 见 _is_blocking_wait 函数
 # 拦 shell 内置 wait（裸 / 接 PID / 接 $!）。豁免有合法 wait 子命令的工具
 # （kubectl wait / docker wait / aws cloudformation wait / gcloud / az）。
@@ -97,6 +106,23 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
     # sleep(N) / subprocess.run("sleep") 这种 — `sleep` 裸字面在 python 代码
     # 里只是 identifier 不会真执行。同 v0.4.13 deep-fix 拆 _WRITE_OP_RE 根因。
     is_lang_c = bool(_LANG_C_HEAD_RE.search(cmd_raw))
+
+    # v0.4.22：python -c 内**真**阻塞接口（time.sleep / subprocess.run("sleep") /
+    # os.system("sleep") / asyncio.sleep）— v0.4.18 漏拦真 python 阻塞。
+    # 注意用 cmd_raw 不是 cmd（strip 后）— 因为 strip_shell_quoted_literals 把
+    # python -c "..." 内容保留扫，所以这里 cmd_raw 跟 cmd 都含 python 代码。但
+    # commit message 里字面引用「time.sleep(60)」必须剥掉，所以扫 cmd（已剥引号
+    # 字面 + python -c 内容保留 = 既能扫真 python 阻塞也能豁免 commit message 描述）。
+    if is_lang_c:
+        m_block = _PYTHON_REAL_BLOCK_RE.search(cmd)
+        if m_block:
+            return CheckHit(
+                sticky_id=_STICKY_ID,
+                trigger=f"python 真阻塞接口: {m_block.group()!r}",
+                snippet=cmd_raw[:200],
+                suggested_fix="python -c 内 time.sleep / subprocess sleep 真阻塞前端。"
+                              "用 run_in_background=True 启动，或用 asyncio + 并发。",
+            )
 
     m = _SLEEP_RE.search(cmd)
     if m and not is_lang_c:
