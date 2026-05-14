@@ -372,10 +372,11 @@ def test_doctor_reports_fully_installed(fake_home, capsys, monkeypatch):
     sticky_path.write_text("- id: test\n  preference: x\n")
     import karma.sticky
     import karma.violations
-    from karma.backends import CodexBackend
+    from karma.backends import CodexBackend, GeminiCLIBackend
     import unittest.mock
-    # mock Codex 没装（fake_home 是 tmp，本测试只关心 Claude Code 路径）
+    # mock 其他 backend 没装（fake_home 是 tmp，本测试只关心 Claude Code 路径）
     monkeypatch.setattr(CodexBackend, "client_installed", lambda self: False)
+    monkeypatch.setattr(GeminiCLIBackend, "client_installed", lambda self: False)
     cli.cmd_install_hooks(backend_name="claude-code")
     with unittest.mock.patch.object(karma.sticky, "DEFAULT_PATH", sticky_path):
         with unittest.mock.patch.object(cli, "STICKY_PATH", sticky_path):

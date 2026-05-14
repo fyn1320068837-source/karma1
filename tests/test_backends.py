@@ -5,7 +5,13 @@ from __future__ import annotations
 
 import pytest
 
-from karma.backends import REGISTRY, ClaudeCodeBackend, CodexBackend, detect_installed_backends
+from karma.backends import (
+    REGISTRY,
+    ClaudeCodeBackend,
+    CodexBackend,
+    GeminiCLIBackend,
+    detect_installed_backends,
+)
 from karma.backends._base import SettingsParseError
 
 
@@ -17,19 +23,54 @@ def fake_home(tmp_path, monkeypatch):
     return tmp_path
 
 
-def test_registry_has_both_backends():
+def test_registry_has_three_backends():
     assert "claude-code" in REGISTRY
     assert "codex" in REGISTRY
+    assert "gemini-cli" in REGISTRY
     assert isinstance(REGISTRY["claude-code"], ClaudeCodeBackend)
     assert isinstance(REGISTRY["codex"], CodexBackend)
+    assert isinstance(REGISTRY["gemini-cli"], GeminiCLIBackend)
 
 
-def test_backends_have_4_overlap_events():
-    """两个 backend 都支持 4 个核心 event（UserPromptSubmit / PreToolUse /
-    PostToolUse / Stop） — karma hook 入口可跨 backend 复用。"""
-    expected = {"UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"}
-    assert set(REGISTRY["claude-code"].hook_events().keys()) == expected
-    assert set(REGISTRY["codex"].hook_events().keys()) == expected
+def test_backends_all_have_4_karma_wrappers():
+    """3 个 backend 都映射到 4 个 karma wrapper basename（跨 backend hook 入口
+    完全复用）。Gemini event 名不同（BeforeAgent 等）但 wrapper 还是 user_prompt_submit。"""
+    expected_wrappers = {"user_prompt_submit", "pre_tool_use", "post_tool_use", "stop"}
+    for name in ("claude-code", "codex", "gemini-cli"):
+        wrappers = set(REGISTRY[name].hook_events().values())
+        assert wrappers == expected_wrappers, f"{name} wrapper 不齐: {wrappers}"
+
+
+def test_gemini_uses_different_event_names():
+    """Gemini event 名是 BeforeAgent/AfterAgent/BeforeTool/AfterTool —
+    跟 Claude Code/Codex 的 UserPromptSubmit/Stop/PreToolUse/PostToolUse 完全不同。"""
+    gemini_events = set(REGISTRY["gemini-cli"].hook_events().keys())
+    expected = {"BeforeAgent", "AfterAgent", "BeforeTool", "AfterTool"}
+    assert gemini_events == expected
+
+
+def test_gemini_event_to_wrapper_mapping():
+    """Gemini 的 BeforeAgent → user_prompt_submit / AfterAgent → stop 等映射对。"""
+    g = REGISTRY["gemini-cli"]
+    events = g.hook_events()
+    assert events["BeforeAgent"] == "user_prompt_submit"
+    assert events["AfterAgent"] == "stop"
+    assert events["BeforeTool"] == "pre_tool_use"
+    assert events["AfterTool"] == "post_tool_use"
+
+
+def test_gemini_paths(fake_home):
+    g = GeminiCLIBackend()
+    assert g.hooks_dir() == fake_home / ".gemini" / "hooks"
+    assert g.settings_path() == fake_home / ".gemini" / "settings.json"
+
+
+def test_gemini_event_entry_timeout_ms(fake_home):
+    """Gemini hook entry 用 timeout 毫秒（跟 vibe-island 已用格式一致 5000）。"""
+    g = GeminiCLIBackend()
+    entry = g.build_event_entry("user_prompt_submit", "BeforeAgent")
+    assert "matcher" not in entry
+    assert entry["hooks"][0]["timeout"] == 5000
 
 
 # ---- Claude Code backend ----
@@ -149,14 +190,16 @@ def test_detect_installed_returns_list_of_names():
 
 
 def test_detect_installed_picks_up_each_backend(monkeypatch):
-    """两个 backend 都「装了」→ detect 返回两个。"""
+    """3 个 backend 都「装了」→ detect 返回 3 个（顺序按 REGISTRY）。"""
     monkeypatch.setattr(ClaudeCodeBackend, "client_installed", lambda self: True)
     monkeypatch.setattr(CodexBackend, "client_installed", lambda self: True)
-    assert detect_installed_backends() == ["claude-code", "codex"]
+    monkeypatch.setattr(GeminiCLIBackend, "client_installed", lambda self: True)
+    assert detect_installed_backends() == ["claude-code", "codex", "gemini-cli"]
 
 
 def test_detect_installed_skips_uninstalled_backend(monkeypatch):
     """只装一个 → detect 只返回那个。"""
     monkeypatch.setattr(ClaudeCodeBackend, "client_installed", lambda self: False)
     monkeypatch.setattr(CodexBackend, "client_installed", lambda self: True)
+    monkeypatch.setattr(GeminiCLIBackend, "client_installed", lambda self: False)
     assert detect_installed_backends() == ["codex"]

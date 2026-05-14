@@ -4,6 +4,58 @@
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-05-14（minor — 第三个 backend：Gemini CLI 适配）
+
+### Added — Gemini CLI 装机支持
+
+karma 三家 AI 编程客户端 backend 全打通：Claude Code（v0.1.0）+ Codex CLI
+（v0.3.0）+ Gemini CLI（v0.4.0）。三个客户端 hook 协议跟 karma 实测兼容,
+真实装机 / 卸装 / hook 触发 catch 违反全跑通。
+
+- **`karma/backends/gemini_cli.py`**：新 `GeminiCLIBackend` 实现，
+  `~/.gemini/settings.json` 配置（含 `hooks` 字段），默认启用（不像 Codex 要
+  feature flag）。
+- **`karma install-hooks --backend gemini-cli`** 装机；`--backend all` 自动
+  装本机三家全检测到的客户端。
+- **Stop hook 跨协议跨 backend 适配**：karma `stop.py` 现在适配 3 个不同字段名：
+  | Backend | Stop event 名 | 字段 |
+  |---|---|---|
+  | Claude Code | `Stop` | `transcript_path`（反向读 transcript） |
+  | Codex | `Stop` | `last_assistant_message`（直传） |
+  | Gemini CLI | `AfterAgent` | `prompt_response`（直传） |
+  
+  优先级：直传字段 > transcript fallback。
+
+### Key insight — Gemini event 名跟 Claude Code / Codex 不同
+
+Gemini CLI 用自己的 event 名（`BeforeAgent` / `AfterAgent` / `BeforeTool` /
+`AfterTool`）— 跟 Claude Code 的 `UserPromptSubmit / Stop / PreToolUse /
+PostToolUse` 完全不同。
+
+karma backend 抽象设计巧妙处理：**`hook_events()` key 是 backend 实际 event 名
+（写进各家配置文件），value 是 karma 内部 wrapper basename**。这样 4 个 wrapper
+（user_prompt_submit / pre_tool_use / post_tool_use / stop）跨 3 backend 完全
+复用，karma hook 入口模块代码 0 改动。
+
+| karma wrapper | Claude Code | Codex | Gemini CLI |
+|---|---|---|---|
+| user_prompt_submit | UserPromptSubmit | UserPromptSubmit | BeforeAgent |
+| pre_tool_use | PreToolUse | PreToolUse | BeforeTool |
+| post_tool_use | PostToolUse | PostToolUse | AfterTool |
+| stop | Stop | Stop | AfterAgent |
+
+### Verified（真跑实测）
+
+- 装机：`~/.gemini/settings.json` 6 个 vibe-island event + 4 个 karma event 共存 ✓
+- AfterAgent 模拟 payload 跑 karma stop.py → catch「我先打个补丁」违反 +
+  decision=block + reason 输出 ✓
+- 卸装：karma 4 entry 清除，vibe-island 7 个 entry 完整保留 ✓
+
+### Test
+
+- 测试 294 → 299 全过（加 Gemini event 映射 + 跨协议字段适配守护测试）。
+- ruff / mypy（含 tests/）/ vulture 0 issue。
+
 ## [0.3.0] — 2026-05-14（minor — 多 backend 横向扩展：Codex CLI 适配）
 
 ### Added — Codex CLI 装机支持
@@ -299,7 +351,8 @@ karma v2 的第一个可发布版本，经历多轮 dogfooding + 4 个 Opus 4.7 
 - `.github/workflows/ci.yml` 跨 ubuntu / macOS × py3.11 / 3.12 跑 lint +
   vulture + pytest + wheel build。
 
-[Unreleased]: https://github.com/jhaizhou-ops/karma/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/jhaizhou-ops/karma/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.4.0
 [0.3.0]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.3.0
 [0.2.4]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.2.4
 [0.2.3]: https://github.com/jhaizhou-ops/karma/releases/tag/v0.2.3

@@ -87,9 +87,15 @@ def main() -> int:
             pass
 
     session_id = payload.get("session_id", "") or "default"
-    # 优先 Codex 直传字段（不用读文件更高效）；fallback Claude Code transcript
-    response = payload.get("last_assistant_message", "") or \
-        _read_last_assistant_response(payload.get("transcript_path", ""))
+    # 跨 backend payload 字段适配 — 优先「直传 message」字段，fallback transcript
+    # - Codex Stop: last_assistant_message
+    # - Gemini AfterAgent: prompt_response
+    # - Claude Code Stop: 没直传，要 transcript_path 反向读最后 assistant message
+    response = (
+        payload.get("last_assistant_message", "")
+        or payload.get("prompt_response", "")
+        or _read_last_assistant_response(payload.get("transcript_path", ""))
+    )
 
     try:
         sticky_list = load()
