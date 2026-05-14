@@ -96,6 +96,11 @@ class BashSnapshot:
 @dataclass
 class SessionState:
     session_id: str
+    # v0.4.34 子 Agent 独立架构：agent_id 区分主/子 Agent state 文件路径
+    # 主 Agent agent_id=None（state 文件名 <session_id>.json）
+    # 子 Agent agent_id=<uuid>（state 文件名 <session_id>__<agent_id>.json）
+    # 子 Agent state 在 SubagentStop 时被 purge_subagent_state 销毁
+    agent_id: str | None = None
     read_files: set[str] = field(default_factory=set)         # 本 session Read 过的 file_path
     edit_files: list[str] = field(default_factory=list)        # Edit/Write 顺序记录（重复也保留）
     recent_bash: list[BashSnapshot] = field(default_factory=list)
@@ -265,24 +270,37 @@ class SessionState:
         return caught_up
 
 
-def _state_path(session_id: str, base_dir: Path | None = None) -> Path:
+def _state_path(session_id: str, base_dir: Path | None = None, agent_id: str | None = None) -> Path:
+    """计算 state 文件路径。
+
+    v0.4.34（用户「子 Agent 独立 karma 监控」架构）：agent_id 给的话 path 加
+    `__<agent_id>` 后缀让子 Agent 有独立 state 文件不污染主 session。
+    主 Agent (agent_id=None) 路径不变保持向后兼容。
+    """
     base = base_dir or DEFAULT_DIR
-    # session_id 可能含 /，简单清洗成单文件名
-    safe_id = re.sub(r"[^\w.-]", "_", session_id) or "default"
-    return base / f"{safe_id}.json"
+    # session_id / agent_id 可能含 /，清洗成单文件名安全字符
+    safe_sid = re.sub(r"[^\w.-]", "_", session_id) or "default"
+    if agent_id:
+        safe_aid = re.sub(r"[^\w.-]", "_", agent_id)
+        return base / f"{safe_sid}__{safe_aid}.json"
+    return base / f"{safe_sid}.json"
 
 
-def load(session_id: str, base_dir: Path | None = None) -> SessionState:
-    """加载 session 状态。文件不存在 → 返回空 state。"""
-    p = _state_path(session_id, base_dir)
+def load(session_id: str, base_dir: Path | None = None, agent_id: str | None = None) -> SessionState:
+    """加载 session 状态。文件不存在 → 返回空 state。
+
+    v0.4.34：agent_id 给的话加载子 Agent 独立 state（不污染主 session）。
+    """
+    p = _state_path(session_id, base_dir, agent_id=agent_id)
     if not p.exists():
-        return SessionState(session_id=session_id)
+        return SessionState(session_id=session_id, agent_id=agent_id)
     try:
         d = json.loads(p.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
-        return SessionState(session_id=session_id)
+        return SessionState(session_id=session_id, agent_id=agent_id)
     state = SessionState(
         session_id=session_id,
+        agent_id=agent_id,
         read_files=set(d.get("read_files", [])),
         edit_files=list(d.get("edit_files", [])),
         recent_bash=[
@@ -304,6 +322,20 @@ def load(session_id: str, base_dir: Path | None = None) -> SessionState:
         last_reinject_byte_seq=int(d.get("last_reinject_byte_seq", 0) or 0),
     )
     return state
+
+
+def purge_subagent_state(session_id: str, agent_id: str, base_dir: Path | None = None) -> bool:
+    """SubagentStop 时销毁子 Agent 临时 state（v0.4.34 子 Agent 独立架构）。
+
+    返回 True 真删了文件，False 文件不存在。失败抛 OSError 让调用方决定如何处理。
+    """
+    if not agent_id:
+        return False
+    p = _state_path(session_id, base_dir, agent_id=agent_id)
+    if not p.exists():
+        return False
+    p.unlink()
+    return True
 
 
 def purge_old_states(max_age_days: int = 30, base_dir: Path | None = None) -> int:
@@ -332,8 +364,8 @@ def purge_old_states(max_age_days: int = 30, base_dir: Path | None = None) -> in
 
 
 def save(state: SessionState, base_dir: Path | None = None) -> None:
-    """保存 session 状态（atomic rewrite）。"""
-    p = _state_path(state.session_id, base_dir)
+    """保存 session 状态（atomic rewrite）。v0.4.34 透传 state.agent_id 到路径。"""
+    p = _state_path(state.session_id, base_dir, agent_id=state.agent_id)
     p.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "session_id": state.session_id,

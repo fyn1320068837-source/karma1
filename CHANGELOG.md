@@ -4,6 +4,51 @@
 
 ## [Unreleased]
 
+## [0.4.34] — 2026-05-15（feat — 子 Agent 独立 karma 监控架构 + v0.4.32 叙事对齐 + v3 第七步真验证完成）
+
+### 真触发
+
+用户洞察：「子 Agent 的行为能不能起一个临时 karma 监控并精准注入到子 Agent 的运行过程中，不影响主 Agent，并且子 Agent 结束运行就自动销毁。这本来就是两个完全不同的进程彼此互不干扰才对。」
+
+v3 第七步真验证发现：派 Explore 子 Agent 跑 `Bash sleep 1` → violations.jsonl 真新增 1 条，但 **session_id 是主 session 下** —— 子 Agent 真违反污染主 session 的 stats / audit / force_block 累积。这是真设计盲区。
+
+### 真根因 + 真协议
+
+子 Agent 协议查实（Claude Code 官方 hooks docs）：
+
+- **agent_id 字段真存在** — 主 Agent 字段缺失，子 Agent (Task tool 启动) 含 uuid
+- **session_id 设计是子 Agent 共享主 session_id** — 区分主/子的唯一信号是 `agent_id` 字段有无
+- karma 当前 `pre_tool_use.py:64` 只读 `session_id` 没读 `agent_id` → 真根因
+
+### 真 fix（基于 agent_id 字段路由）
+
+按用户「彼此互不干扰 + 临时独立 + 自动销毁」原则，长期最优雅 split：
+
+- **state（ephemeral 跨 hook 共享数据）** → 子 Agent 独立文件 + SubagentStop 销毁
+- **violations.jsonl（历史审计数据）** → 单文件加 `agent_id` 字段区分（不销毁，保留历史 audit 区分主/子）
+
+代码改动（约 60 行）：
+
+- `karma/session_state.py`: `_state_path / load / save` 加 `agent_id` 可选参数 — 给的话路径加 `__<agent_id>` 后缀；新加 `purge_subagent_state(session_id, agent_id)` 销毁 + `SessionState` 加 `agent_id: str | None = None` 字段
+- `karma/violations.py`: `Violation` 加 `agent_id` 字段 + `to_json` 序列化（None 不写省 jsonl 体积 + 向后兼容） + `detect()` 接受 `agent_id` 参数透传
+- `karma/hooks/pre_tool_use.py`: 读 `agent_id = payload.get("agent_id")` + `state = session_state.load(session_id, agent_id=agent_id)` + Violation 写 agent_id
+- `karma/hooks/post_tool_use.py`: 同上路由
+- `karma/hooks/stop.py`: 同上路由
+- `karma/hooks/subagent_stop.py`: 加 `purge_subagent_state(session_id, agent_id)` 真销毁子 Agent 临时 state + 文案改「临时 state 已自动销毁」
+
+### 验证
+
+加 6 条 `tests/test_subagent_isolation.py` 守护测试：
+
+- 主 Agent state 路径保持向后兼容 = `<session_id>.json`
+- 子 Agent state 路径加 `__<agent_id>` 后缀
+- 子 Agent state 跟主 Agent 完全独立 load/save 互不污染
+- `purge_subagent_state` 真删子 Agent state 文件
+- 销毁子 Agent state 不影响主 Agent state
+- Violation `agent_id=None` 时 to_json 不写字段（向后兼容）；非 None 时真写
+
+测试 364 → **370 全过** + ruff 干净。
+
 ### docs — v0.4.32 阈值叙事真依据对齐 + v3 第七步真验证完成（2026-05-15）
 
 **v0.4.32 阈值叙事错配真根因**（用户挑战「上下文衰减真区间是不是 10K」触发 web 调研）：

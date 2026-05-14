@@ -62,6 +62,9 @@ def main() -> int:
     tool_name = payload.get("tool_name", "")
     tool_input = payload.get("tool_input", {}) or {}
     session_id = payload.get("session_id", "") or "default"
+    # v0.4.34 子 Agent 独立架构：agent_id 区分主/子 Agent
+    # 主 Agent payload 没 agent_id 字段；子 Agent (Task tool 启动) payload 含 uuid
+    agent_id = payload.get("agent_id") or None
 
     try:
         sticky_list = load()
@@ -74,7 +77,7 @@ def main() -> int:
         _allow()
         return 0
 
-    state = session_state.load(session_id)
+    state = session_state.load(session_id, agent_id=agent_id)
     # catchup pending background 任务（覆盖 PostToolUse 之外的 hook 触发场景）
     state.catchup_pending_bg()
 
@@ -108,7 +111,10 @@ def main() -> int:
             content = extract_tool_text(tool_name, tool_input)
             scan_text = extract_natural_language(content)
     if scan_text.strip():
-        keyword_violations = detect(scan_text, sticky_list, session_id=session_id, turn=state.turn_count)
+        keyword_violations = detect(
+            scan_text, sticky_list, session_id=session_id,
+            turn=state.turn_count, agent_id=agent_id,
+        )
 
     if not check_hits and not keyword_violations:
         _allow()
@@ -124,6 +130,7 @@ def main() -> int:
             trigger=top.trigger,
             snippet=top.snippet,
             turn=state.turn_count,
+            agent_id=agent_id,
         )])
         sticky_pref = next((s.preference for s in sticky_list if s.id == top.sticky_id), "")
         reason = (

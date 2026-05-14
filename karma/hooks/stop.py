@@ -108,7 +108,9 @@ def main() -> int:
         print(json.dumps({}))
         return 0
 
-    state = session_state.load(session_id)
+    # v0.4.34 子 Agent 独立架构：agent_id 路由到独立 state（Stop hook 也支持 agent_id）
+    agent_id = payload.get("agent_id") or None
+    state = session_state.load(session_id, agent_id=agent_id)
 
     check_hits = []
     for s in sticky_list:
@@ -122,7 +124,10 @@ def main() -> int:
         )
         check_hits.extend(hits)
 
-    keyword_violations = detect(response, sticky_list, session_id=session_id, turn=state.turn_count)
+    keyword_violations = detect(
+        response, sticky_list, session_id=session_id,
+        turn=state.turn_count, agent_id=agent_id,
+    )
 
     if not check_hits and not keyword_violations:
         print(json.dumps({}))
@@ -134,6 +139,7 @@ def main() -> int:
         all_records.append(Violation(
             ts=int(time.time()), session_id=session_id, sticky_id=h.sticky_id,
             trigger=h.trigger, snippet=h.snippet, turn=state.turn_count,
+            agent_id=agent_id,
         ))
     seen_ids = {h.sticky_id for h in check_hits}
     for v in keyword_violations:

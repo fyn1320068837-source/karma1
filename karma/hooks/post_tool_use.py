@@ -63,11 +63,13 @@ def main() -> int:
 
 
     session_id = payload.get("session_id", "") or "default"
+    # v0.4.34 子 Agent 独立架构：agent_id 路由到独立 state 文件
+    agent_id = payload.get("agent_id") or None
     tool_name = payload.get("tool_name", "")
     tool_input = payload.get("tool_input", {}) or {}
     tool_response = payload.get("tool_response", "") or ""
 
-    state = session_state.load(session_id)
+    state = session_state.load(session_id, agent_id=agent_id)
 
     # 先 catchup 之前 pending 的 background 任务输出（任务可能在中间完成了）
     # 这样能在后续 record 之前更新 last_test_pass_ts，保证 evidence check 看见

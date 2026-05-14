@@ -40,6 +40,17 @@ def main() -> int:
         return 0
 
     agent_id = payload.get("agent_id", "") or "unknown"
+    session_id = payload.get("session_id", "") or "default"
+
+    # v0.4.34 子 Agent 独立 state 销毁 — 子 Agent 完成 → 临时 state 自动销毁
+    # （用户「彼此互不干扰 + 临时独立 + 自动销毁」原则真落地）
+    if agent_id and agent_id != "unknown":
+        try:
+            from karma import session_state
+            session_state.purge_subagent_state(session_id, agent_id)
+        except OSError as e:
+            print(f"karma SubagentStop: 销毁子 Agent state 失败 ({e})", file=sys.stderr)
+            # 销毁失败不阻塞 — 主 Agent 通知仍发出
 
     try:
         sticky_list = load_sticky()
@@ -55,7 +66,7 @@ def main() -> int:
     # 透明度提醒 + sticky 关键方向回声 — 让主 Agent 接子 Agent 结果时自检
     sticky_ids = ", ".join(s.id for s in sticky_list)
     context = (
-        f"[karma 子 Agent {agent_id} 已完成]\n"
+        f"[karma 子 Agent {agent_id} 已完成 — 临时 state 已自动销毁]\n"
         f"sticky 仍生效（{sticky_ids}）— 接结果时自检是否按这些方向处理。"
     )
     print(json.dumps({

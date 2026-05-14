@@ -34,16 +34,24 @@ class Violation:
     snippet: str
     turn: int = 0  # session 内 turn 序号（user_prompt_submit 每次 +1）。
                    # 0 = 旧记录 / unknown，新写入应填实际 turn。
+    # v0.4.34 子 Agent 独立架构：agent_id None=主 Agent / uuid=子 Agent
+    # 主 violations.jsonl 含全部违反（不分文件 — 历史 audit 可见全 picture），
+    # audit / stats 默认只看 agent_id is None（主 Agent 真违反，不算子 Agent 噪音）
+    agent_id: str | None = None
 
     def to_json(self) -> str:
-        return json.dumps({
+        d: dict[str, object] = {
             "ts": self.ts,
             "session_id": self.session_id,
             "sticky_id": self.sticky_id,
             "trigger": self.trigger,
             "snippet": self.snippet,
             "turn": self.turn,
-        }, ensure_ascii=False)
+        }
+        # agent_id 只在子 Agent 触发时写（None 不写省 jsonl 体积 + 向后兼容）
+        if self.agent_id:
+            d["agent_id"] = self.agent_id
+        return json.dumps(d, ensure_ascii=False)
 
 
 def _sanitize_snippet(s: str, max_len: int = 120) -> str:
@@ -68,11 +76,14 @@ def detect(
     session_id: str = "unknown",
     now: int | None = None,
     turn: int = 0,
+    agent_id: str | None = None,
 ) -> list[Violation]:
     """扫 response 看违反哪些 sticky。
 
     简单 substring 匹配（不区分大小写）。同一 sticky 多关键词命中只记第一个。
     turn = session 内 turn 序号，用于按 turn 距离统计漂移（不是人类时钟）。
+    agent_id = 子 Agent uuid（v0.4.34），主 Agent None；写进 Violation.agent_id
+    用于 audit 区分主/子 Agent 真违反。
     """
     if not response or not sticky_list:
         return []
@@ -93,6 +104,7 @@ def detect(
                 trigger=kw,
                 snippet=_sanitize_snippet(response[start:end]),
                 turn=turn,
+                agent_id=agent_id,
             ))
             break  # 同一 sticky 多关键词命中只记第一个
     return out
