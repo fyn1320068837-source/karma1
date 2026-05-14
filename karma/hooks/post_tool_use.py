@@ -17,6 +17,31 @@ import sys
 from karma import session_state
 
 
+# tool 失败的字符串前缀 — Claude Code Read/Edit 失败常见返回（启发式）
+_FAILURE_STRING_PREFIXES = (
+    "Error", "error:", "File does not exist", "does not exist",
+    "<system-reminder>", "Tool execution failed",
+)
+
+
+def _tool_failed(tool_response) -> bool:
+    """启发式判 tool 调用是否失败 — 失败时跳过 record_read/edit
+    防止 Read 失败也 record_read → 后续 Edit 该文件被 read_first 绕过。
+
+    dict 形式：isError / interrupted 标志，或 stderr 含明确错误。
+    string 形式：以已知失败前缀开头。
+    """
+    if isinstance(tool_response, dict):
+        if tool_response.get("isError") or tool_response.get("interrupted"):
+            return True
+        return False
+    s = str(tool_response or "").lstrip()
+    for prefix in _FAILURE_STRING_PREFIXES:
+        if s.startswith(prefix):
+            return True
+    return False
+
+
 def main() -> int:
     try:
         payload = json.load(sys.stdin)
@@ -37,24 +62,29 @@ def main() -> int:
     # 这样能在后续 record 之前更新 last_test_pass_ts，保证 evidence check 看见
     state.catchup_pending_bg()
 
-    if tool_name == "Read":
-        fp = tool_input.get("file_path", "")
-        state.record_read(fp)
-    elif tool_name in ("Write", "NotebookEdit"):
-        # Write / NotebookEdit 替换或创建整个文件 — Agent 完全知道写入后内容
-        # 既 record_edit（推 last_edit_ts）也 record_read（后续 Edit 不被 read_first 多余拦）
-        fp = tool_input.get("file_path", "") or tool_input.get("notebook_path", "")
-        state.record_edit(fp)
-        state.record_read(fp)
-    elif tool_name == "Edit":
-        # Edit 只改部分内容 — 仍要求事先 Read 全文（read_first 检测真违反）
-        fp = tool_input.get("file_path", "")
-        state.record_edit(fp)
-    elif tool_name == "Bash":
+    failed = _tool_failed(tool_response)
+
+    if tool_name == "Bash":
+        # Bash 失败仍 record — has_recent_test_pass 由 _FAIL_RE 在 record_bash 内部判
         cmd = tool_input.get("command", "") or ""
         is_bg = bool(tool_input.get("run_in_background"))
-        # 不强转 str — record_bash 内部判 dict (Claude Code 真实格式) 或 string
         state.record_bash(cmd, tool_response, run_in_background=is_bg)
+    elif not failed:
+        # 非 Bash tool — 只在成功时 record，失败时不动 read_files/edit_files
+        # 防 Read 失败也 record_read 让后续 Edit 绕过 read_first 检测
+        if tool_name == "Read":
+            fp = tool_input.get("file_path", "")
+            state.record_read(fp)
+        elif tool_name in ("Write", "NotebookEdit"):
+            # Write / NotebookEdit 替换或创建整个文件 — Agent 完全知道写入后内容
+            # 既 record_edit 也 record_read（后续 Edit 不被 read_first 多余拦）
+            fp = tool_input.get("file_path", "") or tool_input.get("notebook_path", "")
+            state.record_edit(fp)
+            state.record_read(fp)
+        elif tool_name == "Edit":
+            # Edit 只改部分 — 仍要求事先 Read 全文
+            fp = tool_input.get("file_path", "")
+            state.record_edit(fp)
 
     try:
         session_state.save(state)

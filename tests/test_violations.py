@@ -109,3 +109,74 @@ def test_append_empty_list_noop(tmp_path: Path) -> None:
     p = tmp_path / "violations.jsonl"
     append([], path=p)
     assert not p.exists()
+
+
+# ---- 缺口 #4 violations.jsonl rotation ----
+
+def test_rotation_triggers_when_over_max_lines(tmp_path: Path) -> None:
+    """append 后行数超 max_lines → rotate（重命名 + 新文件）。"""
+    from karma.violations import rotate_if_needed
+    p = tmp_path / "violations.jsonl"
+    # 写 11 行（max_lines=10 让测试简洁）
+    items = [
+        Violation(ts=i, session_id="s", sticky_id=f"r{i}", trigger="x", snippet=".")
+        for i in range(11)
+    ]
+    append(items, path=p)
+    rotated = rotate_if_needed(p, max_lines=10, keep=3)
+    assert rotated, "超 max_lines 应该触发 rotation"
+    # 原文件应该不存在或为空，.1 应该有内容
+    if p.exists():
+        assert p.read_text(encoding="utf-8") == ""
+    assert (tmp_path / "violations.jsonl.1").exists()
+    assert "r5" in (tmp_path / "violations.jsonl.1").read_text(encoding="utf-8")
+
+
+def test_rotation_under_threshold_no_op(tmp_path: Path) -> None:
+    """行数未超阈值 → 不 rotate。"""
+    from karma.violations import rotate_if_needed
+    p = tmp_path / "violations.jsonl"
+    items = [
+        Violation(ts=i, session_id="s", sticky_id=f"r{i}", trigger="x", snippet=".")
+        for i in range(5)
+    ]
+    append(items, path=p)
+    rotated = rotate_if_needed(p, max_lines=10, keep=3)
+    assert not rotated
+    assert p.exists()
+    assert not (tmp_path / "violations.jsonl.1").exists()
+
+
+def test_rotation_keep_history_count(tmp_path: Path) -> None:
+    """多次 rotate 后保留最多 keep 个历史文件（最老的删）。"""
+    from karma.violations import rotate_if_needed
+    p = tmp_path / "violations.jsonl"
+    # 模拟 5 次 rotate（每次行数超阈值）
+    for round_idx in range(5):
+        items = [
+            Violation(ts=round_idx * 100 + i, session_id="s", sticky_id=f"r{i}", trigger="x", snippet=".")
+            for i in range(11)
+        ]
+        append(items, path=p)
+        rotate_if_needed(p, max_lines=10, keep=3)
+    # 应只保留 .1 .2 .3，没有 .4 .5
+    assert (tmp_path / "violations.jsonl.1").exists()
+    assert (tmp_path / "violations.jsonl.2").exists()
+    assert (tmp_path / "violations.jsonl.3").exists()
+    assert not (tmp_path / "violations.jsonl.4").exists()
+    assert not (tmp_path / "violations.jsonl.5").exists()
+
+
+def test_append_triggers_rotation_automatically(tmp_path: Path, monkeypatch) -> None:
+    """append() 末尾自动调 rotate_if_needed — 超阈值时自动 rotate。"""
+    import karma.violations as v
+    monkeypatch.setattr(v, "MAX_LINES", 10)
+    monkeypatch.setattr(v, "KEEP_HISTORY", 3)
+    p = tmp_path / "violations.jsonl"
+    items = [
+        Violation(ts=i, session_id="s", sticky_id=f"r{i}", trigger="x", snippet=".")
+        for i in range(15)
+    ]
+    append(items, path=p)
+    # 应已自动 rotate
+    assert (tmp_path / "violations.jsonl.1").exists(), "append 应自动触发 rotation"

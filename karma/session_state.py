@@ -237,6 +237,31 @@ def load(session_id: str, base_dir: Path | None = None) -> SessionState:
     return state
 
 
+def purge_old_states(max_age_days: int = 30, base_dir: Path | None = None) -> int:
+    """删 base_dir 下 mtime 老于 max_age_days 的 session-state json 文件。
+
+    返回删除数量。base_dir 不存在返回 0。
+    每 turn user_prompt_submit hook 调一次，避免 session-state 长期累积。
+    """
+    base = base_dir or DEFAULT_DIR
+    if not base.exists():
+        return 0
+    cutoff = time.time() - max_age_days * 86400
+    deleted = 0
+    try:
+        files = list(base.glob("*.json"))
+    except OSError:
+        return 0
+    for p in files:
+        try:
+            if p.stat().st_mtime < cutoff:
+                p.unlink()
+                deleted += 1
+        except OSError:
+            continue
+    return deleted
+
+
 def save(state: SessionState, base_dir: Path | None = None) -> None:
     """保存 session 状态（atomic rewrite）。"""
     p = _state_path(state.session_id, base_dir)
@@ -259,7 +284,8 @@ def save(state: SessionState, base_dir: Path | None = None) -> None:
         "last_edit_ts": state.last_edit_ts,
         "pending_bg_tasks": state.pending_bg_tasks,
     }
-    tmp = p.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    # tmp 名加 pid + nanosecond 避免并发 PostToolUse 同 session 写冲突
     import os
+    tmp = p.parent / f"{p.stem}.{os.getpid()}.{time.time_ns()}.json.tmp"
+    tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     os.replace(tmp, p)

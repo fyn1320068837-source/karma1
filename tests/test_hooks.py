@@ -149,3 +149,86 @@ def test_post_tool_use_edit_does_not_imply_read(monkeypatch, tmp_path, capsys):
     state = session_state.load("edit_only", base_dir=tmp_path)
     assert "/x/existing.py" not in state.read_files, "Edit 不应自动 record_read"
     assert "/x/existing.py" in state.edit_files
+
+
+# ---- 缺口 #6 — tool 失败时不 record（防 read_first 被绕过） ----
+
+def test_post_tool_use_failed_read_does_not_record(monkeypatch, tmp_path):
+    """Read 失败（dict 含 isError=True）→ 不 record_read。否则 Agent 用 Read 失败
+    后立刻 Edit 同文件会绕过 read_first 检测。"""
+    monkeypatch.setattr("karma.session_state.DEFAULT_DIR", tmp_path)
+    payload = json.dumps({
+        "session_id": "read_fail",
+        "tool_name": "Read",
+        "tool_input": {"file_path": "/x/notexist.py"},
+        "tool_response": {"content": "", "isError": True},
+    })
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    rc = post_tool_use.main()
+    assert rc == 0
+    state = session_state.load("read_fail", base_dir=tmp_path)
+    assert "/x/notexist.py" not in state.read_files, "Read 失败不该 record_read"
+
+
+def test_post_tool_use_failed_read_string_error_does_not_record(monkeypatch, tmp_path):
+    """Read 返回 'Error: ...' 字符串前缀也算失败 → 不 record。"""
+    monkeypatch.setattr("karma.session_state.DEFAULT_DIR", tmp_path)
+    payload = json.dumps({
+        "session_id": "read_str_fail",
+        "tool_name": "Read",
+        "tool_input": {"file_path": "/x/notexist.py"},
+        "tool_response": "Error: File does not exist: /x/notexist.py",
+    })
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    post_tool_use.main()
+    state = session_state.load("read_str_fail", base_dir=tmp_path)
+    assert "/x/notexist.py" not in state.read_files
+
+
+def test_post_tool_use_failed_edit_does_not_record(monkeypatch, tmp_path):
+    """Edit 失败（old_string 不匹配等）→ 不 record_edit（代码没真改成）。"""
+    monkeypatch.setattr("karma.session_state.DEFAULT_DIR", tmp_path)
+    payload = json.dumps({
+        "session_id": "edit_fail",
+        "tool_name": "Edit",
+        "tool_input": {"file_path": "/x/foo.py", "old_string": "a", "new_string": "b"},
+        "tool_response": {"content": "", "isError": True},
+    })
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    post_tool_use.main()
+    state = session_state.load("edit_fail", base_dir=tmp_path)
+    assert "/x/foo.py" not in state.edit_files, "Edit 失败不该 record_edit"
+
+
+def test_post_tool_use_failed_bash_still_records(monkeypatch, tmp_path):
+    """Bash 即便 interrupted=True 也要 record — has_recent_test_pass 由内部
+    PASS/FAIL 信号判，不依赖 tool 整体成败。"""
+    monkeypatch.setattr("karma.session_state.DEFAULT_DIR", tmp_path)
+    payload = json.dumps({
+        "session_id": "bash_fail",
+        "tool_name": "Bash",
+        "tool_input": {"command": "pytest tests/"},
+        "tool_response": {"stdout": "1 failed, 5 passed", "stderr": "", "interrupted": False},
+    })
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    post_tool_use.main()
+    state = session_state.load("bash_fail", base_dir=tmp_path)
+    assert len(state.recent_bash) == 1, "Bash 仍应 record snapshot 即使输出有 fail 信号"
+    snap = state.recent_bash[-1]
+    assert snap.output_failed
+    assert not state.has_recent_test_pass()
+
+
+def test_post_tool_use_successful_read_records(monkeypatch, tmp_path):
+    """Read 成功（无 isError）→ 正常 record_read。"""
+    monkeypatch.setattr("karma.session_state.DEFAULT_DIR", tmp_path)
+    payload = json.dumps({
+        "session_id": "read_ok",
+        "tool_name": "Read",
+        "tool_input": {"file_path": "/x/exists.py"},
+        "tool_response": {"content": "x = 1\n", "isError": False},
+    })
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    post_tool_use.main()
+    state = session_state.load("read_ok", base_dir=tmp_path)
+    assert "/x/exists.py" in state.read_files

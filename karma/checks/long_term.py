@@ -63,9 +63,9 @@ _PATTERNS_BASH_ONLY = [
 # 仅 Write/Edit 代码内容 — TODO/HACK 标记在 Bash 命令里没意义
 _PATTERNS_WRITE_EDIT_ONLY = [
     (
-        re.compile(r"(?:#|//|--)\s*(TODO|FIXME|HACK|XXX|临时|tmp)\b", re.IGNORECASE),
-        "代码含 TODO / FIXME / HACK / 临时 注释",
-        "把临时注释解决掉再提交，或者在 PR 里明确 follow-up 计划。",
+        re.compile(r"(?:#|//|--)\s*(?:TODO|FIXME|HACK|XXX)(?:\s*[:(]|\s+@)|(?:#|//|--)\s*临时\b", re.IGNORECASE),
+        "代码含 TODO/FIXME/HACK/临时 标记注释",
+        "把这类标记注释解决掉再提交，或者在 PR 里明确 follow-up 计划。",
     ),
     (
         # 明确「打补丁/绕过/凑数」意图的注释（M3 之前关键词层兜底，现在工程层精准化捕获）

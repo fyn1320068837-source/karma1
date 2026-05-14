@@ -17,6 +17,10 @@ DEFAULT_PATH = Path.home() / ".claude" / "karma" / "violations.jsonl"
 RECENT_WINDOW_SEC = 24 * 3600  # 24h 内的违反在 sticky 注入时标 ⚠️
 SNIPPET_RADIUS = 30  # 触发词前后多少字符当 snippet
 
+# rotation 配置 — 当前 jsonl 超 MAX_LINES 行 → 重命名为 .1，保留最多 KEEP_HISTORY 个历史
+MAX_LINES = 5000
+KEEP_HISTORY = 3
+
 
 @dataclass(slots=True, frozen=True)
 class Violation:
@@ -69,8 +73,62 @@ def detect(
     return out
 
 
+def _rotation_path(base: Path, index: int) -> Path:
+    """构造 rotation 文件名 violations.jsonl.{N} — with_name 而非 with_suffix
+    （with_suffix 对多扩展名表现不对）。"""
+    return base.with_name(base.name + f".{index}")
+
+
+def rotate_if_needed(
+    path: Path | None = None,
+    max_lines: int | None = None,
+    keep: int | None = None,
+) -> bool:
+    """如果 path 行数超过 max_lines，rotate：
+    1) 删 path.{keep} (最老的)
+    2) path.{keep-1} → path.{keep}, ..., path.1 → path.2
+    3) path → path.1
+    返回是否真的 rotate 了。"""
+    if path is None:
+        path = DEFAULT_PATH
+    if max_lines is None:
+        max_lines = MAX_LINES
+    if keep is None:
+        keep = KEEP_HISTORY
+    if not path.exists():
+        return False
+    try:
+        with path.open("rb") as f:
+            n_lines = sum(1 for _ in f)
+    except OSError:
+        return False
+    if n_lines < max_lines:
+        return False
+    # rotate 从最老往新走
+    for i in range(keep, 0, -1):
+        old = _rotation_path(path, i)
+        if not old.exists():
+            continue
+        if i == keep:
+            try:
+                old.unlink()
+            except OSError:
+                pass
+        else:
+            try:
+                old.rename(_rotation_path(path, i + 1))
+            except OSError:
+                pass
+    try:
+        path.rename(_rotation_path(path, 1))
+    except OSError:
+        return False
+    return True
+
+
 def append(violations: list[Violation], path: Path | None = None) -> None:
-    """append 违反到 jsonl。path=None 时用 module-level DEFAULT_PATH。"""
+    """append 违反到 jsonl。超 MAX_LINES 自动 rotate。
+    path=None 时用 module-level DEFAULT_PATH。"""
     if not violations:
         return
     if path is None:
@@ -79,6 +137,8 @@ def append(violations: list[Violation], path: Path | None = None) -> None:
     with path.open("a", encoding="utf-8") as f:
         for v in violations:
             f.write(v.to_json() + "\n")
+    # rotate 用 module-level 配置（测试可 monkeypatch MAX_LINES / KEEP_HISTORY）
+    rotate_if_needed(path)
 
 
 def recent(

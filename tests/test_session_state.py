@@ -196,6 +196,67 @@ def test_parse_redirect_target():
     assert _parse_redirect_target("pytest 2>&1") is None
 
 
+# ---- 缺口 #3 session-state 文件清理 ----
+
+def test_purge_old_session_states(tmp_path):
+    """删 mtime 老于 max_age_days 的 session-state json。"""
+    import os, time
+    from karma.session_state import purge_old_states
+    old1 = tmp_path / "old1.json"
+    old2 = tmp_path / "old2.json"
+    fresh = tmp_path / "fresh.json"
+    for p in (old1, old2, fresh):
+        p.write_text("{}")
+    # 把 old1/old2 的 mtime 改成 31 天前
+    old_ts = time.time() - 31 * 86400
+    os.utime(old1, (old_ts, old_ts))
+    os.utime(old2, (old_ts, old_ts))
+    n = purge_old_states(max_age_days=30, base_dir=tmp_path)
+    assert n == 2
+    assert not old1.exists()
+    assert not old2.exists()
+    assert fresh.exists()
+
+
+def test_purge_no_old_files(tmp_path):
+    """没老文件 → 返回 0，不动新文件。"""
+    from karma.session_state import purge_old_states
+    fresh = tmp_path / "fresh.json"
+    fresh.write_text("{}")
+    n = purge_old_states(max_age_days=30, base_dir=tmp_path)
+    assert n == 0
+    assert fresh.exists()
+
+
+def test_purge_missing_dir(tmp_path):
+    """目录不存在 → 返回 0 不抛错。"""
+    from karma.session_state import purge_old_states
+    n = purge_old_states(max_age_days=30, base_dir=tmp_path / "nonexistent")
+    assert n == 0
+
+
+# ---- 缺口 #5 session_state.save() 并发安全 tmp 名 ----
+
+def test_save_uses_unique_tmp_name(tmp_path, monkeypatch):
+    """tmp 文件名应含 pid + nanosecond 避免并发冲突。"""
+    from karma.session_state import save, SessionState
+    s = SessionState(session_id="x")
+    captured_tmp_names = []
+    real_write = type(tmp_path).write_text
+
+    def spy_write(self, *args, **kwargs):
+        if self.suffix == ".tmp":
+            captured_tmp_names.append(self.name)
+        return real_write(self, *args, **kwargs)
+    monkeypatch.setattr(type(tmp_path), "write_text", spy_write)
+    save(s, base_dir=tmp_path)
+    assert len(captured_tmp_names) == 1
+    tmp_name = captured_tmp_names[0]
+    # 不该是固定的 'x.json.tmp' — 应含 pid 数字段
+    import os
+    assert str(os.getpid()) in tmp_name, f"tmp 名 {tmp_name} 应含 pid"
+
+
 def test_write_implies_read_for_same_file(tmp_path):
     """Write 一个文件后，has_read 应为 True — Agent 写过的内容自己当然知道。
 
