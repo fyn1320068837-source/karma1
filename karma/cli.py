@@ -1,16 +1,20 @@
 """karma CLI — sticky 管理 + 违反观察 + hook 安装。
 
 Usage:
+    karma init                     创建 ~/.claude/karma/ + 复制 sticky/config 模板
+    karma install-hooks            自动配置 Claude Code hooks
+    karma uninstall-hooks          移除 hook 配置
+    karma doctor                   检查环境 + hook 装机 + 当前生效 config
+
     karma sticky list              列出所有 sticky 规则
     karma sticky edit              用 $EDITOR 编辑 sticky.yaml
     karma sticky remove <id>       移除某条
-    karma stats                    显示每条规则的违反统计
+
+    karma stats                    每条规则违反计数（含本 session 最近 5 turn）
     karma violations recent [N]    最近 N 条违反详情（默认 20）
     karma violations clear         清空违反历史（需确认）
-    karma install-hooks            自动配置 Claude Code hooks
-    karma uninstall-hooks          移除 hook 配置
-    karma doctor                   检查环境（sticky 合法、hook 已装等）
-    karma init                     创建 ~/.claude/karma/ 目录 + 复制 sticky 模板
+    karma audit                    审计 — 每条 sticky top 触发词 + 假阳嫌疑标记
+    karma reset                    清 session-state（漂移实验重启）
 """
 
 from __future__ import annotations
@@ -204,6 +208,27 @@ def cmd_sticky_remove(rule_id: str) -> int:
         encoding="utf-8",
     )
     print(f"已删除 sticky {rule_id!r} ({len(filtered)} 条剩余)")
+    return 0
+
+
+def cmd_reset_session() -> int:
+    """清所有 session-state JSON — Agent 注意力漂移实验重启。
+
+    用法场景：观察「干净 session 起步」vs「累积 N turn 后」Agent 行为差异。
+    不动 violations.jsonl（历史保留）+ 不动 sticky.yaml / config.yaml。
+    """
+    from karma.session_state import DEFAULT_DIR as SS_DIR
+    if not SS_DIR.exists():
+        print(f"session-state 目录不存在: {SS_DIR}")
+        return 0
+    n = 0
+    for p in SS_DIR.glob("*.json"):
+        try:
+            p.unlink()
+            n += 1
+        except OSError as e:
+            print(f"删 {p} 失败: {e}", file=sys.stderr)
+    print(f"已清空 {n} 个 session-state 文件 ({SS_DIR})")
     return 0
 
 
@@ -451,6 +476,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_stats()
     if cmd == "audit":
         return cmd_audit()
+    if cmd in ("reset", "reset-session"):
+        return cmd_reset_session()
     if cmd == "install-hooks":
         return cmd_install_hooks()
     if cmd == "uninstall-hooks":
