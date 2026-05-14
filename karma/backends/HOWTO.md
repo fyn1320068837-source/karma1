@@ -65,6 +65,26 @@ class CursorBackend(JsonHooksBackend):
     # build_event_entry / pre_install_setup。基类 _json_hooks.py 提供合理默认。
 ```
 
+### Claude Code 特有可选扩展 (v0.4.28+)
+
+karma v3 演化加了 2 个 Claude Code 协议特有 hook event 给「sticky 中段
+注入 + compact 失忆两端夹击」用：
+
+```python
+# Claude Code backend 额外 2 个（其他 backend 协议没对应不强求）
+"SessionStart": "session_start",  # v0.4.28 — session 起手注入 sticky baseline
+                                   # source 字段区分 startup/resume/clear/compact
+"PreCompact": "pre_compact",       # v0.4.29 — compact 前落盘 sticky 完整状态
+                                   # 跟 SessionStart(source=compact) 两端夹击
+```
+
+新 backend 实现者评估：
+
+- 如果 backend 协议**有**类似 session lifecycle / context compact 事件 →
+  在 `_HOOK_EVENTS` 加映射 + 写对应 wrapper 升级 karma v3 演化能力
+- 如果**没**对应事件（如 Codex / Gemini 当前情况）→ 跳过即可，4 个通用
+  wrapper 已经够 karma 核心功能（违反检测 + sticky 注入到 user prompt）
+
 如果 backend 需要 matcher / timeout 字段在 hook entry 里：override
 `build_event_entry`：
 
