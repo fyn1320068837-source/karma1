@@ -26,6 +26,7 @@
 | **M4 reset 命令** | karma reset 清 session-state 漂移实验重启 | ffcbd07 |
 | **M4 audit turn 维度** | audit 末尾段「本 session 最近 10 turn 漂移近况」+ 🔥 高频标记 | ca65116 |
 | **M4 keep-pushing 工程层 + Stop hook 真干预** | keep_pushing check（问号 / 停顿语气词双信号）+ Stop hook decision=block 让 Agent 不真停继续生成 + safeguard `stop_block_max_per_turn` 防死循环 | 8502713 |
+| **M4 keep-pushing 反转 + audit 改进建议** | 用户精准纠正：问号是合理决策应豁免，纯陈述完结无下一步才是真停下 → 反转检测方向（推进/问号豁免，停顿词/默认 → 命中）。stats / doctor 显示 stop_block_count；audit 末尾自动改进建议段；catchup 多 hook 跑（UserPromptSubmit+PreToolUse 都跑，task #8 剩余 case）；non_blocking 长任务列表收紧（移除 pytest 等测试命令，保留 docker/build/install）| 8502713 → 最新 |
 
 ### 真实工作证据 — 本 session 累积 32 条违反
 
@@ -42,7 +43,7 @@
 
 ### 测试状态
 
-`pytest tests/` → **201/201 passed**（M3+M4 加了 126 个新测试）
+`pytest tests/` → **203/203 passed**（M3+M4 加了 128 个新测试）
 - `tests/test_false_negative_regression.py` — 23 个对偶假阴测试
 - `tests/test_cli.py` — 10 个 CLI 测试
 - `tests/test_description_context.py` — 9 个上下文测试
