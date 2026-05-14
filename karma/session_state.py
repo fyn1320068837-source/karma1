@@ -109,15 +109,19 @@ class SessionState:
     # Stop hook 本 turn 累积 block 次数 — 防 keep-pushing 干预死循环
     # 每个 user_prompt_submit 重置 0；累积 ≥ max 后 Stop hook 放 Agent 停
     stop_block_count: int = 0
-    # v0.4.32 中段注入 token 启发式（karma v3 第七步）：
+    # v0.4.32 中段注入 token 启发式（锚定刷新阈值，不是「衰减阈值」）：
     # tool_byte_seq 累积主 Agent 真看到的 tool_input + tool_response 字节数
     # （估算 token = bytes // 3，粗略中英文混合）。每个 PostToolUse +=
     # _estimate_tokens(...)。每 turn 起手 user_prompt_submit hook 重置 0。
     # last_reinject_byte_seq 跟踪「上次中段注入时的累积值」— 累积差 >= 阈值
     # （sticky.yaml reinject_every_n_tokens 默认 8000）下个 PostToolUse 注入。
-    # 设计意图：抵御长 turn context 累积导致 sticky attention 衰减，按 token
-    # 累积维度（不是 tool call 数）— sub-agent / 大 Bash 输出真按主 Agent 看到
-    # 的 token 大小算，简单 Edit 不被错算大 weight。
+    #
+    # 设计意图（v0.4.34 叙事对齐 — web 调研真验证）:
+    # 当代 Claude Sonnet/Opus 4.6 真衰减拐点是 70K-200K（不是 8K）。Anthropic
+    # 200K 是原生可靠边界。8K 阈值不是「模型开始忘」的判据，是「sticky 在
+    # attention 里被新上下文稀释到该重新锚定」的判据 — 真价值是抗稀释不是
+    # 抗遗忘。Liu 2023 的 8K 衰减数据来自 GPT-3.5/Claude-1.3 旧模型时代，
+    # 拿来撑当代模型阈值依据是错的，但 8K 抗稀释频率在工程层仍合理。
     tool_byte_seq: int = 0
     last_reinject_byte_seq: int = 0
 

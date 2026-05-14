@@ -153,7 +153,8 @@ def test_post_tool_use_smart_reinject_when_recent_violation(monkeypatch, tmp_pat
     assert "hookSpecificOutput" in out, "最近违反时应注入 reinject context"
     ctx = out["hookSpecificOutput"]["additionalContext"]
     assert "long-term-fundamental" in ctx, "context 应包含触发过的 sticky id"
-    assert "中段提醒" in ctx, "应有「中段提醒」标记"
+    # v0.4.34 叙事对齐：「中段提醒/易衰减」→「锚定刷新/易被新上下文稀释」
+    assert "锚定刷新" in ctx, "应有「锚定刷新」标记（v0.4.34 叙事对齐 — 抗稀释不是抗遗忘）"
     # v0.4.32 注入后 last_reinject_byte_seq 真重置为当前 tool_byte_seq
     # （main 自己又累加了 _estimate_tokens(tool_input, tool_response) 几字节，
     # 所以最终 tool_byte_seq 略大于预设的 10000，但 last_reinject_byte_seq

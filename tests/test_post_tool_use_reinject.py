@@ -71,7 +71,8 @@ def test_reinject_when_threshold_reached_and_sticky_triggered():
     with patch("karma.sticky.load", return_value=[_make_sticky("r1"), _make_sticky("r2")]), \
          patch("karma.violations.recent_turns", return_value={"r1": 2}):
         result = _build_smart_reinject("test", state)
-    assert "[karma 中段提醒" in result
+    # v0.4.34 叙事对齐：「中段提醒」→「锚定刷新」（抗稀释不是抗遗忘）
+    assert "[karma 锚定刷新" in result
     assert "r1" in result
     assert "r2" not in result  # 没触发 r2 不该注入
     # 注入后 last_reinject_byte_seq 真重置为当前 tool_byte_seq

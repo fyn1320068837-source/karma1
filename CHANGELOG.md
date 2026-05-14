@@ -4,6 +4,36 @@
 
 ## [Unreleased]
 
+### docs — v0.4.32 阈值叙事真依据对齐 + v3 第七步真验证完成（2026-05-15）
+
+**v0.4.32 阈值叙事错配真根因**（用户挑战「上下文衰减真区间是不是 10K」触发 web 调研）：
+
+我之前给 8K 阈值的依据「~5-10K token 开始衰减」是 Liu 2023 旧模型数据撑当代场。web 真研究发现：
+
+- **当代 Claude Sonnet/Opus 4.6 真衰减拐点 70K-200K**（不是 8K）
+- **Anthropic 200K 是原生可靠边界**（超 200K 收 2x 附加费）
+- Liu 2023 的 8K 衰减数据来自 GPT-3.5/Claude-1.3 旧模型时代
+- 真严重衰减（50%+）只在 1M token + 多针检索极端场景
+
+**真叙事对齐**（不改数字改语义）：
+
+karma 8K 阈值不是「模型开始忘」的判据，是「sticky 在 attention 里被新上下文**稀释**到该重新锚定」的判据 — 真价值是**抗稀释**不是**抗遗忘**。Liu 2023 数据撑当代阈值依据是错的，但 8K 抗稀释频率在工程层仍合理。
+
+文档 / 注释改：
+- `karma/session_state.py` `tool_byte_seq` 字段注释加 v0.4.34 叙事对齐说明
+- `karma/hooks/post_tool_use.py` `_build_smart_reinject` docstring 改「衰减」→「稀释」
+- 中段注入 additionalContext 文案：「中段提醒 — context 累积 ~XK token，sticky 易衰减」→「锚定刷新 — context 累积 ~XK token，sticky 易被新上下文稀释」
+
+**v3 第七步真验证完成结论**（manual run 子 Agent 真触发实验）：
+
+派 Explore 子 Agent 跑 `Bash sleep 1`（触发 non-blocking-parallel sticky）— violations.jsonl 真新增 1 条 `sess=2f563164 turn=4 [non-blocking-parallel]: 'sleep 1'`，**session_id 是主 session 下** ✓。
+
+**真根本结论**：**路径 A 真生效** — 子 Agent 内 Bash 真被主 PreToolUse hook 拦 + 写主 violations.jsonl + 主 Stop hook 也会扫子 Agent 完成响应文本。**karma 当前架构已自动监管子 Agent 内 tool 调用**，不需要写新 SubagentStop transcript scan 机制（路径 B）。
+
+HANDOFF v3 第七步候选段从「待验证」改成「真验证完成 — 不需要新机制」。
+
+
+
 ## [0.4.33] — 2026-05-15（fix — strip_shell_quoted_literals 复合 shell 嵌套真根因）
 
 ### 真触发

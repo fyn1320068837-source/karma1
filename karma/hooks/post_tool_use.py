@@ -143,11 +143,14 @@ def _estimate_tokens(tool_input, tool_response) -> int:
 def _build_smart_reinject(session_id: str, state) -> str:
     """智能 sticky reinject — 按 token 累积维度决定是否注入（v0.4.32 升级）。
 
-    设计意图（用户 v0.4.32 决策）：
-    1. 中段注入是「抵御长 turn context 累积导致 sticky attention 衰减」补丁
+    设计意图（用户 v0.4.32 决策 + v0.4.34 叙事对齐）：
+    1. 中段注入是「抵御长 turn context 累积导致 sticky attention 稀释」补丁
+       （不是「抵御模型遗忘」 — 当代 Claude 在 8K 几乎没真衰减，真衰减拐点
+       在 70K-200K。8K 阈值是抗稀释频率，不是抗遗忘频率。详 session_state.py
+       tool_byte_seq 字段注释）
     2. 每 turn 起手 user_prompt_submit 已全量注入 sticky → 中段不该立即重复
     3. 真发生违反时已在 PreToolUse / Stop hook 响亮提醒 → 中段不重复警告
-    4. 累积 token 达阈值（默认 8000）后下个 PostToolUse 注入一次「重新锚定」
+    4. 累积 token 达阈值（默认 8000）后下个 PostToolUse 注入一次「锚定刷新」
     5. 注入只取最近触发过的 sticky（不是全 sticky）— 跟 v0.4.24 保持一致
 
     返回空字符串 → PostToolUse 不注入 additionalContext。
@@ -191,7 +194,7 @@ def _build_smart_reinject(session_id: str, state) -> str:
         state.last_reinject_byte_seq = state.tool_byte_seq
         return ""
 
-    lines = [f"[karma 中段提醒 — context 累积 ~{accumulated // 1000}K token，sticky 易衰减]"]
+    lines = [f"[karma 锚定刷新 — context 累积 ~{accumulated // 1000}K token，sticky 易被新上下文稀释]"]
     for s in triggered_sticky[:3]:
         first_line = s.preference.strip().split("\n")[0]
         lines.append(f"  - {s.id}: {first_line}")
