@@ -149,6 +149,53 @@ def test_success_report_chinese_quanguo_exempted():
     assert _check("一波改完了，测试 316 全过。下个推进点想好了。") is None
 
 
+def test_future_plan_xia_ci_jie_shou_exempted():
+    """v0.4.19 第 3 类假阳治理：「下次接手做 X」「下个 session 推进 X」类
+    未来推进规划 → 真有下一步计划应豁免（不是「就此停下」）。
+
+    dogfooding 实测：本回合末尾我多次写「下次接手做 non-blocking 治理」
+    被错算停下，但实际是真规划下一步推进延续。
+    """
+    cases = [
+        "本回合饱和收口。下次接手做 non-blocking 假阳治理。",
+        "做完了。下个 session 接手 keep-pushing 第 3 类。",
+        "fix 完了。候选清单：1. X 2. Y 3. Z。",
+        "v0.4.18 发布。接手做 audit timeline。",
+    ]
+    for c in cases:
+        assert _check(c) is None, f"未来推进规划不该被算停下: {c!r}"
+
+
+def test_explicit_user_handoff_exempted():
+    """v0.4.19：「请决定 / 请授权 / 等你 X」是 sticky #7「显式让用户介入」
+    合法 stop 路径，应豁免（区别于 sticky #8 禁止的「停下问反馈等用户随便决定」）。
+
+    dogfooding：本回合请求清历史授权 → 按 sticky #7 是合法做法，但被 keep-
+    pushing 算停下。
+    """
+    cases = [
+        "我会跑 karma violations clear。授权后才执行。请决定。",
+        "改完了。等你确认。",
+        "做了 A 跟 B。请授权。",
+    ]
+    for c in cases:
+        assert _check(c) is None, f"显式让用户介入合法 stop 应豁免: {c!r}"
+
+
+def test_v419_real_stop_still_caught():
+    """对偶守护：v0.4.19 豁免不影响真停顿语气拦截。"""
+    cases = [
+        ("commit 已推。下次再说吧。", "下次再说"),
+        ("改完了。先到这。", "先到这"),
+        ("OK 了。告一段落。", "告一段落"),
+        ("好的。下次见。", "下次见"),
+    ]
+    for cmd, expected_word in cases:
+        hit = _check(cmd)
+        assert hit is not None, f"真停顿语气仍应拦: {cmd!r}"
+        assert expected_word in hit.trigger, f"trigger 应识别 {expected_word!r}: {hit.trigger}"
+
+
 def test_push_signal_woqu_kan_exempted():
     """「我去看 / 我去查 / 我要去做 X」简单近 future 动作 → 豁免推进。
 
