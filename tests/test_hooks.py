@@ -232,3 +232,56 @@ def test_post_tool_use_successful_read_records(monkeypatch, tmp_path):
     post_tool_use.main()
     state = session_state.load("read_ok", base_dir=tmp_path)
     assert "/x/exists.py" in state.read_files
+
+
+def test_post_tool_use_docs_edit_does_not_push_last_edit_ts(monkeypatch, tmp_path):
+    """改 docs (.md) / 配置 (.yaml) 不算「代码改动」 — last_edit_ts 不动。
+
+    用户洞察：sticky #4 说「完成代码任务必须附测试证据」，docs 改不是代码任务。
+    post_tool_use 应区分文件类型，描述上下文文件 Edit 不推 last_edit_ts。
+    """
+    monkeypatch.setattr("karma.session_state.DEFAULT_DIR", tmp_path)
+    # 改 README.md
+    payload = json.dumps({
+        "session_id": "docs_edit",
+        "tool_name": "Edit",
+        "tool_input": {"file_path": "/x/README.md", "old_string": "a", "new_string": "b"},
+        "tool_response": "ok",
+    })
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    post_tool_use.main()
+    state = session_state.load("docs_edit", base_dir=tmp_path)
+    assert state.last_edit_ts == 0.0, "docs Edit 不该推 last_edit_ts"
+    # 但 edit_files 历史可以保留（record_edit 没被调）
+    assert state.edit_files == []
+
+
+def test_post_tool_use_code_edit_pushes_last_edit_ts(monkeypatch, tmp_path):
+    """改普通源码（.py）推 last_edit_ts（real 代码改动）。"""
+    monkeypatch.setattr("karma.session_state.DEFAULT_DIR", tmp_path)
+    payload = json.dumps({
+        "session_id": "code_edit",
+        "tool_name": "Edit",
+        "tool_input": {"file_path": "/x/src/foo.py", "old_string": "a", "new_string": "b"},
+        "tool_response": "ok",
+    })
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    post_tool_use.main()
+    state = session_state.load("code_edit", base_dir=tmp_path)
+    assert state.last_edit_ts > 0, "代码 Edit 应推 last_edit_ts"
+    assert "/x/src/foo.py" in state.edit_files
+
+
+def test_post_tool_use_yaml_write_does_not_push_last_edit_ts(monkeypatch, tmp_path):
+    """改 .yaml 配置不算代码改动。"""
+    monkeypatch.setattr("karma.session_state.DEFAULT_DIR", tmp_path)
+    payload = json.dumps({
+        "session_id": "yaml_write",
+        "tool_name": "Write",
+        "tool_input": {"file_path": "/x/config.yaml", "content": "key: value\n"},
+        "tool_response": "ok",
+    })
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    post_tool_use.main()
+    state = session_state.load("yaml_write", base_dir=tmp_path)
+    assert state.last_edit_ts == 0.0, "yaml Write 不该推 last_edit_ts"

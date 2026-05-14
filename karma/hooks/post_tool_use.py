@@ -15,6 +15,7 @@ import json
 import sys
 
 from karma import session_state
+from karma.checks.description_context import is_description_context
 
 
 # tool 失败的字符串前缀 — Claude Code Read/Edit 失败常见返回（启发式）
@@ -76,15 +77,22 @@ def main() -> int:
             fp = tool_input.get("file_path", "")
             state.record_read(fp)
         elif tool_name in ("Write", "NotebookEdit"):
-            # Write / NotebookEdit 替换或创建整个文件 — Agent 完全知道写入后内容
-            # 既 record_edit 也 record_read（后续 Edit 不被 read_first 多余拦）
+            # Write / NotebookEdit 替换或创建整个文件
+            # 描述上下文文件（.md / .yaml / tests/ 等）的改不算「代码改动」—
+            # 不推 last_edit_ts（避免 docs / 配置 Edit 后 evidence check 误判
+            # 「自最近代码改动以来未测试」）。仍 record_read（已知内容不被 read_first 拦）
             fp = tool_input.get("file_path", "") or tool_input.get("notebook_path", "")
-            state.record_edit(fp)
+            is_desc, _ = is_description_context(tool_name, tool_input)
+            if not is_desc:
+                state.record_edit(fp)
             state.record_read(fp)
         elif tool_name == "Edit":
             # Edit 只改部分 — 仍要求事先 Read 全文
+            # 描述上下文文件 Edit 不推 last_edit_ts（同 Write/NotebookEdit 逻辑）
             fp = tool_input.get("file_path", "")
-            state.record_edit(fp)
+            is_desc, _ = is_description_context(tool_name, tool_input)
+            if not is_desc:
+                state.record_edit(fp)
 
     try:
         session_state.save(state)

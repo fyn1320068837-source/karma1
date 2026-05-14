@@ -207,6 +207,33 @@ def cmd_sticky_remove(rule_id: str) -> int:
     return 0
 
 
+def cmd_audit() -> int:
+    """审计违反历史：每条 sticky 的 top 触发词 + 假阳嫌疑标记。
+
+    假阳嫌疑：同一触发词命中 ≥ 5 次且占该 sticky 触发 ≥ 50% → 可能 pattern 过宽
+    """
+    violations = load_all()
+    if not violations:
+        print("没有违反记录。先用 karma 一阵子再来 audit。")
+        return 0
+    from collections import Counter
+    # 按 sticky_id 分组，每组数 trigger 出现频次
+    by_sticky: dict[str, Counter] = {}
+    for v in violations:
+        by_sticky.setdefault(v.sticky_id, Counter())[v.trigger] += 1
+    print(f"karma 违反审计 (总 {len(violations)} 条):\n")
+    for sid in sorted(by_sticky, key=lambda s: -sum(by_sticky[s].values())):
+        ctr = by_sticky[sid]
+        total = sum(ctr.values())
+        print(f"[{sid}] {total} 条触发")
+        for trigger, cnt in ctr.most_common(5):
+            ratio = cnt / total
+            mark = " ⚠️ 可能假阳" if cnt >= 5 and ratio >= 0.5 else ""
+            print(f"  {cnt:>3}× ({ratio*100:.0f}%) {trigger!r}{mark}")
+        print()
+    return 0
+
+
 def cmd_stats() -> int:
     """每条 sticky 的违反计数（总 / 7 天）。"""
     violations = load_all()
@@ -385,6 +412,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_doctor()
     if cmd == "stats":
         return cmd_stats()
+    if cmd == "audit":
+        return cmd_audit()
     if cmd == "install-hooks":
         return cmd_install_hooks()
     if cmd == "uninstall-hooks":
