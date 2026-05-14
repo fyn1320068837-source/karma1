@@ -316,6 +316,45 @@ hook 也有 transcript_path 能读最近 user prompt）。
 
 价值高 — 这是把 sticky #8 自带的「用户明确叫停」例外从规则文本真落到工程实施。
 
+### CI billing 暂停状态（2026-05-14）
+
+GitHub Actions CI 4 job 全报「The job was not started because recent
+account payments have failed or your spending limit needs to be increased」—
+**不是代码问题**。账户 payments 失败 / spending limit 用完。
+
+用户明确「先忽略，正式发布前再充值测试」。当前阶段（作者自用 + 同事首装期）
+本地 5 套检查（ruff / vulture / mypy karma / mypy tests / pytest）真够用。
+
+下次接手 Agent 如果看到 CI 红 — **先看 billing 不要怀疑代码**：
+- https://github.com/settings/billing/spending_limit
+
+CI 恢复后跨平台（ubuntu/macos × py3.11/3.12）真验证才有意义。
+
+### karma v3 第五步真已落地（v0.4.29 — 2026-05-14）
+
+子 Agent 研究 Claude Code 9 个未用 hook 真协议关键发现：**PostCompact 不支持
+additionalContext** — 之前以为可以 PostCompact 注入解决 compact 失忆走不通。
+
+真路径：**PreCompact + SessionStart(source=compact) 两端夹击**（已落地）：
+
+- **PreCompact**（v0.4.29 真上线）— compact 触发前 hook，落盘 sticky 完整状态
+  到 `~/.claude/karma/pre_compact_snapshot.md`：
+  - 完整 sticky.yaml 内容（id + 多行 preference）
+  - 最近 5 turn 真违反清单
+  - compact 触发时间 + session_id
+  - 注入 additionalContext 让 Claude 看到「即将 compact，sticky 已落盘」
+- **SessionStart(source=compact)** — compact 后重起时读 snapshot 提取「compact
+  前撞过的 sticky 清单」附加注入
+
+**设计原则：不阻止 compact** — compact 是 Claude Code 保护长 session 不爆 token
+的机制，karma 做的是「让 sticky 跨 compact 不丢」**不是**「让 compact 不发生」。
+两个不同问题。用户明确指令「别阻止自动 compact，这是保护机制不是咱们应该干扰
+的机制」。
+
+真生效证据：本地真跑 `echo '{"trigger":"auto","session_id":"test"}' | python -m
+karma.hooks.pre_compact` 输出完整 additionalContext + 真落盘 snapshot 含 8 条
+sticky + 时间戳。本机已装 6 个 hook event 全配置。
+
 ### karma v3 第五步候选：PreCompact 落盘 + 两端夹击 compact 失忆（2026-05-14 子 Agent 9 hook 研究触发）
 
 子 Agent 研究 Claude Code 9 个未用 hook 真协议发现：**PostCompact 不支持
