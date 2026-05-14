@@ -1,4 +1,4 @@
-# karma sticky 模板 — 软件开发场景专用（6 条精选）
+# karma sticky 模板 — 软件开发场景专用（7 条精选）
 #
 # karma = 通用 hook 框架 + 场景规则集
 # 本文件是「软件开发」场景预设。其他场景（写作 / 研究 / 产品 / 设计等）
@@ -14,6 +14,10 @@
 #                         规则：用「意图主语 + 动作」格式（如「我先打个补丁」）
 #                         而非纯名词（如「硬编码」），减少描述类假阳
 #   violation_checks    : 工程检测函数名列表（karma.checks.REGISTRY 里）
+#   force_block_exempt  : 可选 bool，default false。开启后该规则累积违反多次也
+#                         不会触发 Stop hook 强制 decision=block 让 Agent 停下。
+#                         给「应该继续推进 / 不阻塞」类规则用 — 否则累积处罚
+#                         反而违反规则本身（语义自我矛盾）。
 
 - id: long-term-fundamental
   preference: |
