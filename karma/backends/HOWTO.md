@@ -1,0 +1,137 @@
+# 如何加一个新 AI 编程客户端 backend
+
+karma 当前装机支持 3 家（Claude Code / Codex / Gemini CLI）。本文档讲怎么
+加第 4 家 — 实证 vibe-island 桥支持的 9 家清单：claude / codex / gemini /
+cursor / factory / qoder / copilot / codebuddy / kimi。
+
+## 5 步加一个新 backend
+
+### 第 1 步：调研客户端 hook 协议
+
+按 [karma sticky #1 长期根本] **真跑不凭假设**，调研以下：
+
+1. **hook 配置文件路径** — 通常 `~/.<client>/settings.json` 或 `~/.<client>/hooks.json`
+2. **hook event 名** — 写进配置文件的 event 名（如 `UserPromptSubmit` vs Gemini 的
+   `BeforeAgent`）
+3. **stdin payload 字段** — case style（snake_case 还是 camelCase？）+ 哪些字段
+   karma 关心（`prompt` / `tool_name` / `tool_input` / `tool_response` /
+   等同 stop 字段如 `last_assistant_message` / `prompt_response` / `transcript_path`）
+4. **stdout JSON 字段** — 跟 Claude Code 一致就直接用，不一致要适配 hook 入口模块
+5. **是否需要启用步骤** — 像 Codex 要 `[features] hooks = true`
+6. **每条 hook entry 是否需要 matcher / timeout 字段** — 各家不一样
+
+调研来源优先级：① 官方文档 ② 真跑客户端 + trace hook 看 stdin 字段
+③ 看现有桥工具（vibe-island）的实现 ④ GitHub issues
+
+### 第 2 步：在 `karma/backends/` 新建一个 backend 文件
+
+参考 `karma/backends/gemini_cli.py` 最简洁的样板（继承 `JsonHooksBackend`
+只填类属性）：
+
+```python
+from karma.backends._json_hooks import JsonHooksBackend
+
+class CursorBackend(JsonHooksBackend):
+    name = "cursor"                          # backend 注册名
+    display_name = "Cursor"                  # 给用户看的名字
+    _CONFIG_DIR_NAME = ".cursor"             # ~/ 下配置目录名
+    _SETTINGS_FILENAME = "hooks.json"        # 配置文件名
+    _CLIENT_CMD = "cursor"                   # PATH 命令名（用于检测装机）
+
+    # backend native event 名 → karma 内部 wrapper basename
+    # karma 内部 4 个 wrapper：user_prompt_submit / pre_tool_use /
+    # post_tool_use / stop（跨 backend 复用，不动）
+    _HOOK_EVENTS = {
+        "UserPromptSubmit": "user_prompt_submit",
+        "PreToolUse": "pre_tool_use",
+        "PostToolUse": "post_tool_use",
+        "Stop": "stop",
+    }
+```
+
+如果 backend 需要 matcher / timeout 字段在 hook entry 里：override
+`build_event_entry`：
+
+```python
+def build_event_entry(self, hook_name_lower: str, event_name: str) -> dict:
+    wrapper = self.hooks_dir() / f"karma_{hook_name_lower}.py"
+    return {
+        "hooks": [{"type": "command", "command": str(wrapper), "timeout": 30}]
+    }
+```
+
+如果 backend 需要启用步骤（Codex 类）：override `pre_install_setup`：
+
+```python
+def pre_install_setup(self) -> list[str]:
+    # 返回给用户看的步骤日志
+    ...
+```
+
+### 第 3 步：注册到 `karma/backends/__init__.py`
+
+```python
+from karma.backends.cursor import CursorBackend
+
+REGISTRY: dict[str, Backend] = {
+    "claude-code": ClaudeCodeBackend(),
+    "codex": CodexBackend(),
+    "gemini-cli": GeminiCLIBackend(),
+    "cursor": CursorBackend(),              # 加这行
+}
+```
+
+### 第 4 步：检查 stdin payload 字段差异
+
+karma hook 入口（`karma/hooks/*.py`）用以下字段，跨 backend 一般同名：
+
+- `session_id` — 所有 backend 都用 `session_id`（snake_case）
+- `prompt` — UserPromptSubmit / BeforeAgent 都用 `prompt`
+- `tool_name` / `tool_input` / `tool_response` — Pre/PostToolUse 都用同名
+
+Stop 字段三家不同（karma stop.py 已三选一适配）：
+- Claude Code: `transcript_path`（反向读 transcript）
+- Codex: `last_assistant_message`
+- Gemini: `prompt_response`
+
+如果新 backend 用第四种字段名，改 `karma/hooks/stop.py:_read_last_assistant_response`
+前面那段 fallback 链加一条 `or payload.get("<new_field>", "")`。
+
+### 第 5 步：加守护测试
+
+参考 `tests/test_backends.py` 加：
+
+- backend 路径正确
+- event entry 构造对（含 timeout / matcher 字段如果有）
+- load_settings / save_settings roundtrip
+- `is_karma_entry` 识别 karma_ 前缀
+
+如果改了 stop.py 适配字段：参考
+`tests/test_hooks.py::test_stop_hook_uses_codex_last_assistant_message_field`
+加一条字段 fallback 测试。
+
+## 实测验证（按 sticky #1 真跑不凭假设）
+
+加完后**必须真跑**验证：
+
+```bash
+karma install-hooks --backend <new-name>
+cat ~/.<client>/settings.json | python -m json.tool  # 看 karma 4 个 entry 加进去 + 他人 hook 保留
+karma uninstall-hooks --backend <new-name>
+cat ~/.<client>/settings.json | python -m json.tool  # 看 karma 清掉 + 他人 hook 保留
+```
+
+模拟 stdin payload 跑 karma stop hook 看 catch 违反：
+
+```bash
+echo '{"session_id":"t","prompt_response":"我先打个补丁","<其他字段>":"..."}' | \
+    ~/.<client>/hooks/karma_stop.py
+# 期望：⚠️ karma: Agent 触发关键词 ... + JSON decision=block 输出
+```
+
+## 不能省的步骤（按 karma 项目原则）
+
+- ❌ **不要凭文档完成，必须真跑**（karma sticky #1 + #4）
+- ❌ **不要破坏他人 hook 共存**（vibe-island / rtk 等同 event 多 entry 必须保留）
+- ❌ **配置文件原子写**（基类已实现 tmp + os.replace 不用动）
+- ❌ **不要硬编码 backend id 名字到核心逻辑** — 加 backend 不该改 cli.py 等核心代码
