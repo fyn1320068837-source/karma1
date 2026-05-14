@@ -4,6 +4,60 @@
 
 ## [Unreleased]
 
+## [0.4.16] — 2026-05-14（patch — force_block 协议真根因：只惩罚当前 turn 真触发）
+
+### 真触发
+
+dogfooding 实测真死循环：
+
+1. chinese-plain check 累积 8 次 force_block
+2. 真根因深挖 + v0.4.15 发布修了（表格 cell jargon 扫描豁免）
+3. 但 force_block 看「最近 3 turn 累积 8 次」仍**继续 force_block**
+4. 即使**当前 turn 0 次真触发**chinese-plain，force_block 仍报同样 8 次累积
+5. Agent 修了真根因没法靠「不再违反」解除 force_block — **死循环**
+
+### 真根因
+
+`karma/hooks/stop.py` 的 force_block 逻辑（line 210-213）：
+
+```python
+over_threshold = [
+    sid for sid, n in counts_force.items()
+    if n >= force_threshold and sid not in exempt_ids
+]
+```
+
+只看「最近 3 turn 累积超阈值」+「不在 force_block_exempt 列表」，
+**没要求当前 turn 真触发该 sticky**。导致 fix 后 Agent 仍被历史
+violation 卡死。
+
+### Fix
+
+加 `sid in hit_sticky_ids` 条件 — force_block 只惩罚「当前 turn 真
+触发 + 历史累积超阈值」的 sticky：
+
+```python
+over_threshold = [
+    sid for sid, n in counts_force.items()
+    if n >= force_threshold and sid not in exempt_ids
+    and sid in hit_sticky_ids  # ← v0.4.16 加
+]
+```
+
+`hit_sticky_ids` 计算提到两个 `if notify_msgs:` 块前作共享变量
+（之前在第一个块内定义，第二个块依赖 Python 函数级 scope 脆弱）。
+
+### 设计原则
+
+force_block 的目的是「**Agent 反复违反同 sticky 时强制让用户介入**」。
+如果 Agent 已经**修了真根因不再违反**，应该自动解除不该继续 force_
+block — 否则惩罚 Agent 的正确行为（修真根因）。
+
+### 验证
+
+326 测试全过；ruff/mypy 全绿。dogfooding 真闭环将在下个 turn stop
+hook 真跑时验证。
+
 ## [0.4.15] — 2026-05-14（patch — chinese-plain jargon 扫描豁免表格 cell 引用）
 
 ### 真触发

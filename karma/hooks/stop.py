@@ -160,6 +160,14 @@ def main() -> int:
         summary_lines.append(line)
         notify_msgs.append(f"{v.sticky_id} — {v.trigger}")
 
+    # 当前 turn 真触发的 sticky_id 集合 — 提到两个 if 块前共享
+    # 用于 force_block 真根因 fix：只惩罚「当前 turn 真触发 + 历史累积超阈值」
+    # 的 sticky；如果 Agent 修了真根因当前 turn 不再触发，不重复 force_block
+    # 历史违反（否则 fix 后仍卡 force_block 形成死循环）
+    hit_sticky_ids = {h.sticky_id for h in check_hits} | {
+        v.sticky_id for v in keyword_violations if v.sticky_id not in seen_ids
+    }
+
     # 桌面通知（合并多条违反到一条 notification 避免轰炸；fail open）
     # 累积告警：本次违反含窗口内已累积超阈值 → 升级严重度（阈值从 config 读）
     if notify_msgs:
@@ -171,9 +179,6 @@ def main() -> int:
         except Exception:
             window_turns = _ESCALATE_WINDOW_TURNS
             threshold = _ESCALATE_THRESHOLD
-        hit_sticky_ids = {h.sticky_id for h in check_hits} | {
-            v.sticky_id for v in keyword_violations if v.sticky_id not in seen_ids
-        }
         # 按 turn 距离统计（不是人类时钟）— Agent 漂移按 turn 累积
         if state.turn_count > 0:
             counts = count_recent_turns(session_id, state.turn_count, window_turns=window_turns)
@@ -207,9 +212,15 @@ def main() -> int:
             # 「应该继续推进」类规则不该被「累积太多必须停下让用户介入」处罚
             # （否则语义自我矛盾 — 用户实战发现 keep-pushing-no-stop 触发该 bug）
             exempt_ids = {s.id for s in sticky_list if s.force_block_exempt}
+            # v0.4.16 真根因 fix：force_block 只惩罚「当前 turn 真触发 + 历史累积
+            # 超阈值」的 sticky，不惩罚「已修了不再触发但历史在窗口内」的 sticky。
+            # dogfooding 真触发：v0.4.15 修了 chinese-plain 真根因，但 force_block
+            # 仍按最近 3 turn 累积 8 次重复 force_block，Agent 没法靠「修真根因」
+            # 解除卡死。
             over_threshold = [
                 sid for sid, n in counts_force.items()
                 if n >= force_threshold and sid not in exempt_ids
+                and sid in hit_sticky_ids  # 当前 turn 真触发了该 sticky 才 force_block
             ]
             if over_threshold and state.stop_block_count < block_max:
                 state.stop_block_count += 1
