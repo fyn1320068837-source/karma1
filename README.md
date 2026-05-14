@@ -208,4 +208,4 @@ karma = **通用 hook 框架** + **场景规则集**。
 - [CLAUDE.md](./CLAUDE.md) — 给 Claude Code 协作的项目宪章
 - [karma v1 归档](https://github.com/jhaizhou-ops/karma-v1) — v1 探索过程与反思
 
-karma v2 已完成 M0-M3（六波 commit），158 个测试全绿，作者在 dogfooding 中。验证标准是「开发过程能否减少 Agent 在长任务中的方向漂移」— 而**开发 karma 的过程本身就是它最严酷的自用观察期**。
+karma v2 已完成 M0-M4（多波 commit + 多轮 dogfooding 修真 bug），232 个测试全绿。验证标准是「开发过程能否减少 Agent 在长任务中的方向漂移」— 而**开发 karma 的过程本身就是它最严酷的自用观察期**。

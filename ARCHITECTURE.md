@@ -195,7 +195,7 @@ append-only，行数超 5000 自动 rotation（`.1` `.2` `.3` 保留 3 个历史
 UserPromptSubmit 才加。如果你看 `/tmp/karma_stop_trace.log` 真实 session 0 条，
 先检查 `~/.claude/settings.json` 的 Stop entry 是否含 matcher 字段。
 
-## 6 个 violation_check 函数（工程层精准检测）
+## 8 个 violation_check 函数（工程层精准检测）
 
 `karma/checks/__init__.py:REGISTRY` 映射 sticky.yaml 的 `violation_checks` 字符串 → 函数：
 
@@ -309,6 +309,6 @@ karma doctor                     # 检查环境 + 4 个 hook 安装状态
 
 ## 持续观察 = 持续开发
 
-用户原话「咱们继续推就是观察期」— 每次推进都装着 karma 跑，每个 commit 都经历 hook 拦截。M3 累积 30+ 真实违反，6 个 sticky 全部触发过。
+用户原话「咱们继续推就是观察期」— 每次推进都装着 karma 跑，每个 commit 都经历 hook 拦截。M3 累积 30+ 真实违反，全部 7-8 个 sticky 都触发过。
 
 karma 不是「先开发完再观察」，是「开发即 dogfooding」。
