@@ -4,6 +4,41 @@
 
 ## [Unreleased]
 
+## [0.4.11] — 2026-05-14（patch — chinese-plain 再修：kebab/snake 项目标识符不算 jargon）
+
+### 真触发
+
+v0.4.10 刚发完一句汇报响应立即触发**第 6 次** force_block：karma 自己的
+release note 风格响应大量含项目专有标识符（`chinese-plain-no-jargon` /
+`force_block` / `karma-v1` / `sticky_id`），这些**含连字符或下划线的英文
+token** 被算成英文 jargon 词数，拉低中文占比 < 40%。
+
+剥过版本号 / markdown / emoji 后还剩 9 个英文 token > 8 阈值就触发；
+其中 4 个是项目专有标识符。
+
+### Fix
+
+`karma/checks/chinese_plain.py` 增 `_KEBAB_SNAKE_IDENT_RE`：
+
+```python
+_KEBAB_SNAKE_IDENT_RE = re.compile(
+    r"\b[a-zA-Z][a-zA-Z0-9]*(?:[-_][a-zA-Z0-9]+)+\b"
+)
+```
+
+含至少一个 `-` 或 `_` 连接的英文 token = code identifier 不是自然语言
+jargon 话术（用户看代码自己也用这些原文），算 ratio 时剥。
+
+剥除链顺序：URL → table row → version → markdown mark → emoji → **ident** → 算 ratio。
+
+jargon 词扫描仍用原文（`retrieval` / `embedding` 等真 jargon 仍命中）。
+
+### 验证
+
+dogfooding 实测第 6 次真触发 case → None；真 jargon `retrieval embedding` 仍命中；
+纯 ident 段（chinese-plain / force_block / karma-v1 / sticky_id）→ None。
+tests/test_checks.py 加 kebab/snake 守护 case。
+
 ## [0.4.10] — 2026-05-14（patch — chinese-plain 假阳消除：版本号 / markdown / emoji 不算 jargon）
 
 ### 真触发

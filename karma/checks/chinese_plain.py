@@ -50,6 +50,14 @@ _EMOJI_RE = re.compile(
     r"[☀-➿\U0001F300-\U0001FAFF✅❌⚠✨⭐]"
 )
 
+# kebab-case / snake_case 项目标识符（含连字符或下划线连接的英文 token）—
+# 如 `chinese-plain-no-jargon` / `force_block` / `karma-v1` / `sticky_id` —
+# 这是 code identifier 不是自然语言 jargon 话术，算 ratio 时剥。
+# 边界 `\b` 避免匹配 URL 内片段（已先被 _URL_RE 剥）。
+_KEBAB_SNAKE_IDENT_RE = re.compile(
+    r"\b[a-zA-Z][a-zA-Z0-9]*(?:[-_][a-zA-Z0-9]+)+\b"
+)
+
 # 常见 jargon 术语 — 软件开发场景的英文技术词（用户偏好直白中文时拦）
 # 边界要求避免 e.g. `recall` 误匹配 `recalls` / `dispatch` 误匹配 `dispatcher`
 # 包括：ML 词 + 通用编程词（并发 / 设计模式 / 异步 / 分布式）
@@ -95,6 +103,7 @@ def check(*, response: str = "", **_):
     natural_for_ratio = _VERSION_RE.sub("", natural_for_ratio)
     natural_for_ratio = _MARKDOWN_MARK_RE.sub("", natural_for_ratio)
     natural_for_ratio = _EMOJI_RE.sub("", natural_for_ratio)
+    natural_for_ratio = _KEBAB_SNAKE_IDENT_RE.sub("", natural_for_ratio)
 
     # === Check 1: 自然语言中文占比 ===
     total = total_visible_char_count(natural_for_ratio)

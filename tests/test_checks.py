@@ -380,6 +380,24 @@ def test_chinese_plain_markdown_table_not_counted_in_ratio():
     assert hit is None, f"表格不该拉低中文比例造假阳: {hit}"
 
 
+def test_chinese_plain_kebab_snake_idents_not_counted():
+    """项目专有标识符 kebab-case / snake_case（chinese-plain / force_block / karma-v1）
+    是 code identifier 不是自然语言 jargon — 算 ratio 时剥。
+
+    dogfooding 实测第 6 次真触发：karma 自己的发布报告里大量提自家 sticky_id
+    / 规则名 / 仓库代号，被算成英文 token 拉低中文比例。
+    """
+    fn = REGISTRY["chinese_plain_no_jargon"]
+    response = (
+        "v0.4.10 发布 + karma-v1 永久归档完成。\n"
+        "**v0.4.10**: chinese-plain 剥版本号 / markdown / emoji 后修掉累积 5 次 force_block 假阳。\n"
+        "**karma-v1**: 已 `gh repo archive` 永久归档，readonly 状态。\n"
+        "后续 sticky_id 报错时让同事贴 git remote -v 输出。"
+    )
+    hit = fn(response=response)
+    assert hit is None, f"kebab/snake 标识符不该算英文 jargon: {hit}"
+
+
 def test_chinese_plain_markdown_emphasis_not_counted():
     """markdown emphasis 标记（** * ~~）不算自然语言字符。"""
     fn = REGISTRY["chinese_plain_no_jargon"]
