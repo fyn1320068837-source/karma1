@@ -368,6 +368,7 @@ def test_user_prompt_submit_injects_strong_reminder_when_last_response_stopped(
     """user_prompt_submit hook 检测上一 response 末尾无推进信号 → 注入强提醒。
 
     这是 Stop hook 「user 立刻接 prompt 时不跑」协议 limitation 的 fallback fix。
+    扩展版：跑所有 sticky 的 violation_checks，不只 keep-pushing。
     """
     _patch_paths(monkeypatch, tmp_path, sticky_items=[
         {"id": "keep-pushing-no-stop", "preference": "x",
@@ -389,8 +390,8 @@ def test_user_prompt_submit_injects_strong_reminder_when_last_response_stopped(
     user_prompt_submit.main()
     out = json.loads(capsys.readouterr().out)
     ctx = out.get("hookSpecificOutput", {}).get("additionalContext", "")
-    assert "强提醒" in ctx or "keep-pushing" in ctx, \
-        f"上一 response 无推进信号应注入强提醒：{ctx}"
+    assert "强提醒" in ctx and "keep-pushing-no-stop" in ctx, \
+        f"上一 response 无推进信号应注入强提醒含具体 sticky id：{ctx}"
 
 
 def test_user_prompt_submit_no_reminder_when_last_response_has_push(
