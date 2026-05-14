@@ -609,3 +609,45 @@ def test_run_checks_multiple_hits():
     )
     assert len(hits) >= 1
     assert any(h.sticky_id == "long-term-fundamental" for h in hits)
+
+
+def test_run_checks_check_exception_silently_swallowed_by_default(monkeypatch, capsys):
+    """check 函数抛异常默认 fail open 静默吞错（不阻塞 hook）— 但 stderr 应该
+    什么都不打（避免污染 hook 输出）。"""
+    from karma.checks import REGISTRY
+
+    def _bad_check(**_):
+        raise RuntimeError("intentional test failure")
+
+    monkeypatch.setitem(REGISTRY, "_bad_test_check", _bad_check)
+    monkeypatch.delenv("KARMA_DEBUG", raising=False)
+    hits = run_checks(["_bad_test_check"])
+    assert hits == []
+    captured = capsys.readouterr()
+    assert "intentional test failure" not in captured.err, "默认不该打 traceback"
+
+
+def test_run_checks_check_exception_prints_traceback_under_debug(monkeypatch, capsys):
+    """KARMA_DEBUG=1 时 check 抛异常打 traceback 到 stderr — 评审 A Agent 建议
+    的调试门控（让用户能 debug 自定义 check / karma 内部 bug 不黑盒）。"""
+    from karma.checks import REGISTRY
+
+    def _bad_check(**_):
+        raise RuntimeError("intentional test failure")
+
+    monkeypatch.setitem(REGISTRY, "_bad_test_check2", _bad_check)
+    monkeypatch.setenv("KARMA_DEBUG", "1")
+    hits = run_checks(["_bad_test_check2"])
+    assert hits == []
+    captured = capsys.readouterr()
+    assert "intentional test failure" in captured.err
+    assert "RuntimeError" in captured.err
+
+
+def test_run_checks_unknown_name_prints_under_debug(monkeypatch, capsys):
+    """KARMA_DEBUG=1 时未知 check 名也打提示 — sticky.yaml 写错时能立刻发现。"""
+    monkeypatch.setenv("KARMA_DEBUG", "1")
+    hits = run_checks(["nonexistent_xyz_check"])
+    assert hits == []
+    captured = capsys.readouterr()
+    assert "nonexistent_xyz_check" in captured.err
