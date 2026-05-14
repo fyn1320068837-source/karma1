@@ -391,6 +391,21 @@ check 假阳**。Agent（包括本人）写 release note / commit / 汇报响应
   黑白名单，每个 fix 解决一类下一类还在等
 - 不该做：调本机小模型语义层兜底（违反 v2 边界）
 
+**矛盾 6：karma hook 拦 release 命令 + shell `&&` 短路冲突产生幽灵 release**
+- 真触发：v0.4.22 commit 命令字面含 `time.sleep(60)` 真阻塞 pattern → karma
+  pre_tool_use hook 拦 commit。但 shell `cmd1 && cmd2 && cmd3` 链中 cmd1
+  exit code 非 0 时 cmd2 短路，可是当时 `git commit && git tag && git push
+  && gh release create` 链整体跑了 — 实际 commit 失败了但 git tag 创建在
+  之前的 head（v0.4.21 commit）→ tag 指向错 commit 的幽灵 release
+- 真根因：karma hook 设计上是事后审计 + 警告类，没区分「真阻塞继续」vs
+  「警告但 shell 应继续」。当前 hook 返回非 0 exit code 让 shell 短路，
+  但作者的命令链假设「commit 失败就别 tag」是合理预期 — 矛盾在 hook 拦
+  跟链式短路的合理预期不一致
+- fix：scripts/release.sh + release-finalize.sh 分两阶段（commit 跟 tag
+  分开跑，验证 HEAD 含目标版本 + 不超前 origin 才进 tag 阶段）。这是工程
+  workaround，karma 自身设计层可考虑 hook 拦时应主动 abort 整条 shell
+  链（但实现复杂）
+
 **矛盾 5：dogfooding 自我评估陷阱（2026-05-14 用户问触发的元层教训）**
 - 真触发：本 session 修 5 类 check fix 后我用「audit 修前 N / 修后 0」当
   「完美闭环」证据。用户问「全修成 0 了会不会真阳被误判成假阳」 → 自审发
