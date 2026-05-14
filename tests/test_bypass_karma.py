@@ -93,6 +93,14 @@ def test_commit_message_describing_bypass_not_blocked():
     assert _check(cmd) is None  # 引号字面剥后不含敏感字面
 
 
+def test_self_referential_commit_message_about_bypass_exempted():
+    """meta-test：本身就是 commit 描述 bypass fix 的 message，含敏感字面但是
+    描述 → 应豁免（验证 strip_shell_quoted_literals fix 真根因方案）。"""
+    msg = "fix(karma): bypass check 加 last_test_pass_ts 检测 + json.dump 写操作"
+    cmd = f'git commit -m "{msg}"'
+    assert _check(cmd) is None, "commit message 描述 bypass check 改动不该被自身拦"
+
+
 def test_python_heredoc_real_bypass_still_caught():
     """python heredoc 真改 session_state 文件 — 是真绕（不是 commit message 描述）。
 
