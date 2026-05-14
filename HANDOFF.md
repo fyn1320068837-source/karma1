@@ -20,6 +20,9 @@
 | **M3 第四波** | **长期质量 4 缺口**（session-state 30 天清理 / violations.jsonl rotation / save tmp 名 pid+ns / post_tool_use 跳过失败 tool） | 2938d91 |
 | **M3 第五波** | **描述上下文完整化 2 项**（commit message 80 字位置约束 / heredoc 剥） | bf928bd |
 | **M3 第六波** | **用户反馈担心放过真违反，对偶审计 + 加严**（heredoc 区分头部命令 bash/sh 内是真 shell / 关键词层 Write/Edit 加注释 + docstring 扫描 / 11 个对偶假阴回归测试） | 8f58bb9 |
+| **M4 装机体验 + 反馈机制** | sticky.example → dev.example（场景化定位）+ 5 项 sticky 调整 / 桌面通知（macOS/Linux/Windows）/ 累积告警 / 配置系统 / doctor 显示配置 | 216f754 → 61a7c72 |
+| **M4 turn 维度重构** | ⚠️ 标记 + 累积告警按 **turn 距离**（Agent 漂移按 turn 累积，不按人类时钟）+ Violation 加 turn 字段 + recent_turns / count_recent_turns | 42955ba |
+| **M4 audit + 假阳根因修复** | karma audit 命令（自动标可疑假阳，触发词占 ≥ 50% 标 ⚠️）/ docs/yaml Edit 不推 last_edit_ts / conventional commit (docs/chore) 豁免 evidence / stats 加最近 5 turn 列 | 667f15c → 最新 |
 
 ### 真实工作证据 — 本 session 累积 32 条违反
 
@@ -36,7 +39,7 @@
 
 ### 测试状态
 
-`pytest tests/` → **158/158 passed**（M3 加了 83 个新测试）
+`pytest tests/` → **187/187 passed**（M3+M4 加了 112 个新测试）
 - `tests/test_false_negative_regression.py` — 23 个对偶假阴测试
 - `tests/test_cli.py` — 10 个 CLI 测试
 - `tests/test_description_context.py` — 9 个上下文测试

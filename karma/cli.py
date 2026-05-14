@@ -235,7 +235,7 @@ def cmd_audit() -> int:
 
 
 def cmd_stats() -> int:
-    """每条 sticky 的违反计数（总 / 7 天）。"""
+    """每条 sticky 的违反计数（总 / 7 天 / 本 session 最近 5 turn）。"""
     violations = load_all()
     if not violations:
         print("没有违反记录。")
@@ -248,12 +248,31 @@ def cmd_stats() -> int:
     for v in violations:
         if v.ts > last_ts.get(v.sticky_id, 0):
             last_ts[v.sticky_id] = v.ts
-    print(f"karma 违反统计 (总 {len(violations)} 条):\n")
-    print(f"{'sticky_id':<35} {'总':>6} {'7d':>6} {'最近违反':>20}")
-    print("-" * 70)
+
+    # 本 session 最近 N turn 维度（Agent 漂移视角）— 取最新 session_id 当前 turn
+    # 简化：取 violations.jsonl 里最近一条的 session_id 当「当前 session」
+    current_session = violations[-1].session_id if violations else ""
+    current_turn = max((v.turn for v in violations if v.session_id == current_session), default=0)
+    turns_window = 5
+    cutoff_turn = current_turn - turns_window
+    recent_turns_count = Counter(
+        v.sticky_id for v in violations
+        if v.session_id == current_session and v.turn >= cutoff_turn and v.turn > 0
+    )
+
+    print(f"karma 违反统计 (总 {len(violations)} 条):")
+    if current_turn > 0:
+        print(f"本 session 当前 turn={current_turn}，「最近 {turns_window} turn」列代表 Agent 注意力漂移近况\n")
+    else:
+        print()
+    print(f"{'sticky_id':<35} {'总':>6} {'7d':>6} {'最近 ' + str(turns_window) + ' turn':>14} {'最近违反':>20}")
+    print("-" * 84)
     for sid, n in total.most_common():
         recent_str = datetime.fromtimestamp(last_ts.get(sid, 0)).strftime("%m-%d %H:%M")
-        print(f"{sid:<35} {n:>6} {week.get(sid, 0):>6} {recent_str:>20}")
+        print(
+            f"{sid:<35} {n:>6} {week.get(sid, 0):>6} "
+            f"{recent_turns_count.get(sid, 0):>14} {recent_str:>20}"
+        )
     return 0
 
 
