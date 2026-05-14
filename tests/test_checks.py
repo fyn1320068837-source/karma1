@@ -380,6 +380,19 @@ def test_chinese_plain_markdown_table_not_counted_in_ratio():
     assert hit is None, f"表格不该拉低中文比例造假阳: {hit}"
 
 
+def test_chinese_plain_markdown_emphasis_not_counted():
+    """markdown emphasis 标记（** * ~~）不算自然语言字符。"""
+    fn = REGISTRY["chinese_plain_no_jargon"]
+    response = (
+        "**真深挖找到关键真根因**（不是你瞎扯也不是我瞎扯）：\n\n"
+        "**真区分**：\n"
+        "- **codex Desktop App**：你这几天**真在用**\n"
+        "- **codex CLI**：装着但**几乎没真用过**\n"
+    )
+    hit = fn(response=response)
+    assert hit is None, f"markdown 加粗标记不该拉低中文比例: {hit}"
+
+
 def test_chinese_plain_real_jargon_still_blocked():
     """对偶：URL/表格剥不能让真 jargon 漏报。"""
     fn = REGISTRY["chinese_plain_no_jargon"]

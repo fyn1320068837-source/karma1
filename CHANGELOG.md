@@ -4,6 +4,35 @@
 
 ## [Unreleased]
 
+## [0.4.10] — 2026-05-14（patch — chinese-plain 假阳消除：版本号 / markdown / emoji 不算 jargon）
+
+### 真触发
+
+dogfooding 实测：`chinese-plain-no-jargon` 累积 **5 次 force_block 干预**。深挖发现
+5 次都是 post-v0.4.3 fix 类汇报响应 — 含大量版本号字面（`v0.4.6` / `v0.1.x`）
++ markdown emphasis（`**真深挖**` / `* item`）+ emoji（`✅⚠️`），把中文占比从
+正常 ~50% 拉到 34-39% 误判低于 40% 阈值。
+
+这些都是**结构性 / 装饰性内容不是自然语言 jargon 话术**，算 ratio 时应剥除。
+
+### Fix
+
+`karma/checks/chinese_plain.py` 增 3 个剥离正则在算 ratio 前应用：
+
+- `_VERSION_RE` — `v0.4.6` / `0.4.3` / `v1.2.3-rc1` 等版本号字面
+- `_MARKDOWN_MARK_RE` — `**` / `*` / `~~` / 行首 `- * # > +` / 行内 `` ` ``
+- `_EMOJI_RE` — `☀-➿` / `U+1F300-1FAFF` / `✅❌⚠✨⭐`
+
+剥除链顺序（紧接已有 URL / 表格剥离）：
+URL → table row → version → markdown mark → emoji → 算 ratio。
+
+注意只在**算 ratio 时剥**，jargon 词扫描仍用原始 natural 文本（这样真 jargon 仍命中）。
+
+### 验证
+
+实测 v0.4.6 类技术报告 case → None（不再误触发）；真 jargon `retrieval embedding`
+等仍命中。tests/test_checks.py 加 1 个 markdown emphasis 守护 case。
+
 ## [0.4.9] — 2026-05-14（patch — codex 0.130 hook approval gate 最终真根因）
 
 sub-agent 用 `pty.fork()` 真起 codex CLI TUI（绕过主作者 expect 失败 / codex

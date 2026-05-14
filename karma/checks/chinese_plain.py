@@ -35,6 +35,21 @@ _URL_RE = re.compile(
 # 含分隔行 `|---|---|` 跟正常 cell 行
 _TABLE_ROW_RE = re.compile(r"^\s*\|.*\|\s*$", re.MULTILINE)
 
+# 版本号字面（v0.4.6 / 0.4.3 / v1.2.3-rc1 等） — 不是自然语言 jargon 是数据
+_VERSION_RE = re.compile(r"\bv?\d+\.\d+(?:\.\d+)?(?:[-+][\w.]+)?\b")
+
+# markdown emphasis / list / heading 标记 — 不算自然语言字符
+# `**bold**` / `*italic*` / `~~strike~~` / 行首 `- ` `* ` `# ` 等
+_MARKDOWN_MARK_RE = re.compile(
+    r"\*\*|\*|~~|^\s*[-*#>+]\s+|`",
+    re.MULTILINE,
+)
+
+# emoji / 装饰符号 — 不算可见自然语言字符
+_EMOJI_RE = re.compile(
+    r"[☀-➿\U0001F300-\U0001FAFF✅❌⚠✨⭐]"
+)
+
 # 常见 jargon 术语 — 软件开发场景的英文技术词（用户偏好直白中文时拦）
 # 边界要求避免 e.g. `recall` 误匹配 `recalls` / `dispatch` 误匹配 `dispatcher`
 # 包括：ML 词 + 通用编程词（并发 / 设计模式 / 异步 / 分布式）
@@ -70,11 +85,16 @@ def check(*, response: str = "", **_):
     if not natural.strip():
         return None  # 全是代码 - 不算 jargon 对话
 
-    # 先剥**结构性内容**（URL / email / markdown 表格行）— 这些不是 jargon
-    # 话术，算 ratio 时不该计入。dogfooding 真触发：response 含 GitHub release
-    # URL 35+ 字符 + 多行表格把中文占比从 ~50% 拉低到 15-28%。
+    # 先剥**结构性内容**（不是自然语言 jargon 话术）算 ratio：
+    # - URL / email / markdown 表格行（v0.4.3 加）
+    # - 版本号字面（v0.4.6 / 0.4.3 等）+ markdown emphasis / list / heading 标记
+    #   + emoji 装饰（v0.4.9 dogfooding 实测 5 次累积假阳：技术报告 response 含
+    #   大量版本号 + markdown ** * - + emoji ✅⚠️ 标记把中文占比拉到 34-39%）
     natural_for_ratio = _URL_RE.sub("", natural)
     natural_for_ratio = _TABLE_ROW_RE.sub("", natural_for_ratio)
+    natural_for_ratio = _VERSION_RE.sub("", natural_for_ratio)
+    natural_for_ratio = _MARKDOWN_MARK_RE.sub("", natural_for_ratio)
+    natural_for_ratio = _EMOJI_RE.sub("", natural_for_ratio)
 
     # === Check 1: 自然语言中文占比 ===
     total = total_visible_char_count(natural_for_ratio)
