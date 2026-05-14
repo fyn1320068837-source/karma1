@@ -18,11 +18,22 @@ _INDIRECT_SHELL_RE = re.compile(
     r"\b(?:bash|sh|zsh|dash|ksh|python\d?|node|ruby|perl)\s+-c\s+(['\"])(.*?)\1",
     re.IGNORECASE | re.DOTALL,
 )
+# bash -c 无引号形式：bash -c sleep30 / sh -c ls （POSIX 合法，引号可省）
+# 取 -c 之后第一个 token 作为子命令
+_INDIRECT_SHELL_NOQUOTE_RE = re.compile(
+    r"\b(?:bash|sh|zsh|dash|ksh|python\d?|node|ruby|perl)\s+-c\s+([^\s'\"`][^\s;&|\n]*)",
+    re.IGNORECASE,
+)
+# 反引号命令替换 `cmd` — 内容是真执行的子命令
+_BACKTICK_SUBST_RE = re.compile(r"`([^`\n]+)`")
+# $(...) 命令替换 — 内容是真执行的子命令（不支持嵌套，足够覆盖常见场景）
+_DOLLAR_PAREN_SUBST_RE = re.compile(r"\$\(([^()\n]*)\)")
 # heredoc 多行字符串 — `<<EOF ... EOF` 形式
 # 支持 `<<EOF` / `<<'EOF'` / `<<"EOF"` / `<<-EOF` / `<<~EOF` 几种变体
 # 允许 `<<EOF` 后到换行前有任意非换行字符（如 `> /tmp/x.sh` 重定向）
+# 终结符前允许 tab/space 缩进 — `<<-` 形式 bash 会剥 tab 缩进，karma 也要识别到
 _HEREDOC_RE = re.compile(
-    r"<<[-~]?\s*['\"]?(\w+)['\"]?[^\n]*\n(.*?)\n\1\b",
+    r"<<[-~]?\s*['\"]?(\w+)['\"]?[^\n]*\n(.*?)\n[\t ]*\1\b",
     re.DOTALL,
 )
 # heredoc 头部是 shell 解释器 → 内容是真要执行的 shell 命令（保留扫）
@@ -57,13 +68,22 @@ def strip_shell_quoted_literals(cmd: str) -> str:
     跨 non_blocking + 关键词层共用，统一描述上下文剥离逻辑。
     """
     # 抽 indirect shell 内容到 placeholder（防内部 'x' 引号被 _SHELL_QUOTED_RE 误剥）
+    # 三种 indirect 形态都捕获：bash -c '...' / bash -c sleep30 / `cmd` / $(cmd)
     indirect_contents: list[str] = []
 
-    def _capture_indirect(m: re.Match) -> str:
+    def _capture_indirect_quoted(m: re.Match) -> str:
         indirect_contents.append(m.group(2))
         return f"\x00INDIRECT_{len(indirect_contents) - 1}\x00"
 
-    cmd = _INDIRECT_SHELL_RE.sub(_capture_indirect, cmd)
+    def _capture_indirect_simple(m: re.Match) -> str:
+        # group(1) 是单 token 子命令（bash -c X / `X` / $(X)）
+        indirect_contents.append(m.group(1))
+        return f"\x00INDIRECT_{len(indirect_contents) - 1}\x00"
+
+    cmd = _INDIRECT_SHELL_RE.sub(_capture_indirect_quoted, cmd)
+    cmd = _INDIRECT_SHELL_NOQUOTE_RE.sub(_capture_indirect_simple, cmd)
+    cmd = _BACKTICK_SUBST_RE.sub(_capture_indirect_simple, cmd)
+    cmd = _DOLLAR_PAREN_SUBST_RE.sub(_capture_indirect_simple, cmd)
 
     def _maybe_strip_heredoc(m: re.Match) -> str:
         head_cmd = _heredoc_prefix_command(cmd[:m.start()])

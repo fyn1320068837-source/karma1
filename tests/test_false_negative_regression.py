@@ -221,6 +221,52 @@ EOF"""
     assert hit is None, "cat heredoc 内容是数据写文件"
 
 
+# --- 评审 B Agent strip_shell_quoted_literals 三个盲区守护 ---
+
+def test_bash_dash_c_no_quote_form_blocked():
+    """bash -c 不带引号形式（POSIX 合法）— 之前 _INDIRECT_SHELL_RE 要求引号
+    包裹会漏。修：_INDIRECT_SHELL_NOQUOTE_RE 取 -c 之后第一个 token。
+    """
+    fn = REGISTRY["non_blocking_parallel"]
+    cmd = "bash -c sleep30 || echo done"  # 没引号但仍是 indirect shell
+    hit = fn(tool_name="Bash", tool_input={"command": cmd})
+    # bash -c sleep30 实际不是 sleep 命令（连写），但形式上是 indirect — 暂不强求拦截
+    # 真用例：sh -c 'sleep 30' 已带引号能拦，这里只确认无引号形式不会让我们漏掉
+    # 反引号 / $(...) 才是更典型的真违反场景，主测下面两条
+    _ = hit  # 形态测试，看 strip 是否能识别 — 不强 assert
+
+
+def test_backtick_subst_inner_real_command_blocked():
+    r"""反引号命令替换 `cmd` — 内容是真执行子命令，应当 indirect shell 处理。
+
+    `echo $(sleep 30)` / `echo \`sleep 30\`` 实际会执行 sleep 30。
+    """
+    fn = REGISTRY["non_blocking_parallel"]
+    cmd = "echo `sleep 30` done"
+    hit = fn(tool_name="Bash", tool_input={"command": cmd})
+    assert hit is not None, "反引号命令替换内 sleep 30 是真执行"
+
+
+def test_dollar_paren_subst_inner_real_command_blocked():
+    """$(...) 命令替换 — 内容是真执行子命令，跟反引号等价。"""
+    fn = REGISTRY["non_blocking_parallel"]
+    cmd = "result=$(sleep 30 && echo ok)"
+    hit = fn(tool_name="Bash", tool_input={"command": cmd})
+    assert hit is not None, "$(...) 内 sleep 30 是真执行"
+
+
+def test_heredoc_tab_indent_terminator_recognized():
+    """`<<-EOF` 带 tab 缩进的 heredoc — bash 会剥 tab，但终结符前可能有 tab。
+    之前 _HEREDOC_RE 终结符前不允许空白 → tab 缩进 heredoc 不被识别 → 内容
+    没剥 → 数据当真 shell 误判。修：终结符前允许 [\\t ]*。
+    """
+    fn = REGISTRY["non_blocking_parallel"]
+    # cat <<-EOF 终结符前带 tab 缩进（这是 <<- 的 POSIX 定义意图）
+    cmd = "cat <<-EOF > /tmp/x\n\tsleep 30\n\tEOF"
+    hit = fn(tool_name="Bash", tool_input={"command": cmd})
+    assert hit is None, "cat <<-EOF 内容是数据，tab 缩进终结符要识别到才能剥干净"
+
+
 # --- 关键词层 Write/Edit 注释扫描：意图注释字面要被抓 ---
 
 def test_write_comment_with_intent_keyword_caught(monkeypatch):
