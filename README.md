@@ -253,7 +253,7 @@ karma v0.4+ 支持 **3 家 AI 编程客户端 hook 协议**（基类抽象，加
 | 客户端 | 配置文件 | 启用方式 | 实测状态 |
 |---|---|---|---|
 | Claude Code | `~/.claude/settings.json` | 默认启用 | ✓ v0.1.0 起 |
-| Codex CLI | `~/.codex/hooks.json` | `karma install-hooks --backend codex`<br/>自动启用 `[features] hooks = true` | ✓ v0.3.0 起 |
+| Codex CLI | `~/.codex/hooks.json` | `karma install-hooks --backend codex`<br/>自动启用 `[features] hooks = true` | ✓ v0.3.0 装机层<br/>⚠️ **codex 0.129+ Desktop App 已知 regression 让 hook 不调度**（[issue #21639](https://github.com/openai/codex/issues/21639)）— karma 装机/协议适配生效，但 codex 自身不调 wrapper。等 OpenAI 修。 |
 | Gemini CLI | `~/.gemini/settings.json` | `karma install-hooks --backend gemini-cli` | ✓ v0.4.0 起 |
 
 加新客户端 backend 看 [karma/backends/HOWTO.md](./karma/backends/HOWTO.md) —

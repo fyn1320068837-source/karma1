@@ -60,6 +60,15 @@ karma 4 hook 是否真注册 + 输入 prompt 看是否真触发。
 
 不是 karma 的 bug — 是 codex / gemini 客户端调度行为只能在真 TUI 验证。
 
+**2026-05-14 真根因找到**（用户挑战「这几天 vibe island 一直调 codex hook」
+驱动深挖）：[GitHub codex issue #21639](https://github.com/openai/codex/issues/21639)
+明确 **codex Desktop App 0.129+ 起 hook 调度 regression** — 配在
+`.codex/hooks.json` 的 hook 不再触发（不论 karma / vibe-island / 其他）。
+作者本机 codex 0.130 + Desktop App 用户 = 正好命中这个上游 bug 窗口。
+
+karma 装机层 + 5 个 wrapper + sticky 注入 + 协议适配全验证生效，但 codex
+Desktop App 不调度 wrapper 是 OpenAI 端 regression。**等 OpenAI 修。**
+
 ## ✅ Stop hook matcher fix 已实战验证生效 + 一条 karma 管不到的元认知盲区
 
 **生效证据**：fix 后 Stop hook 真触发 decision=block 干预（用户在 UI 看到了
