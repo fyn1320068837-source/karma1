@@ -4,6 +4,44 @@
 
 ## [Unreleased]
 
+## [0.4.12] — 2026-05-14（patch — keep-pushing 假阳治理 + scripts/verify-installed.sh）
+
+### 真触发
+
+`.venv/bin/karma stats` 看：`keep-pushing-no-stop` 最近 5 turn 触发 **10
+次**最高频。深挖 5 次 snippet 发现 3 次假阳：
+
+- `316 测试全过，Release 链接：...` × 2 — 「数字 + 测试 + 全过」是真
+  成功汇报但 `_SUCCESS_REPORT_RE` 只覆盖 `X/X 通过` 跟 `X passed` 跟
+  `测试 X` 三种语序，漏了「N 测试全过」「测试 N 全过」
+- `我去看 karma check ...` — 「我去 + 看/查」是真近 future 推进信号
+  但 `_PUSH_SIGNAL_RE` 漏覆盖（只有「我现在/立刻/马上 + 动词」）
+
+### Fix
+
+`karma/checks/keep_pushing.py` 两处 regex 扩：
+
+- `_SUCCESS_REPORT_RE` 加「`\\d+ 测试/tests (全/all)? 通过/过/绿/passed`」
+  跟「`测试/tests \\d+ (全/all)? 通过/过/绿/passed`」两种语序
+- `_PUSH_SIGNAL_RE` 加「我去/我要去」类近 future + 动词扩展（看/查/测
+  /检查/确认/核对）
+
+加 2 个守护测试（4 个 assert）`tests/test_keep_pushing.py`。
+
+### 真根因第二层 — 发版流程
+
+v0.4.9/10/11 三连发 chinese-plain fix 都没装到本机 .venv，hook 跑
+v0.4.8 旧字节码，force_block 累积 6 次都没生效（代码层 fix 真做了但
+运行层假完成）。
+
+加 `scripts/verify-installed.sh`：对比 pyproject 版本 vs `.venv/bin/karma
+--version` 不一致就退 1（加 `--reinstall` 自动 uv pip 重装本机）。
+HANDOFF.md「接手前必读」加发版后必跑提醒。
+
+### 验证
+
+318 测试全过；ruff/mypy 全绿。
+
 ## [0.4.11] — 2026-05-14（patch — chinese-plain 再修：kebab/snake 项目标识符不算 jargon）
 
 ### 真触发

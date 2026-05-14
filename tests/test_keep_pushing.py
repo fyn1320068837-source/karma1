@@ -137,3 +137,24 @@ def test_response_with_action_then_summary_passes():
     """先汇报再下一步推进 → 豁免（标准格式）。"""
     hit = _check("测试 203 通过。我现在去做 X 推进。")
     assert hit is None
+
+
+def test_success_report_chinese_quanguo_exempted():
+    """「N 测试全过」语序也算成功汇报豁免。
+
+    dogfooding 实测真假阳：「316 测试全过，Release 链接：...」末尾被错拦。
+    `\\d+ 测试 全过` 跟 `\\d+ 测试 通过` 等价是真成功汇报应豁免。
+    """
+    assert _check("316 测试全过，Release 链接：https://example.com") is None
+    assert _check("一波改完了，测试 316 全过。下个推进点想好了。") is None
+
+
+def test_push_signal_woqu_kan_exempted():
+    """「我去看 / 我去查 / 我要去做 X」简单近 future 动作 → 豁免推进。
+
+    dogfooding 实测：「我去看 karma check 能不能加一条...」被错拦
+    （`_PUSH_SIGNAL_RE` 漏「我去 + 看/查」类动词组合）。
+    """
+    assert _check("commit 推完。我去看 karma stats 累积违反。") is None
+    assert _check("做好了。我去查下个推进点。") is None
+    assert _check("OK。接下来去看 force_block 累计。") is None
