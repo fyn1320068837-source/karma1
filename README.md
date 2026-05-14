@@ -277,4 +277,6 @@ karma init --no-minimal # 强制 7 条完整
 - [karma v1 归档](https://github.com/jhaizhou-ops/karma-v1) — v1 探索过程与反思
 - HANDOFF.md — 内部开发接力文档（非最终用户文档）
 
-karma v2 已完成 M0-M4 + 多轮评审 Agent 交叉评审 + 多轮 dogfooding 修真 bug，275 个测试全绿（含 17 条跨平台 locale 检测守护）。验证标准是「开发过程能否减少 Agent 在长任务中的方向漂移」— 而**开发 karma 的过程本身就是它最严酷的自用观察期**。
+karma v2 已完成 M0-M5（多 backend 横向扩展）+ 多轮评审 Agent 交叉评审 + 多轮 dogfooding 修真 bug，307 个测试全绿（含跨平台 locale 检测 17 条 + 多 backend 守护 22 条）。三家 AI 客户端（Claude Code / Codex CLI / Gemini CLI）实测装机 / 卸装 / hook 触发全跑通。
+
+**用户状态**：2026-05-14 起进入「真实非作者用户使用期」— 之前一年是作者 dogfooding 自用观察，现在开始有同事/朋友首次接触 karma。这是 dogfooding 转 real-user 的关键时刻，新用户首装踩坑会持续触发新一波改进。验证标准是「开发过程能否减少 Agent 在长任务中的方向漂移」— 而**开发 karma 的过程本身就是它最严酷的自用观察期**。
