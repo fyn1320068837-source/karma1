@@ -20,15 +20,12 @@ from karma.sticky import load as load_sticky
 
 def main() -> int:
     try:
-        payload = json.load(sys.stdin)
+        _payload = json.load(sys.stdin)
     except json.JSONDecodeError as e:
         print(f"karma SubagentStart: 输入 JSON 解析失败 ({e})", file=sys.stderr)
         print(json.dumps({}))
         return 0
-    
-    agent_type = payload.get("agent_type", "")
-    agent_id = payload.get("agent_id", "")
-    
+
     try:
         sticky_list = load_sticky()
     except Exception as e:

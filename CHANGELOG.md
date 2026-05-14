@@ -4,6 +4,65 @@
 
 ## [Unreleased]
 
+## [0.4.29] — 2026-05-14（feat — karma v3 第五步：PreCompact 落盘 + 两端夹击 compact 失忆 / CI 修）
+
+### 真触发
+
+用户指令：「别阻止自动 compact，这是个保护机制不是咱们应该干扰的机制，剩下两个
+很好：PreCompact 落盘 sticky 完整状态 / SessionStart(source=compact) 重起强注入」。
+
+同时 CI 4 个 job 全失败 — ruff 4 个错（karma 早期 stub 文件 unused import / var）：
+- `karma/hooks/subagent_start.py:29` unused `agent_id`
+- `tests/test_compact_hooks.py` 3 个 unused import (`Path` / `mock` / `Sticky`)
+
+### Fix
+
+**1. CI lint 修**：
+- `subagent_start.py` 删 `agent_id = payload.get(...)` unused assign（改 `_payload`）
+- `test_compact_hooks.py` 删 3 个 unused import
+- `pre_compact.py` ruff F541 5 处 f-string 没占位符自动修
+
+**2. karma v3 第五步真落地** — PreCompact 升级（早期 stub 用 `continue: false`
+想阻止 compact，错。compact 是 Claude Code 保护机制 karma 不该干扰。改成纯落盘 +
+注入 reminder）：
+
+- 落盘 sticky 完整状态到 `~/.claude/karma/pre_compact_snapshot.md`：
+  - 完整 sticky.yaml 内容（id + 多行 preference）
+  - 最近 5 turn 真违反清单（让 compact 后 Agent 知道之前撞过哪些 sticky）
+  - compact 触发时间 + session_id
+- 注入 `additionalContext` 让 Claude 看到「即将 compact — sticky 已落盘，重起会强注入」
+
+**3. SessionStart(source=compact) 读盘**：
+- 在 v0.4.28 baseline 注入基础上，compact 场景额外读 `pre_compact_snapshot.md`
+  提取「compact 前最近 5 turn 违反过的 sticky」段附加注入
+- compact 失忆两端夹击形成：PreCompact 落盘 + SessionStart 读盘
+
+**4. backends 注册**：
+- `claude_code.py` `_HOOK_EVENTS` 加 `"PreCompact": "pre_compact"`（matcher=`*`
+  区分 manual / auto）— install-hooks 真装 wrapper 到 `~/.claude/settings.json`
+- 测试 `len(cc_wrappers) == 5` → `== 6`（含 PreCompact）
+
+### 设计原则
+
+不阻止 compact — compact 是 Claude Code 保护长 session 不爆 token 的机制，karma
+做的是「让 sticky 跨 compact 不丢」不是「让 compact 不发生」。两个不同问题。
+
+### 验证
+
+352 测试全过 + ruff / mypy / vulture 全绿。CI 4 job 应该真通过。
+
+### 安装升级
+
+已装用户跑：`karma install-hooks --backend claude-code` 重装加新 PreCompact 入口。
+
+### karma v3 演化清单（5 步）
+
+- v0.4.24 中段注入 anchor（PostToolUse 信道）
+- v0.4.25 字面多样性元行为监测
+- v0.4.26→v0.4.27 反思式语气改造
+- v0.4.28 SessionStart sticky baseline
+- **v0.4.29 PreCompact 落盘 + SessionStart 读盘两端夹击 compact 失忆**
+
 ## [0.4.28] — 2026-05-14（feat — karma v3 第四步：SessionStart 注入 sticky baseline）
 
 ### 真触发

@@ -1,22 +1,41 @@
-"""PreCompact hook — Compact 前防止 sticky 淡化。
+"""PreCompact hook — compact 前落盘 sticky 完整状态（karma v3 第五步）。
 
 Claude Code 协议:
 - stdin payload: {trigger: "manual"|"auto", session_id, transcript_path, ...}
-- stdout: {"continue": false/true, "stopReason": "...", 
-           "hookSpecificOutput": {"hookEventName": "PreCompact", "additionalContext": "..."}}
+- stdout: {"hookSpecificOutput": {"hookEventName": "PreCompact", "additionalContext": "..."}}
 
-策略：检查即将 compact 会不会导致 sticky anchor 离 context 太远。
-- 若 sticky 在 context 中部或头部，compact 可能把它推到尾部或丢掉
-- 拒绝 compact（block）或允许 + 强制重注 sticky
-- 目标：长 session 中不让 compact 淡化用户核心方向
+设计（v0.4.29 升级 — 早期 stub 用 continue:false 想阻止 compact，错。compact 是
+Claude Code 保护机制，karma 不该干扰。改成纯落盘 + 注入 reminder）：
+
+- 落盘 sticky 完整状态到 `~/.claude/karma/pre_compact_snapshot.md`
+  保存：完整 sticky.yaml + 最近 5 turn 违反清单 + compact 触发时间 + session_id
+- 注入 additionalContext 让 Claude 看到「即将 compact，sticky 已落盘」
+- SessionStart(source=compact) 重起后会读这个 snapshot 加强提醒
+
+两端夹击 compact 失忆：PreCompact 落盘 + SessionStart 读盘。
 """
 
 from __future__ import annotations
 
 import json
 import sys
+import time
+from pathlib import Path
 
+from karma.paths import karma_home
 from karma.sticky import load as load_sticky
+from karma.violations import recent_turns
+
+
+SNAPSHOT_FILENAME = "pre_compact_snapshot.md"
+
+
+def _snapshot_path() -> Path:
+    return karma_home() / SNAPSHOT_FILENAME
+
+
+def _passthrough() -> None:
+    print(json.dumps({}))
 
 
 def main() -> int:
@@ -24,43 +43,80 @@ def main() -> int:
         payload = json.load(sys.stdin)
     except json.JSONDecodeError as e:
         print(f"karma PreCompact: 输入 JSON 解析失败 ({e})", file=sys.stderr)
-        # Fail open — 配置问题不卡用户
-        print(json.dumps({"continue": True}))
+        _passthrough()
         return 0
 
-    trigger = payload.get("trigger", "")
-    
+    trigger = payload.get("trigger", "")  # manual / auto
+    session_id = payload.get("session_id", "") or "default"
+
     try:
         sticky_list = load_sticky()
     except Exception as e:
         print(f"karma PreCompact: sticky 加载失败 ({e})", file=sys.stderr)
-        print(json.dumps({"continue": True}))
+        _passthrough()
         return 0
-    
-    if not sticky_list:
-        # 没有 sticky，随意 compact
-        print(json.dumps({"continue": True}))
-        return 0
-    
-    # v0.5.0 简单策略：
-    # - 自动 compact 时，提醒 sticky 会重新注入
-    # - 手工 compact (/compact) 则允许，用户自知
-    if trigger == "auto":
-        sticky_ids = ", ".join(s.id for s in sticky_list)
-        context = f"""⚠️ Context compact 前置检查完成。当前有 {len(sticky_list)} 条核心方向：{sticky_ids}
 
-Compact 后将自动重新注入已有的 sticky 约束，不会丢失。继续 compact。"""
-        print(json.dumps({
-            "continue": True,
-            "hookSpecificOutput": {
-                "hookEventName": "PreCompact",
-                "additionalContext": context
-            }
-        }))
-    else:
-        # trigger == "manual"
-        print(json.dumps({"continue": True}))
-    
+    if not sticky_list:
+        _passthrough()
+        return 0
+
+    # 落盘 snapshot — 让 SessionStart(source=compact) 重起后读得到
+    lines = [
+        "# karma compact 前快照",
+        "",
+        f"- compact 触发: {trigger or 'unknown'}",
+        f"- session_id: {session_id}",
+        f"- 时间: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}",
+        "",
+        "## sticky 完整清单",
+        "",
+    ]
+    for s in sticky_list:
+        lines.append(f"### {s.id}")
+        lines.append("")
+        for pref_line in s.preference.strip().split("\n"):
+            lines.append(f"> {pref_line}")
+        lines.append("")
+
+    # 最近 5 turn 违反清单 — 让 compact 后 Agent 知道之前撞过哪些 sticky
+    try:
+        # 取本 session 当前 turn — 估算从 session_state 拿不到时用大数让 recent_turns 看全部
+        from karma import session_state as _ss
+        state = _ss.load(session_id)
+        current_turn = state.turn_count if state.turn_count > 0 else 999999
+        recent_v = recent_turns(session_id, current_turn, window_turns=5)
+    except Exception:
+        recent_v = {}
+    if recent_v:
+        lines.append("## compact 前最近 5 turn 违反过的 sticky")
+        lines.append("")
+        for sid, n in recent_v.items():
+            lines.append(f"- {sid}: {n} 次")
+        lines.append("")
+
+    snapshot = "\n".join(lines)
+    try:
+        sp = _snapshot_path()
+        sp.parent.mkdir(parents=True, exist_ok=True)
+        sp.write_text(snapshot, encoding="utf-8")
+    except OSError as e:
+        print(f"karma PreCompact: 落盘失败 ({e})", file=sys.stderr)
+        _passthrough()
+        return 0
+
+    # 注入 additionalContext — 让 Claude 看到 sticky 已落盘 + 提醒
+    sticky_ids = ", ".join(s.id for s in sticky_list)
+    context = (
+        f"[karma 即将 compact ({trigger}) — sticky 已落盘 {SNAPSHOT_FILENAME}]\n"
+        f"当前 sticky: {sticky_ids}\n"
+        f"compact 后 SessionStart 会读 snapshot 重新强注入这些核心方向。"
+    )
+    print(json.dumps({
+        "hookSpecificOutput": {
+            "hookEventName": "PreCompact",
+            "additionalContext": context,
+        }
+    }, ensure_ascii=False))
     return 0
 
 

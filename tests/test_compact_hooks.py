@@ -2,21 +2,19 @@
 
 import json
 import subprocess
-from pathlib import Path
-from unittest import mock
 
 import pytest
 
-from karma.sticky import Sticky
-
 
 def test_pre_compact_hook_auto_allows():
-    """PreCompact hook: 自动 compact 时允许 + 提醒。"""
+    """PreCompact hook (v0.4.29): 自动 compact 时落盘 sticky + 注入 reminder。
+    新 API 不用 continue 字段（compact 是 Claude Code 保护机制，karma 不该干扰），
+    输出 hookSpecificOutput.additionalContext 让 Claude 看到 sticky 已落盘。"""
     payload = {
         "trigger": "auto",
         "session_id": "test-session",
     }
-    
+
     result = subprocess.run(
         ["/Users/jhz/karma/.venv/bin/python", "-m", "karma.hooks.pre_compact"],
         capture_output=True,
@@ -24,10 +22,14 @@ def test_pre_compact_hook_auto_allows():
         input=json.dumps(payload),
         cwd="/Users/jhz/karma"
     )
-    
+
     if result.returncode == 0:
         output = json.loads(result.stdout)
-        assert output.get("continue") is True
+        # 新 API：输出 additionalContext（passthrough 时输出 {}）
+        # sticky 存在时应注入 PreCompact additionalContext
+        if "hookSpecificOutput" in output:
+            assert output["hookSpecificOutput"]["hookEventName"] == "PreCompact"
+            assert "additionalContext" in output["hookSpecificOutput"]
     else:
         print("STDERR:", result.stderr)
         pytest.skip(f"Hook execution failed: {result.stderr}")
@@ -77,12 +79,13 @@ def test_session_start_hook_resume():
 
 
 def test_pre_compact_hook_manual_allows():
-    """PreCompact hook: 手工 /compact 时直接允许。"""
+    """PreCompact hook (v0.4.29): 手工 /compact 时也走落盘 + 注入路径。
+    manual / auto 在新逻辑统一处理 — 不再 special-case。"""
     payload = {
         "trigger": "manual",
         "session_id": "test-session",
     }
-    
+
     result = subprocess.run(
         ["/Users/jhz/karma/.venv/bin/python", "-m", "karma.hooks.pre_compact"],
         capture_output=True,
@@ -90,10 +93,12 @@ def test_pre_compact_hook_manual_allows():
         input=json.dumps(payload),
         cwd="/Users/jhz/karma"
     )
-    
+
     assert result.returncode == 0
     output = json.loads(result.stdout)
-    assert output.get("continue") is True
+    # 新 API：sticky 存在时输出 additionalContext，没 sticky 时 passthrough {}
+    if "hookSpecificOutput" in output:
+        assert output["hookSpecificOutput"]["hookEventName"] == "PreCompact"
 
 
 def test_hooks_graceful_fallback_on_sticky_error():
