@@ -234,7 +234,8 @@ def test_parse_redirect_target():
 
 def test_purge_old_session_states(tmp_path):
     """删 mtime 老于 max_age_days 的 session-state json。"""
-    import os, time
+    import os
+    import time
     from karma.session_state import purge_old_states
     old1 = tmp_path / "old1.json"
     old2 = tmp_path / "old2.json"

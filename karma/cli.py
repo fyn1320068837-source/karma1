@@ -169,7 +169,7 @@ def cmd_sticky_list() -> int:
         print(f"配置错误: {e}", file=sys.stderr)
         return 1
     if not sticky:
-        print(f"没配置 sticky。运行 'karma init' 复制模板。")
+        print("没配置 sticky。运行 'karma init' 复制模板。")
         return 0
     print(f"karma sticky ({len(sticky)}/{MAX_STICKY} 软上限, {HARD_MAX} 硬上限):\n")
     for i, s in enumerate(sticky, 1):
@@ -183,7 +183,7 @@ def cmd_sticky_list() -> int:
 
 def cmd_sticky_edit() -> int:
     if not STICKY_PATH.exists():
-        print(f"sticky.yaml 不存在，先 'karma init'", file=sys.stderr)
+        print("sticky.yaml 不存在，先 'karma init'", file=sys.stderr)
         return 1
     editor = os.environ.get("EDITOR", "vim")
     subprocess.run([editor, str(STICKY_PATH)])
@@ -201,7 +201,7 @@ def cmd_sticky_remove(rule_id: str) -> int:
     """简单删除 — 读 yaml，过滤，写回。"""
     import yaml
     if not STICKY_PATH.exists():
-        print(f"sticky.yaml 不存在", file=sys.stderr)
+        print("sticky.yaml 不存在", file=sys.stderr)
         return 1
     raw = yaml.safe_load(STICKY_PATH.read_text(encoding="utf-8")) or []
     filtered = [item for item in raw if item.get("id") != rule_id]
@@ -361,7 +361,7 @@ def cmd_stats() -> int:
         all_sticky_ids = {s.id for s in _load_sticky()}
         untriggered = sorted(all_sticky_ids - set(total))
         if untriggered:
-            print(f"\n=== 未触发的 sticky（✓ 没违反过）===")
+            print("\n=== 未触发的 sticky（✓ 没违反过）===")
             for sid in untriggered:
                 print(f"  ✓ {sid}")
     except Exception:
@@ -463,7 +463,7 @@ def cmd_doctor() -> int:
     # 显示当前生效配置
     from karma.config import load as _load_config
     cfg = _load_config()
-    print(f"  当前生效配置:")
+    print("  当前生效配置:")
     for k, v in cfg.items():
         print(f"    {k}: {v}")
 
@@ -499,13 +499,13 @@ def cmd_doctor() -> int:
             ]
             print(f"  Stop hook 触发记录: 总 {len(lines)} 条，真实 session {len(real_session_lines)} 条")
             if len(real_session_lines) == 0 and len(lines) > 0:
-                print(f"    ⚠️ Stop hook 在真实 session 中没触发 — Claude Code 协议层 limitation")
+                print("    ⚠️ Stop hook 在真实 session 中没触发 — Claude Code 协议层 limitation")
         except OSError:
             pass
 
     # hook 安装检测 — 每个 event 三项：wrapper 存在 / 可执行 / settings.json 含引用
     status = _check_hooks_installed()
-    print(f"  hook 安装检测:")
+    print("  hook 安装检测:")
     all_ok = True
     any_missing = False
     for event in ("UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"):
@@ -524,7 +524,7 @@ def cmd_doctor() -> int:
                 problems.append("settings.json 未引用")
             print(f"    {event}: ✗ {', '.join(problems)}")
     if any_missing:
-        print(f"  → 运行 `karma install-hooks` 修复")
+        print("  → 运行 `karma install-hooks` 修复")
     return 0 if all_ok else 1
 
 

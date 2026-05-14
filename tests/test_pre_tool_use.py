@@ -23,7 +23,6 @@ def _patch(monkeypatch, tmp_path: Path, sticky_items: list[dict]) -> tuple[Path,
 def _run_hook(monkeypatch, payload: dict) -> dict:
     """跑 hook，返回 hookSpecificOutput dict (含 permissionDecision)。"""
     monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(payload)))
-    import sys
     captured = io.StringIO()
     monkeypatch.setattr("sys.stdout", captured)
     pre_tool_use.main()
@@ -208,7 +207,7 @@ def test_fail_open_on_bad_payload(monkeypatch, tmp_path):
     """payload JSON 解析失败 → fail open。"""
     monkeypatch.setattr("karma.sticky.DEFAULT_PATH", tmp_path / "sticky.yaml")
     monkeypatch.setattr("karma.violations.DEFAULT_PATH", tmp_path / "v.jsonl")
-    import sys, io
+    import io
     monkeypatch.setattr("sys.stdin", io.StringIO("not json"))
     captured = io.StringIO()
     monkeypatch.setattr("sys.stdout", captured)

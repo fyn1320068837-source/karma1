@@ -248,7 +248,7 @@ def test_doctor_reports_missing_wrappers(fake_home, capsys):
         with unittest.mock.patch.object(cli, "STICKY_PATH", sticky_path):
             with unittest.mock.patch.object(karma.violations, "DEFAULT_PATH", fake_home / "v.jsonl"):
                 with unittest.mock.patch.object(cli, "VIOLATIONS_PATH", fake_home / "v.jsonl"):
-                    rc = cli.cmd_doctor()
+                    cli.cmd_doctor()
     out = capsys.readouterr().out
     assert "✗" in out or "缺失" in out or "未安装" in out, f"doctor 应明确报告 hook 缺失: {out}"
 

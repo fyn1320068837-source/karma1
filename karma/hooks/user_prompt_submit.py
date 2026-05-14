@@ -130,6 +130,19 @@ def main() -> int:
                         )
                         all_hits.extend(hits)
                     if all_hits:
+                        # 写到 violations.jsonl 让 stats/audit 反映实战触发（fallback for
+                        # Stop hook 实战不跑导致违反没记录）
+                        try:
+                            import time as _time
+                            from karma.violations import Violation as _V, append as _v_append
+                            recs = [_V(
+                                ts=int(_time.time()), session_id=session_id,
+                                sticky_id=h.sticky_id, trigger=h.trigger,
+                                snippet=h.snippet, turn=current_turn,
+                            ) for h in all_hits]
+                            _v_append(recs)
+                        except Exception:
+                            pass
                         reminder_lines = ["\n\n[karma 强提醒 — 上一 response 命中检测]"]
                         for h in all_hits[:5]:  # 最多 5 条避免淹没
                             reminder_lines.append(f"  - {h.sticky_id}: {h.trigger}")

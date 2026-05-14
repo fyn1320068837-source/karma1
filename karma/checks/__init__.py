@@ -11,7 +11,7 @@ sticky.yaml 的 violation_checks 字段值对应 REGISTRY 的 key。
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Protocol
+from typing import Protocol
 
 from karma.checks import (
     bypass_karma,
