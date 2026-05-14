@@ -28,22 +28,26 @@
 | **M4 keep-pushing 工程层 + Stop hook 真干预** | keep_pushing check（问号 / 停顿语气词双信号）+ Stop hook decision=block 让 Agent 不真停继续生成 + safeguard `stop_block_max_per_turn` 防死循环 | 8502713 |
 | **M4 keep-pushing 反转 + audit 改进建议** | 用户精准纠正：问号是合理决策应豁免，纯陈述完结无下一步才是真停下 → 反转检测方向（推进/问号豁免，停顿词/默认 → 命中）。stats / doctor 显示 stop_block_count；audit 末尾自动改进建议段；catchup 多 hook 跑（UserPromptSubmit+PreToolUse 都跑，task #8 剩余 case）；non_blocking 长任务列表收紧（移除 pytest 等测试命令，保留 docker/build/install）| 8502713 → 最新 |
 
-### 真实工作证据 — 本 session 累积 32 条违反
+### 真实工作证据 — 假阳治理后 audit 干净
 
-| sticky_id | 总 | 真违反典型 | 假阳性已修 |
-|---|---|---|---|
-| long-term-fundamental | 17 | hardcode / TODO 真注释 / git commit message hack 主语 | 描述类字面 / pattern 描述自身 |
-| non-blocking-parallel | 6 | sleep / 长任务无 background | heredoc 数据字面 / commit message 字面 |
-| read-before-write | 4 | 未 Read 就 Edit | (Write 后 record_read 修了) |
-| loud-failure-with-evidence | 3 | git commit 无测试证据 | (闲聊用「应该」已加上下文豁免) |
-| chinese-plain-no-jargon | 1 | jargon 多无中文 | — |
-| no-testset-no-future-leakage | 1 | gold_cases 写 hash | — |
+完整 audit 工具链实证（本 session M4 末尾）：
+1. audit 找问题 → 33 条历史，标 2 个假阳重灾区（evidence / non_blocking pytest）
+2. 修 pattern → conventional commit 豁免 / docs Edit 不推 ts / pytest 移出长任务列表 / sleep 0 不算阻塞 / TODO 后缀要求 / 描述上下文 yaml/json 豁免 等
+3. clear --trigger 治理历史 → 33 → 11 条剩真违反
+4. 现状 audit：**「暂无明显假阳重灾区」** ✓
 
-**全 6 个 sticky 都被触发过** — PRD 验证标准的实证。
+剩余 11 条都是真违反 / 边缘观察：
+| sticky_id | 总 | 类型 |
+|---|---|---|
+| read-before-write | 6 | **真违反**（未 Read 就 Edit /Users/jhz/.claude/statusline.sh 等） |
+| chinese-plain-no-jargon | 3 | 真违反（中文比例 34% / mutex 无中文解释） |
+| no-testset-no-future-leakage | 2 | 边缘（描述 ML 概念） |
+
+**全 7 个 sticky 都装好**（含 sticky #7 keep-pushing-no-stop 工程层 + Stop block 真干预）。
 
 ### 测试状态
 
-`pytest tests/` → **203/203 passed**（M3+M4 加了 128 个新测试）
+`pytest tests/` → **210/210 passed**（M3+M4 加了 135 个新测试）
 - `tests/test_false_negative_regression.py` — 23 个对偶假阴测试
 - `tests/test_cli.py` — 10 个 CLI 测试
 - `tests/test_description_context.py` — 9 个上下文测试
