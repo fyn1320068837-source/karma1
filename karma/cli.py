@@ -64,12 +64,17 @@ def _karma_wrapper_path(hook_name_lower: str) -> Path:
     return _hooks_dir() / f"karma_{hook_name_lower}.py"
 
 
-def _karma_event_entry(hook_name_lower: str) -> dict:
-    """构造一条 karma hook entry — Claude Code settings.json hooks 字段格式。"""
-    return {
-        "matcher": "*",
-        "hooks": [{"type": "command", "command": str(_karma_wrapper_path(hook_name_lower))}],
-    }
+def _karma_event_entry(hook_name_lower: str, event_name: str = "") -> dict:
+    """构造一条 karma hook entry — Claude Code settings.json hooks 字段格式。
+
+    Stop / SessionStart / SessionEnd 等不支持 matcher 字段（matcher 字段会被无声忽略
+    且可能导致 hook 不生效）。只对 PreToolUse / PostToolUse / UserPromptSubmit 等
+    工具相关 hook 加 matcher: "*"。
+    """
+    entry = {"hooks": [{"type": "command", "command": str(_karma_wrapper_path(hook_name_lower))}]}
+    if event_name in ("PreToolUse", "PostToolUse", "UserPromptSubmit"):
+        entry["matcher"] = "*"
+    return entry
 
 
 def _is_karma_entry(entry: dict) -> bool:
@@ -111,7 +116,7 @@ def _add_karma_entries(settings: dict) -> dict:
     settings.setdefault("hooks", {})
     for event, fname in _KARMA_HOOK_EVENTS.items():
         settings["hooks"].setdefault(event, [])
-        settings["hooks"][event].append(_karma_event_entry(fname))
+        settings["hooks"][event].append(_karma_event_entry(fname, event_name=event))
     return settings
 
 
