@@ -176,10 +176,54 @@ def cmd_reset_session() -> int:
     return 0
 
 
-def cmd_audit() -> int:
+def _check_file_last_commit_ts(sticky_id: str, sticky_list) -> int | None:
+    """查 sticky 对应 check 文件最新 git commit 时间戳（dogfooding fix 时间线用）。
+
+    用 sticky.yaml 的 violation_checks 字段反查 REGISTRY[func_name].__module__
+    → check 文件路径 → `git log -1 --format=%ct -- <path>`。
+
+    返回 None 的情况：不在 karma 仓库 cwd / git 不可用 / sticky 没工程 check
+    （只关键词层）。这是 dev 工具按 sticky #1「失败要响亮」fail open。
+    """
+    import subprocess
+    from pathlib import Path
+    target_sticky = next((s for s in sticky_list if s.id == sticky_id), None)
+    if not target_sticky or not target_sticky.violation_checks:
+        return None
+    try:
+        from karma.checks import REGISTRY
+        check_fn = REGISTRY.get(target_sticky.violation_checks[0])
+        if not check_fn:
+            return None
+        # __module__ 形如 'karma.checks.chinese_plain'
+        module_path = check_fn.__module__.replace(".", "/") + ".py"
+        # 找 karma 仓库根 — cwd 或父目录含 pyproject.toml + karma/ 子目录
+        cwd = Path.cwd()
+        for candidate in [cwd, *cwd.parents]:
+            if (candidate / "pyproject.toml").exists() and (candidate / "karma").is_dir():
+                check_file = candidate / module_path
+                if not check_file.exists():
+                    return None
+                result = subprocess.run(
+                    ["git", "log", "-1", "--format=%ct", "--", str(check_file)],
+                    capture_output=True, text=True, cwd=str(candidate), timeout=2,
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    return int(result.stdout.strip())
+                return None
+        return None
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return None
+
+
+def cmd_audit(with_fix_timeline: bool = False) -> int:
     """审计违反历史：每条 sticky 的 top 触发词 + 假阳嫌疑标记 + 本 session 漂移近况。
 
     假阳嫌疑：同一触发词命中 ≥ 5 次且占该 sticky 触发 ≥ 50% → 可能 pattern 过宽
+
+    with_fix_timeline=True 时，调 git log 查每个 check 文件最新 commit ts，对比
+    violation.ts 标记每条 violation 在 fix 前 / 后。dev 工具，仅 karma 仓库 cwd
+    + git 可用时启用。
     """
     violations = load_all()
     if not violations:
@@ -191,10 +235,29 @@ def cmd_audit() -> int:
     for v in violations:
         by_sticky.setdefault(v.sticky_id, Counter())[v.trigger] += 1
     print(f"karma 违反审计 (总 {len(violations)} 条):\n")
+    # fix 时间线 — 仅 with_fix_timeline=True 时算
+    fix_ts_by_sticky: dict[str, int | None] = {}
+    if with_fix_timeline:
+        from karma.sticky import load as load_sticky
+        sticky_list = load_sticky()
+        for sid in by_sticky:
+            fix_ts_by_sticky[sid] = _check_file_last_commit_ts(sid, sticky_list)
     for sid in sorted(by_sticky, key=lambda s: -sum(by_sticky[s].values())):
         ctr = by_sticky[sid]
         total = sum(ctr.values())
-        print(f"[{sid}] {total} 条触发")
+        # fix 时间线：算这条 sticky 的 violations 多少在 check 最新 fix 前 / 后
+        timeline_suffix = ""
+        if with_fix_timeline:
+            fix_ts = fix_ts_by_sticky.get(sid)
+            if fix_ts:
+                pre_fix = sum(1 for v in violations if v.sticky_id == sid and v.ts < fix_ts)
+                post_fix = total - pre_fix
+                import time as _t
+                fix_date = _t.strftime("%m-%d %H:%M", _t.localtime(fix_ts))
+                timeline_suffix = (
+                    f" [check 最新 fix {fix_date}: 修前 {pre_fix} / 修后 {post_fix}]"
+                )
+        print(f"[{sid}] {total} 条触发{timeline_suffix}")
         for trigger, cnt in ctr.most_common(5):
             ratio = cnt / total
             mark = " ⚠️ 可能假阳" if cnt >= 5 and ratio >= 0.5 else ""
@@ -687,7 +750,8 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "stats":
         return cmd_stats()
     if cmd == "audit":
-        return cmd_audit()
+        with_timeline = "--with-fix-timeline" in args
+        return cmd_audit(with_fix_timeline=with_timeline)
     if cmd in ("reset", "reset-session"):
         return cmd_reset_session()
     if cmd == "install-hooks":

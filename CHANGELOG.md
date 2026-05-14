@@ -4,6 +4,46 @@
 
 ## [Unreleased]
 
+## [0.4.17] — 2026-05-14（feat — audit --with-fix-timeline dogfooding 闭环视图）
+
+### 真价值
+
+dogfooding 闭环视图 — 让用户能看「我修了 v0.4.X 后某条 sticky 假阳真的
+不再触发」。这是 v0.4.16 协议层 fix（修真根因后自动恢复 force_block）的
+**自然延续** — 视图层证据 vs 协议层机制。
+
+### Fix / Feat
+
+`karma/cli.py`：
+- 加 `_check_file_last_commit_ts(sticky_id, sticky_list)` 用 `sticky.yaml.
+  violation_checks` 反查 `REGISTRY[func_name].__module__` → check 文件路径
+  → `git log -1 --format=%ct -- <path>` 取最新 commit ts
+- `cmd_audit` 加 `with_fix_timeline: bool` 参数。开启时每条 sticky 行追
+  加 `[check 最新 fix MM-DD HH:MM: 修前 X / 修后 Y]` 标记
+- CLI 加 `--with-fix-timeline` flag
+
+### 设计约束
+
+- 仅 karma 仓库 cwd + git 可用时启用（dev 工具，不破坏跨用户场景）
+- fail open — 不在 karma 仓库 / git 不可用 → 静默不报错，正常 audit 视图
+- 粒度：单 check 文件最新 commit ts（不区分「真根因修复」vs「注释 / 重构
+  commit」） — dev hint 用足够，不追求精准
+
+### 真跑通
+
+```
+karma 违反审计 (总 64 条):
+[keep-pushing-no-stop] 32 条触发 [check 最新 fix 05-14 18:17: 修前 26 / 修后 6]
+[chinese-plain-no-jargon] 11 条触发 [check 最新 fix 05-14 18:36: 修前 11 / 修后 0]
+```
+
+chinese-plain 修前 11 / 修后 0 = v0.4.15 真根因 fix 真生效 dogfooding 闭环证据。
+keep-pushing 修前 26 / 修后 6 = v0.4.12 部分修，第 3 类假阳还在（HANDOFF 候选）。
+
+### 验证
+
+327 测试全过；真跑 `karma audit --with-fix-timeline` 输出完整 timeline 标记。
+
 ## [0.4.16] — 2026-05-14（patch — force_block 协议真根因：只惩罚当前 turn 真触发）
 
 ### 真触发
