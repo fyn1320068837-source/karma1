@@ -265,6 +265,33 @@ karma doctor                     # 检查环境 + 4 个 hook 安装状态
 - 保留所有非 karma hook（vibe-island / rtk / codex-review 等共存）
 - 用 wrapper 路径含 `karma_` 前缀识别 karma entry
 
+## 配置
+
+`~/.claude/karma/config.yaml` 调阈值不用改代码。`karma doctor` 看当前生效值。
+所有字段缺失走 `karma/config.py:DEFAULTS`（fail open），可只配关心的几条。
+
+| 字段 | 默认 | 含义 |
+|---|---|---|
+| `notify_enabled` | `true` | 桌面通知开关（也可用 `KARMA_NO_NOTIFY=1` 环境变量关） |
+| `recent_violation_turns` | `5` | ⚠️ 标记窗口 — 最近 N turn 内违反过的 sticky 下次注入时标红 |
+| `escalate_window_turns` | `3` | 累积告警窗口（按 turn 距离） |
+| `escalate_threshold` | `3` | 累积告警次数阈值 — 窗口内同 sticky 命中 ≥ N 次升级 🚨 严重通知 |
+| `stop_block_max_per_turn` | `3` | Stop hook 单 turn 内 `decision=block` 上限（防 keep-pushing 干预死循环）。`0` 完全关闭干预 |
+| `force_block_threshold` | `5` | 累积强制 block 阈值 — 同 sticky 窗口内违反 ≥ N 次 Stop hook 输出 `decision=block` 强制 fix 真根因。`0` 完全关闭。可在 sticky.yaml 单条规则用 `force_block_exempt: true` 豁免 |
+| `violations_max_lines` | `5000` | `violations.jsonl` 行数上限触发 rotation |
+| `violations_keep_history` | `3` | rotation 保留几个历史 `.jsonl.{N}` |
+| `session_state_max_age_days` | `30` | `session-state/*.json` 自动清理周期（天） |
+| `max_recent_bash` | `15` | `SessionState` 保留最近 Bash 数量 |
+
+`karma init` 复制 `data/config.example.yaml` 模板。
+
+### 调试环境变量
+
+- `KARMA_NO_NOTIFY=1` — 关桌面通知（CI / 静音场景）
+- `KARMA_DEBUG=1` — `run_checks` 函数抛异常时 stderr 打 traceback（调试自定义 check）
+- `KARMA_DEBUG_TRACE=<path>` — Stop hook 触发时 append 一行 trace 到指定文件
+  （验证 Stop hook 是否真触发，production 默认完全关）
+
 ## 性能预算
 
 | 路径 | 预算 | 当前实测 |
