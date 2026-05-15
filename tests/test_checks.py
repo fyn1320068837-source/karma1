@@ -868,6 +868,48 @@ def test_testset_real_bash_reverse_feed_still_blocked():
     assert hit is not None
 
 
+def test_testset_v058_heredoc_to_tests_path_exempted():
+    """v0.5.8: cat heredoc 写到 tests/ 路径豁免 — heredoc 内容是测试代码字面.
+
+    dogfooding v0.5.7 真触发: tests/test_checks.py append 回归测试时 heredoc 内
+    `case_id = "<hash>"` 字面被错拦. 跟 v0.5.5 python -c 同根因 — 字面是描述
+    性测试代码不是真执行.
+    """
+    fn = REGISTRY["no_testset_no_future_leakage"]
+    cmd = (
+        "cat >> /Users/x/proj/tests/test_checks.py <<'PY'\n"
+        "def test_x():\n"
+        "    " + "case" + "_id = \"a1b2c3d4e5f6a7b8\"\n"
+        "PY"
+    )
+    hit = fn(tool_name="Bash", tool_input={"command": cmd})
+    assert hit is None, f"heredoc 写 tests/ 应豁免, 实际拦: {hit}"
+
+
+def test_testset_v058_heredoc_to_md_doc_exempted():
+    """v0.5.8: heredoc 写到 .md 文档路径豁免."""
+    fn = REGISTRY["no_testset_no_future_leakage"]
+    cmd = (
+        "cat >> docs/CHANGELOG.md <<'MD'\n"
+        "示例 case " + "_id 写法: " + "case_id = \"a1b2c3d4e5f6a7b8\"\n"
+        "MD"
+    )
+    hit = fn(tool_name="Bash", tool_input={"command": cmd})
+    assert hit is None
+
+
+def test_testset_v058_heredoc_to_src_still_blocked():
+    """v0.5.8 对偶: heredoc 写到非 description context 路径 (src/ 类) 仍拦."""
+    fn = REGISTRY["no_testset_no_future_leakage"]
+    cmd = (
+        "cat >> src/runner.py <<'PY'\n"
+        "" + "case_id = \"a1b2c3d4e5f6a7b8\"\n"
+        "PY"
+    )
+    hit = fn(tool_name="Bash", tool_input={"command": cmd})
+    assert hit is not None, "src/ 路径不该被豁免"
+
+
 # -------- #8 read-before-write --------
 
 def test_read_first_denies_unread_edit():

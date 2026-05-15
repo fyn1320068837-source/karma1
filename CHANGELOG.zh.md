@@ -6,6 +6,30 @@
 
 ## [Unreleased]
 
+## [0.5.8] — 2026-05-15（fix — testset check 豁免 Bash heredoc 写到描述上下文路径）
+
+### fix — `cat >> tests/test_x.py <<EOF ... case_id="..." ... EOF` false-positive
+
+v0.5.7 dogfooding session 真触发：往 `tests/test_checks.py` append v0.5.7 回归测试时，heredoc body 内含 `case_id = "a1b2c3d4..."`（测试 fixture 字面），被错算「测试集 case ID 写死」拦截。根因：v0.5.5 只加了 `python -c` 豁免；姊妹场景 Bash redirect/heredoc 写到 description-context 路径 (tests/ / .md / .yaml) 漏覆盖。
+
+跟 v0.5.5 同根因家族：当**写目标**是描述上下文路径，**写内容**是描述性的不是可执行的。今日豁免对等覆盖：
+
+- `python -c "..."` 内容（v0.5.5）
+- Bash heredoc / redirect `>` `>>` 目标路径匹配 tests/test/__tests__/spec 目录段，或 `.md/.rst/.txt/.yaml/.yml/.json/.toml/.ini/.csv/.tsv` 后缀，或 `test_*.py` / `*_test.py` 文件名（v0.5.8）
+
+`src/runner.py` 等生产代码路径即使通过 heredoc 写仍被拦。
+
+后续 refactor（预计 v0.5.9）会把这逻辑提到 `description_context.py`，让所有 Bash-aware check 共享豁免界面。v0.5.8 helper 暂只在 `testset.py`。
+
+### 验证
+
+- `tests/test_checks.py` 加 3 个回归测试：
+  - `test_testset_v058_heredoc_to_tests_path_exempted` — heredoc 写 `tests/` 豁免
+  - `test_testset_v058_heredoc_to_md_doc_exempted` — heredoc 写 `.md` 豁免
+  - `test_testset_v058_heredoc_to_src_still_blocked` — heredoc 写 `src/` 仍拦
+- `pytest`：404/404 通过（之前 401 + 新 3）
+- `ruff`：0 issues
+
 ## [0.5.7] — 2026-05-15（feat — `CheckHit` + `Violation` 加 locale-agnostic `trigger_key` 字段，audit 跨 locale 分组合并）
 
 ### feat — audit 按 `trigger_key` 而非 `trigger` 字面分组

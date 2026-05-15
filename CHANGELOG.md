@@ -10,6 +10,30 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.5.8] — 2026-05-15 (fix — testset check exempts Bash heredoc writes targeting description-context paths)
+
+### fix — `cat >> tests/test_x.py <<EOF ... case_id="..." ... EOF` false-positive
+
+A v0.5.7 dogfooding session hit it: when appending the new v0.5.7 regression tests via `cat >> tests/test_checks.py <<'PY'`, the heredoc body contained `case_id = "a1b2c3d4..."` — meant as a test fixture literal — and got blocked as "test-set case ID hard-coded." Root cause: v0.5.5 only added the `python -c` exemption; the parallel case of Bash redirect/heredoc writing to a description-context path (tests/ / .md / .yaml) was still missing.
+
+This is the same root-cause family as v0.5.5: when the *target* of a write is a description-context path, the *content* of the write is descriptive, not executable. Today the parity check covers:
+
+- `python -c "..."` content (v0.5.5)
+- Bash heredoc / redirect `>` `>>` to a path matching tests/test/__tests__/spec dirs, or `.md/.rst/.txt/.yaml/.yml/.json/.toml/.ini/.csv/.tsv` suffix, or `test_*.py` / `*_test.py` filename pattern (v0.5.8)
+
+`src/runner.py` / production-code paths are still blocked even when written via heredoc.
+
+A future refactor (likely v0.5.9) will lift this into `description_context.py` so all Bash-aware checks share the same exemption surface. For v0.5.8 the helper lives in `testset.py` only.
+
+### Verification
+
+- 3 new regression tests in `tests/test_checks.py`:
+  - `test_testset_v058_heredoc_to_tests_path_exempted` — heredoc to `tests/` exempted
+  - `test_testset_v058_heredoc_to_md_doc_exempted` — heredoc to `.md` exempted
+  - `test_testset_v058_heredoc_to_src_still_blocked` — heredoc to `src/` still blocked
+- `pytest`: 404/404 passing (401 prior + 3 new)
+- `ruff`: 0 issues
+
 ## [0.5.7] — 2026-05-15 (feat — locale-agnostic `trigger_key` field on `CheckHit` + `Violation` for cross-locale audit grouping)
 
 ### feat — audit groups by `trigger_key` instead of `trigger` literal
