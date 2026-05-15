@@ -1,122 +1,124 @@
-# karma v2 — 项目协作宪章
+# karma v2 — Project collaboration charter
 
-## 一句话定位
+**[🇬🇧 English (current)](./CLAUDE.md) · [🇨🇳 中文](./CLAUDE.zh.md)**
 
-karma = 让 Agent 不在长任务中遗忘用户最重视的几条核心方向。
+## One-line positioning
 
-## 严格边界（不可破）
+karma = Keep Agents from forgetting the user's most-valued core directions in long tasks.
 
-karma v2 从 v1 失败中学到的明确边界（详 [karma-v1/ARCHIVE.md](https://github.com/jhaizhou-ops/karma-v1/blob/main/ARCHIVE.md)）：
+## Strict boundaries (non-negotiable)
 
-### 不做的事
+karma v2 clear boundaries learned from v1's failure (see [karma-v1/ARCHIVE.md](https://github.com/jhaizhou-ops/karma-v1/blob/main/ARCHIVE.md)):
 
-- ❌ **不自动蒸馏新规则** — 用户手工维护核心方向，避免 LLM 蒸馏噪声 / 错位
-- ❌ **不做 retrieval / cosine / scene** — 5-10 条全 always-on，不需要选
-- ❌ **不抢记忆系统赛道** — 「关于用户的事实」交给 Claude Code auto-memory
-- ❌ **v0 不用 LLM** — 全工程化（关键词 / 正则 / 计数）
-- ❌ **不做奖惩 / RL / 评分** — 行为提示不是 reward function
+### Things we don't do
 
-### 严格 LLM 授权（如果 v1+ 用 LLM）
+- ❌ **No auto-distilling new rules** — User manually maintains core directions, avoiding LLM distillation noise / misalignment
+- ❌ **No retrieval / cosine / scene routing** — 5-10 rules all always-on, no selection needed
+- ❌ **Don't compete with memory systems** — "Facts about the user" go to Claude Code auto-memory
+- ❌ **v0 no LLM** — All engineering (keywords / regex / counting)
+- ❌ **No reward / RL / scoring** — Behavioral reminders aren't reward functions
 
-继承 v1 教训：
+### Strict LLM authorization (if v1+ uses LLM)
 
-- ✅ 本机 mlx Qwen3.6 — 小型任务 + ≤4 并发
-- ✅ OpenRouter qwen3.5-flash-02-23 nothinking — 唯一允许远程
-- ❌ sonnet / claude API — 禁用
+Inherits v1 lessons:
 
-## 工作原则
+- ✅ Local mlx Qwen3.6 — small tasks + ≤4 concurrent
+- ✅ OpenRouter qwen3.5-flash-02-23 nothinking — only allowed remote
+- ❌ sonnet / claude API — forbidden
 
-### 1. 不针对当前用户作弊
+## Working principles
 
-karma v2 验证方法是作者自用。**绝不**为了让自己用得舒服而：
-- 把作者特定的 sticky 规则写进默认模板
-- 把作者实测的违反词列表硬编码进 hook
-- 用作者的 session 数据训练任何东西
+### 1. No cheating against current user
 
-karma 的所有「默认」必须**跨用户合理**（CLAUDE.md / Anthropic best practice 级别的通用）。
+karma v2's validation method is author self-use. **Never**, for self-comfort:
+- Hardcode author-specific rules into default templates
+- Hardcode author's empirically-found violation words into hooks
+- Train anything on author's session data
 
-### 2. 永远从「我作为用户」视角设计
+karma's "defaults" must be **cross-user reasonable** (CLAUDE.md / Anthropic best practice level universal).
 
-每个改动问自己：
-- 一个第一次装 karma 的用户能 5 分钟上手吗？
-- yaml 配置直白吗？需要看 docs 才懂吗？
-- hook 装上后第一次违反检测能让用户「啊原来如此」吗？
+### 2. Always design from "I am the user" perspective
 
-如果某功能只能作者用 → 砍掉。
+For every change, ask yourself:
+- Can a first-time karma user get started in 5 minutes?
+- Is the yaml config straightforward? Do they need docs to understand?
+- After hook install, does the first violation detection make the user say "ah, I see"?
 
-### 3. 验证 > 精度数字
+If a feature only works for the author → cut it.
 
-karma v1 沉迷追精度数字（67% inj 精度等），导致优化方向跑偏。
+### 3. Validation > accuracy numbers
 
-karma v2 的验证标准是**作者自用一周后能不能讲出 3 个具体案例**：
-- 「某次长任务中我没说话 Agent 自己提醒了 X」
-- 「某次 compact 后 Agent 还记得 Y」
-- 「某次 Agent 想 Z 我看到 ⚠️ 提示就纠正了」
+karma v1 obsessed over accuracy numbers (67% inj precision etc.), causing optimization direction drift.
 
-如果一周后讲不出这种案例 → karma 假设错，重新设计。
+karma v2's validation criterion is **whether the author can describe 3 concrete cases after a week of self-use**:
+- "During some long task, I didn't speak up and the Agent reminded me of X by itself"
+- "After some compact, the Agent still remembered Y"
+- "Once when the Agent wanted to do Z, I saw the ⚠ prompt and corrected"
 
-## 任务管理
+If after a week, can't describe such cases → karma's hypothesis is wrong, redesign.
 
-karma v2 不维护复杂 task list。一次 milestone 一个 PR 思维。
+## Task management
 
-### 当前 milestone: M0 骨架
+karma v2 doesn't maintain complex task lists. "One milestone, one PR" thinking.
 
-- 项目初始化 ✓
-- sticky.yaml schema
-- 2 个 hook 原型
-- karma CLI 骨架
-- 5-10 条种子 sticky
+### Current milestone: M0 skeleton
 
-## 提交规范
+- Project initialization ✓
+- rules.yaml schema
+- 2 hook prototypes
+- karma CLI skeleton
+- 5-10 seed rules
 
-提交消息说明做了什么 + 为什么。简短直接：
+## Commit conventions
+
+Commit messages explain what was done + why. Brief and direct:
 
 ```
-feat: sticky.yaml 解析器 + schema 验证
+feat: rules.yaml parser + schema validation
 
-支持单行 / 多行 preference，violation_keywords 数组
-schema 校验 5-10 条上限 + id 唯一性
+Supports single-line / multi-line preference, violation_keywords array
+Schema validates 5-10 rule cap + id uniqueness
 ```
 
-不需要复杂模板。但每个提交必须：
-- 通过 lint
-- 不引入新的 LLM 依赖（v0 阶段）
-- 不超过 ~200 行（保持改动小可 review）
+No complex templates needed. But every commit must:
+- Pass lint
+- Not introduce new LLM dependencies (v0 stage)
+- Stay under ~200 lines (keep changes small and reviewable)
 
-## 汇报风格
+## Reporting style
 
-完成任务 1-3 句话汇报：**做了什么 + 测试结果 + push 状态**。
-不要：
-- 列长 todo
-- 展开 diff
-- 解释工具机制
-- 写「接下来可能做的事」超 3 行
+Completion reports in 1-3 sentences: **what was done + test results + push status**.
+Don't:
+- List long todos
+- Expand diff
+- Explain tool mechanics
+- Write "next possible things" over 3 lines
 
-## 自主执行授权
+## Autonomous execution authorization
 
-继承 v1 授权：
-- ✅ 完成任务直接 git add + commit + push
-- ✅ 跑测试 / install 依赖 / 修 lint
-- ✅ 创建评论 issue / PR
-- ✅ 删除已合并的临时分支
+Inherits v1 authorization:
+- ✅ After completing tasks, directly git add + commit + push
+- ✅ Run tests / install dependencies / fix lint
+- ✅ Create comments / issues / PRs
+- ✅ Delete merged temporary branches
 
-仍需事前确认：
-- `git push --force` / `git reset --hard` 已发布提交
-- gh repo archive / settings 修改
-- 数据销毁 (~/.claude/karma/ 清空)
-- 跨仓库改动
+Still need pre-approval:
+- `git push --force` / `git reset --hard` of published commits
+- gh repo archive / settings modifications
+- Data destruction (~/.claude/karma/ clearing)
+- Cross-repo changes
 
-## 失败处理
+## Failure handling
 
-karma v2 第一原则是**诚实** — 跟 v1 一样：
+karma v2's first principle is **honesty** — same as v1:
 
-- 如果 hook 没生效，明说，不伪装
-- 如果违反检测漏了真违反，记下来，不掩盖
-- 如果作者自用一周后没感觉到价值，明说重新设计，不为了维护 sunk cost 强行调
+- If hook doesn't take effect, say so plainly, don't fake it
+- If violation detection missed a real violation, record it, don't cover up
+- If author self-uses for a week with no felt value, plainly say redesign — don't strongarm to maintain sunk cost
 
-## 跟 v1 的关系
+## Relationship with v1
 
-v1 在 [jhaizhou-ops/karma-v1](https://github.com/jhaizhou-ops/karma-v1) 归档保留。
-任何 v1 的可复用资产（SEED 20 条 / qwen3.5 helper / 等）可以 reference，但**不强求复用**。
+v1 archived in [jhaizhou-ops/karma-v1](https://github.com/jhaizhou-ops/karma-v1).
+Any reusable v1 assets (SEED 20 rules / qwen3.5 helper / etc.) can be referenced, but **not required** to reuse.
 
-v2 是认知重启，不是 v1 重构。如果某些组件设计变了，砍掉 v1 的方案没关系。
+v2 is a cognitive reboot, not a v1 refactor. If some component designs changed, dropping v1's solution is fine.
