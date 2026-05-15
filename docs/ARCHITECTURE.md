@@ -352,6 +352,8 @@ Performance hasn't been a bottleneck — measured far below budget.
 | v0.5.17 README narrative rewrite — `/karma <NL>` skill promoted to top-level section instead of patch-style mention; PRD F5 rewritten; ARCHITECTURE + HANDOFF synced to v0.5.16 reality | ✅ |
 | v0.5.18 `bypass_karma` false-positive fix (dogfood-found) — redirect target must actually be a karma path to count as bypass, not just "command mentions karma path + any write op"; symmetric tightening for `has_internal` field-name dimension | ✅ |
 | v0.5.19 `keep_pushing` Agent saturation exemption (dogfood-found) — strong "saturation declaration" phrases (`真饱和` / `卡在 X` / `明天接力` etc.) exempt from the reflection nudge, paired with v0.4.41 user-stop exemption; soft stop phrases (`今天到此为止` / `就这样吧`) without saturation signal still blocked per v0.4.22 design | ✅ |
+| v0.5.20 rule-10 self-audit follow-up — sync ARCHITECTURE + HANDOFF for v0.5.19 (caught by user-prompted self-audit; CHANGELOG had it but technical-archive docs lagged) | ✅ |
+| **v0.6.0** ⚠️ BREAKING — Remove `karma.sticky` module, `.sticky_id` @property on `CheckHit`+`Violation`, `karma sticky` CLI subcommand, and `karma.rule`/`karma.cli` internal aliases (`Sticky` / `MAX_STICKY` / `StickyConfigError` / `EXAMPLE_STICKY*`). Data-compat shims (`sticky.yaml`→`rules.yaml` auto-migration, `violations.jsonl` `sticky_id` field fallback) stay permanently. Deprecation cycle: 18 v0.5.x releases. Pure-deletion commit — no logic refactor needed thanks to v0.5.13/15 internal cleanup. 5 deletion-lock tests added. | ✅ |
 
 Details in [CHANGELOG.md](../CHANGELOG.md) for per-release rationale; [HANDOFF.md](./HANDOFF.md) for internal context.
 

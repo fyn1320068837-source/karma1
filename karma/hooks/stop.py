@@ -21,7 +21,7 @@ from pathlib import Path
 from karma import session_state
 from karma.checks import run_checks
 from karma.notify import notify
-from karma.rule import StickyConfigError, load
+from karma.rule import RuleConfigError, load
 from karma.violations import Violation, append, count_recent, count_recent_turns, detect
 
 # 累积告警 default 阈值（fallback，实际从 karma.config 读）
@@ -120,7 +120,7 @@ def main() -> int:
 
     try:
         sticky_list = load()
-    except StickyConfigError as e:
+    except RuleConfigError as e:
         print(f"karma: {e}", file=sys.stderr)
         print(json.dumps({}))
         return 0

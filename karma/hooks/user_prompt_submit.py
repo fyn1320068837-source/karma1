@@ -15,7 +15,7 @@ import sys
 
 from karma import session_state
 from karma.session_state import purge_old_states
-from karma.rule import StickyConfigError, format_for_injection, load
+from karma.rule import RuleConfigError, format_for_injection, load
 from karma.violations import recent, recent_turns
 
 
@@ -49,7 +49,7 @@ def main() -> int:
 
     try:
         sticky_list = load()
-    except StickyConfigError as e:
+    except RuleConfigError as e:
         print(f"karma: {e}", file=sys.stderr)
         _output_passthrough()
         return 0

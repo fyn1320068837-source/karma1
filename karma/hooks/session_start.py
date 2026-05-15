@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import sys
 
-from karma.rule import StickyConfigError, load as load_sticky
+from karma.rule import RuleConfigError, load as load_sticky
 
 
 def _passthrough() -> None:
@@ -64,7 +64,7 @@ def main() -> int:
 
     try:
         sticky_list = load_sticky()
-    except StickyConfigError as e:
+    except RuleConfigError as e:
         print(f"karma SessionStart: {e}", file=sys.stderr)
         _emit(f"❌ sticky 配置错误：{e}")
         return 0

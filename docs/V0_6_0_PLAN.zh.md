@@ -4,7 +4,7 @@
 
 **起草日期**：2026-05-15
 **起草人**：Claude Opus 4.7（audit 驱动）
-**状态**：📝 **草稿 — 未实施**。这里列出来是为了把废弃契约说在前面，让用户在任何破坏性改动之前有一整个 release 周期的预警。
+**状态**：✅ **v0.6.0 已实施（2026-05-15）** — Group A + Group B 全部删除完成，Group C（盘上数据兼容）按计划保留。加了 5 个 deletion-lock 回归测试。迁移 cookbook 见 [CHANGELOG.md v0.6.0](../CHANGELOG.md)。
 
 ---
 

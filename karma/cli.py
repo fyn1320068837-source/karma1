@@ -51,7 +51,7 @@ from pathlib import Path
 
 from karma import __version__
 from karma.rule import DEFAULT_PATH as STICKY_PATH
-from karma.rule import HARD_MAX, MAX_STICKY, StickyConfigError, load
+from karma.rule import HARD_MAX, MAX_RULES, RuleConfigError, load
 from karma.violations import DEFAULT_PATH as VIOLATIONS_PATH
 from karma.violations import load_all
 
@@ -63,11 +63,9 @@ EXAMPLE_RULES_EN = _DATA_DIR / "rules.dev.example.yaml"        # English default
 EXAMPLE_RULES_ZH = _DATA_DIR / "rules.dev.example.zh.yaml"     # 中文
 EXAMPLE_RULES_MINIMAL_EN = _DATA_DIR / "rules.dev.minimal.example.yaml"
 EXAMPLE_RULES_MINIMAL_ZH = _DATA_DIR / "rules.dev.minimal.example.zh.yaml"
-# v0.5.x deprecated alias (v0.6.0 移除) — default to English templates
+# Default English templates (selected per-locale in _select_rule_template).
 EXAMPLE_RULES = EXAMPLE_RULES_EN
 EXAMPLE_RULES_MINIMAL = EXAMPLE_RULES_MINIMAL_EN
-EXAMPLE_STICKY = EXAMPLE_RULES
-EXAMPLE_STICKY_MINIMAL = EXAMPLE_RULES_MINIMAL
 EXAMPLE_CONFIG = _DATA_DIR / "config.example.yaml"
 # v0.5.16: karma skill source — Markdown source of truth; auto-installed to
 # all detected backends with format conversion (Markdown → TOML for Gemini commands path).
@@ -306,13 +304,13 @@ def cmd_init(minimal: bool | None = None) -> int:
 def cmd_sticky_list() -> int:
     try:
         sticky = load()
-    except StickyConfigError as e:
+    except RuleConfigError as e:
         print(f"配置错误: {e}", file=sys.stderr)
         return 1
     if not sticky:
         print("没配置 sticky。运行 'karma init' 复制模板。")
         return 0
-    print(f"karma sticky ({len(sticky)}/{MAX_STICKY} 软上限, {HARD_MAX} 硬上限):\n")
+    print(f"karma sticky ({len(sticky)}/{MAX_RULES} 软上限, {HARD_MAX} 硬上限):\n")
     for i, s in enumerate(sticky, 1):
         print(f"{i}. [{s.id}]")
         for line in s.preference.split("\n"):
@@ -332,7 +330,7 @@ def cmd_sticky_edit() -> int:
     try:
         sticky = load()
         print(f"编辑成功，当前 {len(sticky)} 条 sticky。")
-    except StickyConfigError as e:
+    except RuleConfigError as e:
         print(f"⚠️ 编辑后配置错误: {e}", file=sys.stderr)
         return 1
     return 0
@@ -944,13 +942,13 @@ def cmd_doctor() -> int:
     try:
         sticky = load()
         print(f"  sticky 加载: ✓ {len(sticky)} 条")
-        if len(sticky) > MAX_STICKY:
-            print(f"    ⚠️ 超过软上限 {MAX_STICKY} (但未达硬上限 {HARD_MAX})")
+        if len(sticky) > MAX_RULES:
+            print(f"    ⚠️ 超过软上限 {MAX_RULES} (但未达硬上限 {HARD_MAX})")
         exempt_ids = [s.id for s in sticky if s.force_block_exempt]
         if exempt_ids:
             print(f"    force_block 豁免: {', '.join(exempt_ids)} "
                   "（累积违反不触发 Stop 强制 block）")
-    except StickyConfigError as e:
+    except RuleConfigError as e:
         print(f"  sticky 加载: ✗ {e}")
         return 1
 
@@ -1259,15 +1257,16 @@ def main(argv: list[str] | None = None) -> int:
         # `karma uninstall` 一键卸所有 backend 的 alias — 陌生用户不用记
         # `uninstall-hooks --backend all` 长串
         return cmd_uninstall_hooks(backend_name="all")
-    if cmd in ("rule", "sticky"):
-        # v0.5.0 起 `karma sticky` → `karma rule`；sticky 作为 deprecated alias
-        # 保留到 v0.6.0 移除（用户原话「将 sticky 字样改成 rule」）
-        if cmd == "sticky":
-            print(
-                "karma DeprecationWarning: `karma sticky` 已改名 `karma rule`，"
-                "v0.6.0 移除 sticky alias。",
-                file=sys.stderr,
-            )
+    if cmd == "sticky":
+        # v0.6.0 起删除 `karma sticky` alias — v0.5.0 起一直在打 DeprecationWarning,
+        # 兑现废弃契约. 给一行「你是不是想用 karma rule」hint 救肌肉记忆.
+        print(
+            "❌ unknown command: 'sticky' (removed in v0.6.0).\n"
+            "💡 你是不是想用 `karma rule`？ (sticky → rule 改名见 v0.5.0 CHANGELOG)",
+            file=sys.stderr,
+        )
+        return 1
+    if cmd == "rule":
         if not args:
             print(f"Usage: karma {cmd} <list|edit|remove|add|preview>", file=sys.stderr)
             return 1

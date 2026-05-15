@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 from karma.hooks.post_tool_use import _estimate_tokens, _build_smart_reinject
 from karma.session_state import SessionState
-from karma.rule import Sticky
+from karma.rule import Rule as Sticky
 
 
 def _make_sticky(sid: str) -> Sticky:

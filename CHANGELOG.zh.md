@@ -6,6 +6,65 @@
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-05-15 ⚠️ BREAKING — 删 `sticky` → `rule` 改名留的 backward-compat 脚手架
+
+### 删了啥（破坏性）
+
+- **`karma.sticky` 模块** — `from karma.sticky import ...` 现在抛 `ModuleNotFoundError`。迁移：`from karma.rule import ...`（exports 完全一致）。
+- **`Violation.sticky_id` @property** — `violation.sticky_id` 抛 `AttributeError`。迁移：用 `.rule_id`。
+- **`CheckHit.sticky_id` @property** — `hit.sticky_id` 抛 `AttributeError`。迁移：用 `.rule_id`。
+- **`karma sticky <subcommand>` CLI** — 退 1 带提示 `💡 你是不是想用 karma rule？`。迁移：用 `karma rule list / edit / remove / add / preview`。
+- **`karma.rule` aliases** — `Sticky` / `MAX_STICKY` / `StickyConfigError` 删了。迁移：`Rule` / `MAX_RULES` / `RuleConfigError`。
+- **`karma.cli` aliases** — `EXAMPLE_STICKY` / `EXAMPLE_STICKY_MINIMAL` 删了（内部符号，对用户基本无影响）。
+
+### 保留（盘上数据兼容永久保留）
+
+这些不是废弃 alias，是处理真实用户盘上数据的兼容补丁，karma 永远保留：
+
+- **`sticky.yaml` → `rules.yaml` 自动迁移** 在 `karma init` — 从 v0.4.x 升级的用户盘上仍有 `sticky.yaml`；karma 静默移到 `rules.yaml` 并备份 `.bak`
+- **`violations.jsonl` `sticky_id` 字段兜底** — v0.4.x 历史 jsonl 行用 `sticky_id` 不是 `rule_id`；`karma audit` / `stats` 通过 `_extract_rule_id` 仍能正确读
+- **`STICKY_PATH` 内部常量** in `karma.cli` — 向后兼容路径 alias 指向 `rule.DEFAULT_PATH`。测试在用；无需迁移
+
+### 这版动机
+
+v0.5.0（今天稍早）改 `sticky` → `rule` 全代码库 + ship backward-compat alias 让用户脚本不立即破。废弃 warning 跑了一个完整 release 周期（v0.5.x 共 18 个 release）。v0.6.0 悬崖按 [`docs/V0_6_0_PLAN.md`](./docs/V0_6_0_PLAN.md) 计划兑现。
+
+karma 自己代码 v0.5.13 起停用 `.sticky_id` 属性访问，v0.5.15 起停用 `from karma.sticky` import。v0.6.0 是**纯删除 commit** — 无 refactor 逻辑，只是删除。
+
+### 用户脚本迁移指南
+
+绝大部分用 karma 的用户脚本是 1 行机械替换：
+
+```python
+# 之前 (任何 v0.5.x — 带 warning)
+from karma.sticky import Sticky, MAX_STICKY, StickyConfigError
+violation.sticky_id  # 工作但 warning
+
+# v0.6.0 之后
+from karma.rule import Rule, MAX_RULES, RuleConfigError
+violation.rule_id  # 必须改
+```
+
+```bash
+# 之前
+karma sticky list
+
+# 现在
+karma rule list
+```
+
+### 验证
+
+- `tests/test_sticky.py` 新增 5 个 deletion-lock 测试（`test_v0600_*`）：
+  - `import karma.sticky` 抛 `ModuleNotFoundError` ✓
+  - `Violation.sticky_id` 抛 `AttributeError` ✓
+  - `CheckHit.sticky_id` 抛 `AttributeError` ✓
+  - `karma.rule.Sticky` / `MAX_STICKY` / `StickyConfigError` `hasattr() == False` ✓
+  - `karma sticky list` subprocess 退 1 + stderr 含 `"karma rule"` ✓
+- `pytest`：423/423 通过（之前 418 + 新 5）
+- `ruff`：0 issues
+- 累积：今早 v0.5.0 改名到今晚 v0.6.0 悬崖，**一天 ship 20 个 release** — 完整 sticky → rule 改名 + 1 周期废弃 + 悬崖弧线在 `git log v0.5.0..v0.6.0` 里
+
 ## [0.5.20] — 2026-05-15（docs — rule 10 自审 follow-up: 补 v0.5.19 漏的 ARCHITECTURE + HANDOFF 同步）
 
 ### 这版动机

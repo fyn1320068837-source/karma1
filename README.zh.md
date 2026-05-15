@@ -9,6 +9,8 @@
 [![Latest Release](https://img.shields.io/github/v/release/jhaizhou-ops/karma?label=release)](https://github.com/jhaizhou-ops/karma/releases)
 [![Last Commit](https://img.shields.io/github/last-commit/jhaizhou-ops/karma)](https://github.com/jhaizhou-ops/karma/commits/main)
 
+> ⚠️ **v0.6.0 破坏性变更 (2026-05-15)**：`karma.sticky` 模块、`.sticky_id` 属性、`karma sticky` CLI 子命令删除（废弃周期完成）。迁移机械化 — 符号 `s/sticky/rule/`，CLI 换 `karma rule`。详细 cookbook 见 [CHANGELOG v0.6.0](./CHANGELOG.zh.md)。用户内部数据（`sticky.yaml` / 历史 `violations.jsonl`）仍自动迁移、保持可读。
+>
 > **Andrej Karpathy 60k stars 的 [CLAUDE.md](https://github.com/forrestchang/andrej-karpathy-skills) 告诉 AI 怎么写好代码。karma 解决另一半 — 怎么让 AI 在长任务中绝不违反你的规则，并且最重要的是如果发生了违反如何在你恼火前已经自行修正。**
 >
 > **同一闭环的两面**：

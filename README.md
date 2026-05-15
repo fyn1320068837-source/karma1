@@ -9,6 +9,8 @@
 [![Latest Release](https://img.shields.io/github/v/release/jhaizhou-ops/karma?label=release)](https://github.com/jhaizhou-ops/karma/releases)
 [![Last Commit](https://img.shields.io/github/last-commit/jhaizhou-ops/karma)](https://github.com/jhaizhou-ops/karma/commits/main)
 
+> ⚠️ **v0.6.0 breaking change (2026-05-15)**: `karma.sticky` module, `.sticky_id` attribute, and `karma sticky` CLI subcommand are removed (deprecation cycle complete). Migration is mechanical — `s/sticky/rule/` for symbols, `karma rule` for CLI. See [CHANGELOG v0.6.0](./CHANGELOG.md) for the cookbook. Internal user data (`sticky.yaml` / historical `violations.jsonl`) still auto-migrates and stays readable.
+>
 > **Andrej Karpathy's 60k-stars [CLAUDE.md](https://github.com/forrestchang/andrej-karpathy-skills) teaches AI how to write good code. karma solves the other half — how to make AI never violate your rules in long tasks, and most importantly, how to auto-correct violations before they frustrate you.**
 >
 > **Two sides of the same loop**:

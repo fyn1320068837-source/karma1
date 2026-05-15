@@ -370,6 +370,8 @@ violations / session_state / config / cli）都用它读 env。
 | v0.5.17 README narrative 重写 — `/karma <NL>` skill 提升为顶级 section 而不是 patch 式提及；PRD F5 重写；ARCHITECTURE + HANDOFF 同步到 v0.5.16 现实 | ✅ |
 | v0.5.18 `bypass_karma` false positive fix（dogfood 真触发驱动）— redirect target 必须真是 karma 路径才算绕过，不是「命令含 karma 路径 + 任何 write op」一刀切；`has_internal` field-name 维度对称收紧 | ✅ |
 | v0.5.19 `keep_pushing` Agent 饱和声明豁免（dogfood 真触发驱动）— 强饱和信号字眼 (`真饱和` / `卡在 X` / `明天接力` 等) 豁免反思 hook，跟 v0.4.41 用户叫停豁免对偶；无强饱和信号的柔性停顿 (`今天到此为止` / `就这样吧`) 仍按 v0.4.22 拦 | ✅ |
+| v0.5.20 rule 10 自审 follow-up — 同步 v0.5.19 漏的 ARCHITECTURE + HANDOFF（用户授权自审 catch，CHANGELOG 有条目但技术档案 doc 落后） | ✅ |
+| **v0.6.0** ⚠️ BREAKING — 删除 `karma.sticky` 模块、`CheckHit`+`Violation` 的 `.sticky_id` @property、`karma sticky` CLI 子命令、`karma.rule`/`karma.cli` 内部 aliases（`Sticky` / `MAX_STICKY` / `StickyConfigError` / `EXAMPLE_STICKY*`）。数据兼容 shim（`sticky.yaml`→`rules.yaml` 自动迁移、`violations.jsonl` `sticky_id` 字段兜底）永久保留。废弃周期：18 个 v0.5.x release。纯删除 commit — 得益于 v0.5.13/15 内部清理无需 refactor 逻辑。加 5 个 deletion-lock 测试。 | ✅ |
 
 详见 [CHANGELOG.md](../CHANGELOG.md) 每版本的设计动机；[HANDOFF.md](./HANDOFF.md) 内部接力 context。
 

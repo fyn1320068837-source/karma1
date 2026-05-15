@@ -46,11 +46,6 @@ class Violation:
     # audit 在缺 key 时 fallback 按 trigger 字面分组保证兼容.
     trigger_key: str = ""
 
-    # 向后兼容 alias — 旧代码用 v.sticky_id 仍可读 (v0.6.0 移除)
-    @property
-    def sticky_id(self) -> str:
-        return self.rule_id
-
     def to_json(self) -> str:
         d: dict[str, object] = {
             "ts": self.ts,

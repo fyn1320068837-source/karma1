@@ -39,9 +39,6 @@ DEFAULT_PATH = _resolve_default_path()
 MAX_RULES = 10  # 软上限，超过 12 抛错
 HARD_MAX = 12  # 注意力拐点，硬上限
 
-# 向后兼容 alias（v0.5.x 保留，v0.6.0 移除）
-MAX_STICKY = MAX_RULES
-
 _SLUG_RE = re.compile(r"^[a-z][a-z0-9-]*[a-z0-9]$")
 
 
@@ -58,10 +55,6 @@ class Rule:
     force_block_exempt: bool = False
 
 
-# 向后兼容 alias（v0.5.x 保留，v0.6.0 移除）
-Sticky = Rule
-
-
 @dataclass(slots=True)
 class RuleConfigError(Exception):
     """rule.yaml 配置错误，hook 拒绝加载（fail loud）。"""
@@ -70,10 +63,6 @@ class RuleConfigError(Exception):
 
     def __str__(self) -> str:
         return f"rule config error: {self.msg}"
-
-
-# 向后兼容 alias（v0.5.x 保留，v0.6.0 移除）
-StickyConfigError = RuleConfigError
 
 
 def load(path: Path | None = None) -> list[Rule]:

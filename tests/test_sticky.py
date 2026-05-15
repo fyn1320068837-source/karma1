@@ -9,8 +9,8 @@ import yaml
 
 from karma.rule import (
     HARD_MAX,
-    Sticky,
-    StickyConfigError,
+    Rule,
+    RuleConfigError,
     format_for_injection,
     load,
 )
@@ -55,7 +55,7 @@ def test_load_rejects_invalid_id(tmp_path: Path) -> None:
     p = _write_yaml(tmp_path, [
         {"id": "Bad_ID", "preference": "x"},
     ])
-    with pytest.raises(StickyConfigError, match="id="):
+    with pytest.raises(RuleConfigError, match="id="):
         load(p)
 
 
@@ -64,7 +64,7 @@ def test_load_rejects_duplicate_id(tmp_path: Path) -> None:
         {"id": "rule-a", "preference": "x"},
         {"id": "rule-a", "preference": "y"},
     ])
-    with pytest.raises(StickyConfigError, match="重复 id"):
+    with pytest.raises(RuleConfigError, match="重复 id"):
         load(p)
 
 
@@ -72,7 +72,7 @@ def test_load_rejects_missing_preference(tmp_path: Path) -> None:
     p = _write_yaml(tmp_path, [
         {"id": "rule-a"},
     ])
-    with pytest.raises(StickyConfigError, match="缺 preference"):
+    with pytest.raises(RuleConfigError, match="缺 preference"):
         load(p)
 
 
@@ -80,7 +80,7 @@ def test_load_rejects_over_hard_max(tmp_path: Path) -> None:
     """超过 HARD_MAX 拒绝加载（fail loud）。"""
     items = [{"id": f"r-{i}", "preference": f"p{i}"} for i in range(HARD_MAX + 1)]
     p = _write_yaml(tmp_path, items)
-    with pytest.raises(StickyConfigError, match="硬上限"):
+    with pytest.raises(RuleConfigError, match="硬上限"):
         load(p)
 
 
@@ -141,8 +141,8 @@ def test_load_real_minimal_example() -> None:
 
 def test_format_for_injection_basic() -> None:
     sticky = [
-        Sticky(id="r1", preference="方向 1\n  细节"),
-        Sticky(id="r2", preference="方向 2"),
+        Rule(id="r1", preference="方向 1\n  细节"),
+        Rule(id="r2", preference="方向 2"),
     ]
     out = format_for_injection(sticky)
     # 2026-05-15 重写：合作默契语气取代「规则系统」包装
@@ -154,7 +154,7 @@ def test_format_for_injection_basic() -> None:
 
 
 def test_format_for_injection_marks_recent_violation() -> None:
-    sticky = [Sticky(id="r1", preference="方向 1")]
+    sticky = [Rule(id="r1", preference="方向 1")]
     out = format_for_injection(sticky, recent_violations={"r1": 12345})
     # 2026-05-15 重写：合作回顾标记取代红警示词 ⚠️ / 「上次违反」
     assert "偏离" in out
@@ -163,3 +163,52 @@ def test_format_for_injection_marks_recent_violation() -> None:
 
 def test_format_for_injection_empty_list() -> None:
     assert format_for_injection([]) == ""
+
+
+# -------- v0.6.0 deletion-lock tests --------
+
+def test_v0600_karma_sticky_module_removed():
+    """v0.6.0: import karma.sticky 应该抛 ModuleNotFoundError (整个 shim module 删了)."""
+    import pytest
+    with pytest.raises(ModuleNotFoundError):
+        import karma.sticky  # noqa: F401
+
+
+def test_v0600_violation_sticky_id_attribute_removed():
+    """v0.6.0: Violation.sticky_id @property 删了 (用 .rule_id)."""
+    import pytest
+    from karma.violations import Violation
+    v = Violation(ts=1, session_id="s", rule_id="r", trigger="x", snippet=".", turn=1)
+    assert v.rule_id == "r"  # 新属性仍工作
+    with pytest.raises(AttributeError):
+        v.sticky_id  # noqa: B018
+
+
+def test_v0600_check_hit_sticky_id_attribute_removed():
+    """v0.6.0: CheckHit.sticky_id @property 删了 (用 .rule_id)."""
+    import pytest
+    from karma.checks._types import CheckHit
+    h = CheckHit(rule_id="r", trigger="x", snippet=".", suggested_fix="y")
+    assert h.rule_id == "r"
+    with pytest.raises(AttributeError):
+        h.sticky_id  # noqa: B018
+
+
+def test_v0600_rule_module_aliases_removed():
+    """v0.6.0: karma.rule 里 Sticky / MAX_STICKY / StickyConfigError aliases 删了."""
+    import karma.rule as r
+    assert not hasattr(r, "Sticky")
+    assert not hasattr(r, "MAX_STICKY")
+    assert not hasattr(r, "StickyConfigError")
+
+
+def test_v0600_karma_sticky_cli_returns_unknown():
+    """v0.6.0: `karma sticky` CLI 子命令删了, 返 1 带「你是不是想用 karma rule」hint."""
+    import subprocess
+    import sys
+    result = subprocess.run(
+        [sys.executable, "-m", "karma.cli", "sticky", "list"],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 1
+    assert "karma rule" in result.stderr

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from karma.rule import Sticky
+from karma.rule import Rule as Sticky
 from karma.violations import Violation, append, detect, load_all, recent
 
 
@@ -27,7 +27,7 @@ def test_detect_finds_violation() -> None:
     response = "让我先打个补丁快速解决"
     out = detect(response, _make_sticky(), session_id="s1", now=1000)
     assert len(out) == 1
-    assert out[0].sticky_id == "long-term"
+    assert out[0].rule_id == "long-term"
     assert out[0].trigger == "先打个补丁"
     assert "先打个补丁" in out[0].snippet
 
@@ -44,14 +44,14 @@ def test_detect_same_sticky_multiple_keywords_records_first() -> None:
     response = "先打个补丁，再硬编码一个"
     out = detect(response, _make_sticky(), now=1000)
     assert len(out) == 1
-    assert out[0].sticky_id == "long-term"
+    assert out[0].rule_id == "long-term"
 
 
 def test_detect_case_insensitive() -> None:
     response = "用 f1 score"
     out = detect(response, _make_sticky(), now=1000)
     assert len(out) == 1
-    assert out[0].sticky_id == "chinese-only"
+    assert out[0].rule_id == "chinese-only"
 
 
 def test_detect_empty_response() -> None:
@@ -73,7 +73,7 @@ def test_append_and_load_roundtrip(tmp_path: Path) -> None:
     loaded = load_all(p)
     assert len(loaded) == 2
     assert loaded[0].ts == 1000
-    assert loaded[1].sticky_id == "r2"
+    assert loaded[1].rule_id == "r2"
 
 
 def test_recent_filters_old(tmp_path: Path) -> None:

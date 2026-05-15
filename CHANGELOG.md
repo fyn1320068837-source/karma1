@@ -10,6 +10,65 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-05-15 ⚠️ BREAKING — Remove backward-compat scaffolding for `sticky` → `rule` rename
+
+### What's removed (breaking)
+
+- **`karma.sticky` module** — `from karma.sticky import ...` now raises `ModuleNotFoundError`. Migration: `from karma.rule import ...` (identical exports).
+- **`Violation.sticky_id` @property** — `violation.sticky_id` raises `AttributeError`. Migration: use `.rule_id`.
+- **`CheckHit.sticky_id` @property** — `hit.sticky_id` raises `AttributeError`. Migration: use `.rule_id`.
+- **`karma sticky <subcommand>` CLI** — exits 1 with hint: `💡 你是不是想用 karma rule？`. Migration: use `karma rule list / edit / remove / add / preview`.
+- **`karma.rule` aliases** — `Sticky`, `MAX_STICKY`, `StickyConfigError` removed. Migration: `Rule`, `MAX_RULES`, `RuleConfigError`.
+- **`karma.cli` aliases** — `EXAMPLE_STICKY`, `EXAMPLE_STICKY_MINIMAL` removed (internal symbols, unlikely to affect users).
+
+### What stays (data-compat preserved forever)
+
+These are not deprecation aliases — they handle real on-disk user data and stay in karma indefinitely:
+
+- **`sticky.yaml` → `rules.yaml` auto-migration** in `karma init` — users upgrading from v0.4.x still have `sticky.yaml`; karma silently moves it to `rules.yaml` with `.bak` backup.
+- **`violations.jsonl` `sticky_id` field fallback** — historical jsonl rows from v0.4.x have `sticky_id` instead of `rule_id`; `karma audit` / `stats` still read them correctly via `_extract_rule_id`.
+- **`STICKY_PATH` internal constant** in `karma.cli` — backward-compat path alias to `rule.DEFAULT_PATH`. Used by tests; no migration required.
+
+### Why this release
+
+v0.5.0 (2026-05-15 earlier today) renamed `sticky` → `rule` codebase-wide and shipped backward-compat aliases so user scripts wouldn't break immediately. The deprecation warning ran for one full release cycle (v0.5.x: 18 releases). v0.6.0 cliff arrives per the plan in [`docs/V0_6_0_PLAN.md`](./docs/V0_6_0_PLAN.md).
+
+Internal karma code stopped using the aliases entirely in v0.5.13 (`.sticky_id` attribute access) and v0.5.15 (`from karma.sticky` imports). v0.6.0 is a **pure deletion commit** — no refactor logic, just removal.
+
+### Migration cookbook for external users
+
+Most user scripts using karma are 1-line mechanical fixes:
+
+```python
+# Before (any v0.5.x — warned)
+from karma.sticky import Sticky, MAX_STICKY, StickyConfigError
+violation.sticky_id  # works with warning
+
+# After (v0.6.0+)
+from karma.rule import Rule, MAX_RULES, RuleConfigError
+violation.rule_id  # required
+```
+
+```bash
+# Before
+karma sticky list
+
+# After
+karma rule list
+```
+
+### Verification
+
+- 5 new deletion-lock tests in `tests/test_sticky.py` (`test_v0600_*`):
+  - `import karma.sticky` raises `ModuleNotFoundError` ✓
+  - `Violation.sticky_id` raises `AttributeError` ✓
+  - `CheckHit.sticky_id` raises `AttributeError` ✓
+  - `karma.rule.Sticky` / `MAX_STICKY` / `StickyConfigError` are `hasattr() == False` ✓
+  - `karma sticky list` subprocess exits 1 with `"karma rule"` in stderr ✓
+- `pytest`: 423/423 passing (418 prior + 5 new)
+- `ruff`: 0 issues
+- Cumulative: from this morning's v0.5.0 rename to tonight's v0.6.0 cliff, **20 releases shipped in a single day** — the full sticky → rule rename + 1-cycle deprecation + cliff arc lives in `git log v0.5.0..v0.6.0`.
+
 ## [0.5.20] — 2026-05-15 (docs — rule-10 self-audit follow-up: sync ARCHITECTURE + HANDOFF for v0.5.19)
 
 ### Why this micro-release

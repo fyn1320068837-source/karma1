@@ -4,7 +4,7 @@
 
 **Draft date**: 2026-05-15
 **Drafter**: Claude Opus 4.7 (audit-driven)
-**Status**: 📝 **Draft — not implemented**. Listed here as the explicit deprecation contract so users get one release cycle of warning before any breaking change.
+**Status**: ✅ **Implemented in v0.6.0 (2026-05-15)** — all Group A + Group B deletions shipped. Group C (on-disk data shims) preserved as planned. 5 deletion-lock regression tests added. See [CHANGELOG.md v0.6.0](../CHANGELOG.md) for migration cookbook.
 
 ---
 

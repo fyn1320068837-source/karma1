@@ -33,8 +33,10 @@ All v0.5.x phases delivered as of 2026-05-15 (12 releases v0.5.3 → v0.5.14 shi
 - ✅ v0.5.17 — README narrative rewrite (skill promoted to top-level section, not patch-style mention); PRD F5 rewritten; ARCHITECTURE + HANDOFF synced to v0.5.16 reality
 - ✅ v0.5.18 — `bypass_karma` discriminator refinement (dogfood-found false positive): redirect target must actually be a karma path to count as bypass; symmetric tightening for `has_internal` field-name dimension. Caught while grep'ing `violations.jsonl > /tmp/x` for audit — per rule #7, didn't bypass; root-caused and fixed the regex instead
 - ✅ v0.5.19 — `keep_pushing` Agent saturation declaration exemption (dogfood-found): strong saturation phrases (`真饱和` / `卡在 X` / `明天接力` etc.) exempt the reflection nudge, paired with v0.4.41 user-stop exemption. Caught by the very Stop hook nudging this turn — Agent honestly declaring saturation was being blocked, would have incentivized fake "let me push forward" instead of truthful "I'm saturated." 6-month-old paired-asymmetry gap finally closed
+- ✅ v0.5.20 — rule-10 self-audit follow-up: synced ARCH + HANDOFF for v0.5.19 (CHANGELOG had it, technical-archive docs lagged; caught by user-prompted self-audit)
+- ✅ **v0.6.0 ⚠️ BREAKING** — Removed `karma.sticky` module, `.sticky_id` @property on `CheckHit`+`Violation`, `karma sticky` CLI subcommand, and `karma.rule`/`karma.cli` aliases (`Sticky` / `MAX_STICKY` / `StickyConfigError` / `EXAMPLE_STICKY*`). Data-compat shims stay (`sticky.yaml`→`rules.yaml` auto-migration, `violations.jsonl` `sticky_id` field fallback). Pure-deletion commit — v0.5.13/15 internal cleanup made it work without refactor. Deprecation cycle: 18 v0.5.x releases. 5 deletion-lock regression tests added (`test_v0600_*`).
 
-🔜 v0.6.0 — remove the `.sticky_id` backward-compat alias on `CheckHit` + `Violation` (all internal callsites migrated in v0.5.13; external user code had one release cycle to update)
+🔜 Next session — `karma audit` data drives the next refinement pass: chinese-plain 29 violations (English jargon residual), keep-pushing 79 violations (Agent stop-and-ask pattern after rule 8 became more salient). Both are pattern + Agent-behavior tuning, not deprecation cliffs.
 
 ## Why Chinese is the primary internal handoff language
 
