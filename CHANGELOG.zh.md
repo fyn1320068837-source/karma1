@@ -6,6 +6,22 @@
 
 ## [Unreleased]
 
+## [0.5.9] — 2026-05-15（refactor — Bash heredoc 豁免提到 `description_context.py`，所有 Bash-aware check 共享）
+
+### refactor — `is_description_context(tool_name="Bash")` 落地
+
+v0.5.8 承诺的事情，v0.5.9 兑现：testset.py 的 Bash heredoc 目标路径豁免提到 description_context.py，所有调 `is_description_context()` 的 Bash-aware check (`long_term` / `testset` 等) 自动受益。
+
+- `description_context.py` 新加 `_classify_path(file_path) -> (bool, str)` helper（从原 Write/Edit 分支提取）
+- `is_description_context()` 加 `tool_name == "Bash"` 特殊处理 — 扫命令找 `>` / `>>` redirect 目标，每个目标过 `_classify_path`；任一目标是描述上下文 → 整调用豁免
+- `testset.py` v0.5.8 局部 helper 删除，行为由共享逻辑保留
+- `long_term.py` 自动受益 — 例如 `echo "TODO: x" >> docs/CHANGELOG.md` 现在会豁免（之前会被错算 `TODO` marker）
+
+### 验证
+
+- `pytest`：404/404 通过（v0.5.8 测试仍全绿 — 同测试 case，现走共享 helper）
+- `ruff`：0 issues
+
 ## [0.5.8] — 2026-05-15（fix — testset check 豁免 Bash heredoc 写到描述上下文路径）
 
 ### fix — `cat >> tests/test_x.py <<EOF ... case_id="..." ... EOF` false-positive

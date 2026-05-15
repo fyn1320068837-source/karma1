@@ -25,31 +25,10 @@ _STICKY_ID = "no-testset-no-future-leakage"
 # `r = testset_check(..., content='gold_cases.append(x)')` 被错拦. 同 v0.4.18
 # non_blocking sleep 探针根因.
 _LANG_C_HEAD_RE = re.compile(r"\b(?:python\d?|node|ruby|perl)\s+-[ce]\b", re.IGNORECASE)
-
-# v0.5.8: Bash heredoc 写描述上下文文件路径豁免. 跟 v0.5.5 python -c 同根因 —
-# `cat >> tests/test_x.py <<'PY' ... PY` 是把字符串写入测试文件, heredoc 内
-# 容是描述性测试代码不是真执行 gold_cases.append. dogfooding v0.5.7 真触发:
-# tests/test_checks.py append v0.5.7 回归测试时被错拦.
-# 设计: 命令含 `>>?\s*<path>` + path 是 description context 后缀/目录 → 豁免
-_BASH_REDIR_TARGET_RE = re.compile(
-    r">>?\s*([^\s|;<>&]+)",
-)
-_DESC_CTX_PATH_RE = re.compile(
-    # 路径含 tests/ test/ __tests__/ spec/ 目录段 或 文档/数据后缀
-    r"(?:^|/)(?:tests?|__tests__|spec)/|"
-    r"\.(?:md|rst|txt|markdown|adoc|yaml|yml|json|toml|ini|csv|tsv)(?:\s|$)|"
-    r"(?:^|/)test_[\w\-]+\.\w+|[\w\-]+_test\.\w+",
-    re.IGNORECASE,
-)
-
-
-def _bash_writes_to_description_context(cmd: str) -> bool:
-    """Bash 命令通过 redirect/heredoc 写文件，目标路径是 description context → 豁免."""
-    for m in _BASH_REDIR_TARGET_RE.finditer(cmd):
-        target = m.group(1)
-        if _DESC_CTX_PATH_RE.search(target):
-            return True
-    return False
+# v0.5.9: Bash heredoc 写描述上下文路径豁免 (tests/ / .md 等) 由 description_context
+# 统一处理 — testset.py 旧的 _bash_writes_to_description_context 已下沉到
+# description_context.is_description_context(tool_name="Bash") 让所有 Bash-aware
+# check 共享同款豁免界面.
 
 _PATTERNS = [
     (
@@ -118,9 +97,7 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
         cmd_raw = (tool_input or {}).get("command", "") or ""
         if _LANG_C_HEAD_RE.search(cmd_raw):
             return None
-        # v0.5.8: Bash heredoc/redirect 写描述上下文路径豁免
-        if _bash_writes_to_description_context(cmd_raw):
-            return None
+        # v0.5.9: Bash heredoc 写描述上下文路径豁免现由 is_description_context 上面已处理
     for pat, trigger_key, fix_key in _PATTERNS:
         m = pat.search(text)
         if m:

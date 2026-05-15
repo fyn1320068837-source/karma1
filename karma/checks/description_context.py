@@ -36,33 +36,28 @@ _SCRATCH_NAME_RE = re.compile(r"(?:probe|scratch|sample|playground|fixture)", re
 # 这些 tool 会被各类 check 扫；只对它们做上下文判定
 _IN_SCOPE_TOOLS = frozenset({"Write", "Edit", "NotebookEdit"})
 
+# v0.5.9: Bash redirect/heredoc 目标路径解析 — 提升自 testset.py v0.5.8 局部 helper.
+# 跟 Write/Edit 走 file_path 一致的尺度: 写目标是描述上下文路径 → 写内容是描述性的.
+# 真触发场景: `cat >> tests/test_x.py <<'PY' ... PY` (字符串字面是测试代码不是执行),
+# `echo "TODO: x" >> docs/CHANGELOG.md` (文档描述不是代码).
+_BASH_REDIR_TARGET_RE = re.compile(r">>?\s*([^\s|;<>&]+)")
 
-def is_description_context(
-    tool_name: str,
-    tool_input: dict | None,
-) -> tuple[bool, str]:
-    """判断 tool 调用是否为「描述上下文」（应豁免 pattern check）。
 
-    Bash / Read 等永远返回 (False, "")，因为：
-    - Bash 是执行意图
-    - Read 不在 check 范围内
+def _classify_path(file_path: str) -> tuple[bool, str]:
+    """单纯 path → 描述上下文判定 helper.
+
+    v0.5.9 提取自 is_description_context 的 Write/Edit 分支，让 Bash redirect 目标
+    路径也能复用同一套尺度。返回 (是否描述, 原因 string).
     """
-    if tool_name not in _IN_SCOPE_TOOLS:
-        return False, ""
-    if not tool_input:
-        return False, ""
-
-    file_path = (tool_input.get("file_path") or tool_input.get("notebook_path") or "").strip()
     if not file_path:
         return False, ""
-
     fp_lower = file_path.lower()
 
     # 1. 文档后缀
     if fp_lower.endswith(_DOC_SUFFIXES):
         return True, f"文档文件 ({fp_lower.rsplit('.', 1)[-1]})"
 
-    # 2. 数据 / 配置文件 — 内容是描述性数据不是执行字面
+    # 2. 数据 / 配置文件
     if fp_lower.endswith(_DATA_SUFFIXES):
         return True, f"数据/配置文件 ({fp_lower.rsplit('.', 1)[-1]})"
 
@@ -84,8 +79,43 @@ def is_description_context(
     if _SCRATCH_NAME_RE.search(name):
         return True, "探针/样本文件名"
 
-    # 7. karma 检测器实现 — checks/*.py 和 hooks/*.py 必然要含触发字面（定义 pattern）
+    # 7. karma 检测器实现路径
     if _KARMA_IMPL_RE.search(file_path.replace("\\", "/")):
         return True, "karma 检测器实现 (self-reference 必然)"
 
     return False, ""
+
+
+def is_description_context(
+    tool_name: str,
+    tool_input: dict | None,
+) -> tuple[bool, str]:
+    """判断 tool 调用是否为「描述上下文」（应豁免 pattern check）。
+
+    Bash redirect / heredoc 目标路径符合描述上下文（tests/ / .md 等）→ 豁免
+    （v0.5.9 起，跟 Write/Edit file_path 一致尺度）.
+    Read 不在 check 范围内永远 (False, "").
+    """
+    if not tool_input:
+        return False, ""
+
+    # v0.5.9: Bash 命令含 redirect/heredoc 写目标路径符合 description context → 豁免
+    if tool_name == "Bash":
+        cmd = (tool_input.get("command") or "").strip()
+        if not cmd:
+            return False, ""
+        for m in _BASH_REDIR_TARGET_RE.finditer(cmd):
+            target = m.group(1)
+            is_desc, reason = _classify_path(target)
+            if is_desc:
+                return True, f"Bash 写目标 → {reason}"
+        return False, ""
+
+    if tool_name not in _IN_SCOPE_TOOLS:
+        return False, ""
+
+    file_path = (tool_input.get("file_path") or tool_input.get("notebook_path") or "").strip()
+    if not file_path:
+        return False, ""
+
+    return _classify_path(file_path)

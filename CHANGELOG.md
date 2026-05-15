@@ -10,6 +10,22 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.5.9] — 2026-05-15 (refactor — Bash heredoc exemption lifted into `description_context.py`, shared by all Bash-aware checks)
+
+### refactor — `is_description_context(tool_name="Bash")` now supported
+
+v0.5.8 promised this. v0.5.9 delivers: the Bash-heredoc-target-path exemption that lived locally in `testset.py` is now in `description_context.py`, and all Bash-aware checks (`long_term`, `testset`, etc.) that already call `is_description_context()` get the same treatment automatically.
+
+- New `_classify_path(file_path) -> (bool, str)` helper in `description_context.py` (extracted from the original Write/Edit branch)
+- `is_description_context()` now special-cases `tool_name == "Bash"` — scans the command for `>` / `>>` redirect targets and applies `_classify_path` to each; if any target is a description context, the whole call is exempt
+- `testset.py` v0.5.8 local helper removed; behavior preserved by the new shared logic
+- `long_term.py` automatically inherits — e.g. `echo "TODO: x" >> docs/CHANGELOG.md` is now exempt (was previously incorrectly blocked as `TODO` marker)
+
+### Verification
+
+- `pytest`: 404/404 passing (v0.5.8 tests still green — same test cases, now flow through the shared helper)
+- `ruff`: 0 issues
+
 ## [0.5.8] — 2026-05-15 (fix — testset check exempts Bash heredoc writes targeting description-context paths)
 
 ### fix — `cat >> tests/test_x.py <<EOF ... case_id="..." ... EOF` false-positive
