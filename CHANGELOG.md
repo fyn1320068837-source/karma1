@@ -10,6 +10,53 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.9.6] — 2026-05-15 (fix — 5th independent CI failure: v0.6.0 BREAKING rename leftover in `verify wheel` step)
+
+### My v0.9.5 prediction was wrong
+
+v0.9.5 changelog declared "This push's CI run should finally be green (4th attempt)." It wasn't. The `Verify wheel contains yaml templates` step failed across all 4 matrix jobs. New root cause:
+
+The CI verify step checks the wheel contains `data/sticky.dev.example.yaml`. But v0.6.0 BREAKING renamed `sticky.*` → `rules.*`. **The verify step has been failing since v0.6.0 (~9 releases ago)** — it was just hidden because earlier steps (vulture/mypy/pytest) kept failing first, and `fail-fast: false` doesn't change the order of step execution within a job.
+
+### Fix — update verify expected list to current artifact layout
+
+```yaml
+expected = [
+    'data/rules.dev.example.yaml',
+    'data/rules.dev.example.zh.yaml',
+    'data/locales/en.yaml',
+    'data/locales/zh.yaml',
+    'data/config.example.yaml',
+    'skills/karma/SKILL.md',
+]
+```
+
+Now matches actual wheel contents (verified locally via `python -m build --wheel && python -c "..."`). Also broader coverage — added the zh.yaml example + locales + skill files which were missing from the original 2-file check.
+
+### Meta-lesson: don't claim "final fix" without running the full CI pipeline locally
+
+I'd been peeling CI failures off one layer at a time, declaring each one "the root cause." The actual deep lesson is structural: my local checklist (5 gates as of v0.9.5) stops at `pytest` — it never runs `python -m build --wheel` + verify. The CI pipeline does. So any step that runs after pytest in CI but isn't on my local checklist remains a blind spot.
+
+**v0.9.6 adds gate 6 — wheel build + verify** — to local checklist, making it a strict superset of CI step order:
+
+```bash
+pytest -q                                            # 460/460
+LANG=en_US.UTF-8 pytest -q                          # 460/460 (locale)
+ruff check karma/ tests/                            # clean
+mypy karma/ && mypy tests/                          # no issues
+vulture karma/ whitelist.py --min-confidence 60     # exit 0
+python -m build --wheel && python -c "<verify>"     # wheel verify (NEW)
+```
+
+### Verification
+
+- All 6 local gates pass
+- Built wheel `karma-0.9.5-py3-none-any.whl` (will be `0.9.6` after this commit) contains all 6 expected templates
+
+### Honesty caveat
+
+I cannot guarantee this is the deepest layer. If a 6th CI failure appears after push, that itself is data — it means the CI pipeline has more steps than I've enumerated in this checklist.
+
 ## [0.9.5] — 2026-05-15 (fix — 4th independent CI failure: tests assume zh locale, CI runs en)
 
 ### Pattern continues

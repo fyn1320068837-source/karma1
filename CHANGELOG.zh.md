@@ -6,6 +6,53 @@
 
 ## [Unreleased]
 
+## [0.9.6] — 2026-05-15（fix — 第 5 个独立 CI fail：v0.6.0 BREAKING 重命名在 verify wheel step 留的残留）
+
+### v0.9.5 的「最终」预言又错了
+
+v0.9.5 changelog 说「This push's CI run should finally be green (4th attempt)」— 错了。`Verify wheel contains yaml templates` 这步 4 个 matrix job 全挂。新根因：
+
+CI verify step 查 wheel 里有没有 `data/sticky.dev.example.yaml`。但 v0.6.0 BREAKING 把 `sticky.*` 改名成 `rules.*`。**这步从 v0.6.0 起就一直在 fail（大概 9 个 release 前）** — 只是前面（vulture/mypy/pytest）一直挂在前头挡着，verify 永远没跑到。
+
+### fix — verify expected 列表对齐 wheel 实际产物
+
+```yaml
+expected = [
+    'data/rules.dev.example.yaml',
+    'data/rules.dev.example.zh.yaml',
+    'data/locales/en.yaml',
+    'data/locales/zh.yaml',
+    'data/config.example.yaml',
+    'skills/karma/SKILL.md',
+]
+```
+
+本机 `python -m build --wheel + python -c "..."` 验证通过。顺手覆盖更广 — 加 zh.yaml example / 2 个 locale / SKILL.md，原 2-file 检查太单薄。
+
+### 元教训 — 不要在没本机跑完整 CI pipeline 时声称「最终 fix」
+
+我一直在一层一层剥 CI fail，每剥一层就说「这就是根因」。真深层教训是结构性的：本机 checklist（v0.9.5 是 5 道门禁）止于 `pytest` — 从不跑 `python -m build --wheel` + verify。CI pipeline 跑。所以任何 CI 在 pytest 之后但本机没跑的步骤，都是盲区。
+
+**v0.9.6 加第 6 道门禁 — wheel build + verify** — 本机 checklist 变成 CI step 顺序的真超集：
+
+```bash
+pytest -q                                            # 460/460
+LANG=en_US.UTF-8 pytest -q                          # 460/460（locale 耦合）
+ruff check karma/ tests/                            # clean
+mypy karma/ && mypy tests/                          # no issues
+vulture karma/ whitelist.py --min-confidence 60     # exit 0
+python -m build --wheel && python -c "<verify>"     # wheel verify（新）
+```
+
+### 验证
+
+- 6 道门禁全过
+- 本机 build 的 wheel 含全部 6 个 expected 模板
+
+### 诚实保留意见
+
+我不能保证这就是最深的一层。push 后如果第 6 个 CI fail 出现 — 那本身就是数据，意味着 CI pipeline 还有 step 没被这个 checklist 覆盖。
+
 ## [0.9.5] — 2026-05-15（fix — 第 4 个独立 CI fail：测试假设 zh locale，CI 跑 en）
 
 ### Pattern 继续

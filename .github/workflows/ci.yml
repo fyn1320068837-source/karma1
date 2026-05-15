@@ -54,8 +54,19 @@ jobs:
           if not wheels: sys.exit('wheel build 失败 — dist/ 无 wheel')
           z = zipfile.ZipFile(wheels[0])
           names = z.namelist()
-          expected = ['data/sticky.dev.example.yaml', 'data/config.example.yaml']
+          # v0.6.0 BREAKING: sticky.* → rules.* 重命名 (此前 expected 还查
+          # data/sticky.dev.example.yaml, 但 wheel 实际产物已是 rules.* —
+          # 校验从 v0.6.0 起就 fail, 但前面的 fail-step 一直挡着没暴露,
+          # 直到 v0.9.6 把前面修干净才浮上来)。
+          expected = [
+              'data/rules.dev.example.yaml',
+              'data/rules.dev.example.zh.yaml',
+              'data/locales/en.yaml',
+              'data/locales/zh.yaml',
+              'data/config.example.yaml',
+              'skills/karma/SKILL.md',
+          ]
           missing = [n for n in expected if n not in names]
           if missing: sys.exit(f'wheel 缺文件: {missing}')
-          print(f'{wheels[0]} 含全部模板 ✓')
+          print(f'{wheels[0]} 含全部 {len(expected)} 个关键模板 ✓')
           "
