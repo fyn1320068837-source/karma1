@@ -10,9 +10,12 @@ import pytest
 
 
 def test_pre_compact_hook_auto_allows():
-    """PreCompact hook (v0.4.29): 自动 compact 时落盘 sticky + 注入 reminder。
-    新 API 不用 continue 字段（compact 是 Claude Code 保护机制，karma 不该干扰），
-    输出 hookSpecificOutput.additionalContext 让 Claude 看到 sticky 已落盘。"""
+    """PreCompact hook: 自动 compact 时落盘 sticky snapshot 给 SessionStart 重读。
+
+    2026-05-15 真根因 fix：PreCompact 协议不支持 hookSpecificOutput
+    (官方文档确认 — 仅 decision/reason 模式)。删除 hookSpecificOutput 输出
+    改 passthrough {}, snapshot 落盘 side effect 不变, SessionStart(source=compact)
+    重起时读 snapshot 真起作用."""
     payload = {
         "trigger": "auto",
         "session_id": "test-session",

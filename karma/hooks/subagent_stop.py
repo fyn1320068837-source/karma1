@@ -24,14 +24,21 @@ from __future__ import annotations
 import json
 import sys
 
-from karma.sticky import load as load_sticky
-
-
 def _passthrough() -> None:
     print(json.dumps({}))
 
 
 def main() -> int:
+    """SubagentStop — 仅做子 Agent state 销毁 side effect，无 stdout 输出。
+
+    2026-05-15 真根因 fix：SubagentStop 协议**不支持 hookSpecificOutput**
+    （Claude Code 官方文档：仅 decision/reason 模式，无 additionalContext）。
+    v0.4.30 起的 hookSpecificOutput.additionalContext 输出一直被 Claude Code
+    静默拒绝，主 Agent 根本没看到「子 Agent X 已结束」透明度提醒。
+
+    子 Agent state 销毁 side effect 保留（v0.4.34 设计核心）。透明度提醒
+    Claude Code UI 自身会显示子 Agent 完成事件，karma 不需重复 echo。
+    """
     try:
         payload = json.load(sys.stdin)
     except json.JSONDecodeError as e:
@@ -43,39 +50,15 @@ def main() -> int:
     session_id = payload.get("session_id", "") or "default"
 
     # v0.4.34 子 Agent 独立 state 销毁 — 子 Agent 完成 → 临时 state 自动销毁
-    # （用户「彼此互不干扰 + 临时独立 + 自动销毁」原则真落地）
+    # （用户「彼此互不干扰 + 临时独立 + 自动销毁」原则）
     if agent_id and agent_id != "unknown":
         try:
             from karma import session_state
             session_state.purge_subagent_state(session_id, agent_id)
         except OSError as e:
             print(f"karma SubagentStop: 销毁子 Agent state 失败 ({e})", file=sys.stderr)
-            # 销毁失败不阻塞 — 主 Agent 通知仍发出
 
-    try:
-        sticky_list = load_sticky()
-    except Exception as e:
-        print(f"karma SubagentStop: sticky 加载失败 ({e})", file=sys.stderr)
-        _passthrough()
-        return 0
-
-    if not sticky_list:
-        _passthrough()
-        return 0
-
-    # 透明度提醒 + sticky 关键方向回声 — 让主 Agent 接子 Agent 结果时自检
-    # 2026-05-15 重写：合作默契语气
-    sticky_ids = ", ".join(s.id for s in sticky_list)
-    context = (
-        f"[karma — 子 Agent {agent_id} 已结束（临时 state 已销毁）]\n"
-        f"跟用户的默契仍生效（{sticky_ids}）— 接结果时记得按这些方向处理。"
-    )
-    print(json.dumps({
-        "hookSpecificOutput": {
-            "hookEventName": "SubagentStop",
-            "additionalContext": context,
-        }
-    }, ensure_ascii=False))
+    _passthrough()
     return 0
 
 

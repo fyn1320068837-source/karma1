@@ -104,19 +104,13 @@ def main() -> int:
         _passthrough()
         return 0
 
-    # 注入 additionalContext — 让 Claude 看到 sticky 已落盘 + 提醒
-    sticky_ids = ", ".join(s.id for s in sticky_list)
-    context = (
-        f"[karma 即将 compact ({trigger}) — sticky 已落盘 {SNAPSHOT_FILENAME}]\n"
-        f"当前 sticky: {sticky_ids}\n"
-        f"compact 后 SessionStart 会读 snapshot 重新强注入这些核心方向。"
-    )
-    print(json.dumps({
-        "hookSpecificOutput": {
-            "hookEventName": "PreCompact",
-            "additionalContext": context,
-        }
-    }, ensure_ascii=False))
+    # 2026-05-15 真根因 fix：PreCompact 协议**不支持 hookSpecificOutput**
+    # （Claude Code 官方文档：PreCompact 仅 decision/reason 模式，无 additionalContext）
+    # snapshot 已落盘（上面 write_text 完成），SessionStart(source=compact) 重起
+    # 时会读 snapshot 重新注入 sticky baseline — 这才是真起作用的路径。
+    # PreCompact 自身输出 additionalContext 一直被 Claude Code 静默拒绝，
+    # 即使生效 Claude 也已开始 compact 看不到（compact 中 Agent 已停止）。
+    _passthrough()
     return 0
 
 

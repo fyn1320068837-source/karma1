@@ -4,6 +4,61 @@
 
 ## [Unreleased]
 
+## [0.4.44] — 2026-05-15（fix — SubagentStop + PreCompact schema 真合规，跟 v0.4.43 Stop fix 同思路）
+
+### 触发
+
+v0.4.43 fix 了 Stop hook schema 违反后，起子 Agent 调研 Claude Code 官方文档
+确认所有非主流 hook 的输出 schema：
+
+| Hook | hookSpecificOutput.additionalContext 支持 |
+|---|---|
+| PreToolUse / UserPromptSubmit / PostToolUse / PostToolBatch | ✅ 支持（主流 4 个） |
+| SessionStart | ✅ 支持（karma 用法合规） |
+| SubagentStart | ✅ 支持（v0.4.30 实证子 Agent 真收到） |
+| **Stop** | ❌ **不支持**（v0.4.43 已 fix） |
+| **SubagentStop** | ❌ **不支持**（本版本 fix） |
+| **PreCompact** | ❌ **不支持**（本版本 fix） |
+
+### Fix 1 — SubagentStop schema 合规
+
+`karma/hooks/subagent_stop.py` v0.4.30 起的 `hookSpecificOutput.additionalContext`
+输出一直被 Claude Code 静默拒绝 — 主 Agent 根本没看到「子 Agent X 已结束」
+透明度提醒。删 hookSpecificOutput 输出 → `{}` passthrough。
+
+子 Agent state 销毁 side effect（v0.4.34 设计核心）保留。「子 Agent 结束」
+事件 Claude Code UI 自身会显示，karma 不需要重复 echo。
+
+顺手清死代码（sticky_list 加载不再用 → 删 `from karma.sticky import load`）。
+
+### Fix 2 — PreCompact schema 合规
+
+`karma/hooks/pre_compact.py` 同 SubagentStop 思路 — v0.4.29 起输出
+`hookSpecificOutput.additionalContext` 一直被 Claude Code 静默拒绝。
+
+snapshot 落盘 side effect 保留（SessionStart(source=compact) 重起时读 snapshot
+重新注入 sticky baseline — 这才是真起作用的路径）。删 hookSpecificOutput 输出
+→ `{}` passthrough。
+
+### 测试
+
+`tests/test_compact_hooks.py::test_pre_compact_hook_auto_allows` docstring
+更新跟代码对齐（描述 snapshot 落盘 + SessionStart 重读路径，不再说
+「输出 hookSpecificOutput」）。原断言用 `if "hookSpecificOutput" in output`
+守卫 — 删 hookSpecificOutput 后测试仍过。
+
+测试 392/392 + 4 件套全过 ✓。
+
+### 教训
+
+v0.4.x 早期阶段所有「stop 类」hook（Stop / SubagentStop / PreCompact）都被
+错用了 hookSpecificOutput.additionalContext — 这是 v0.4.x 早期对协议理解不
+完整的系统性错误。Claude Code 静默拒绝（不阻塞 hook 执行只 log 错），让
+karma 长期以为 hook 真生效但 Agent 没看到。
+
+子 Agent 调研真根因（不仅 Stop，三个 stop 类都同 bug）— 不要被一个 fix
+满足，深挖系统性问题。
+
 ## [0.4.43] — 2026-05-15（fix — Stop hook schema 违反 + 注入文本「合作默契」语气收尾 + sticky keyword 假阳治理）
 
 ### 触发
