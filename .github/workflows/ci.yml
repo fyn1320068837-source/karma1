@@ -31,7 +31,7 @@ jobs:
         run: ruff check karma/ tests/
 
       - name: Dead code scan (vulture, min-confidence 60)
-        run: vulture karma/ --min-confidence 60
+        run: vulture karma/ whitelist.py --min-confidence 60
 
       - name: Type check (mypy)
         run: |

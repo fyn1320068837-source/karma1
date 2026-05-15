@@ -10,6 +10,44 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.9.3] — 2026-05-15 (fix — actually green up CI: 3 more dead-code items + vulture whitelist)
+
+### Following up on v0.9.2
+
+v0.9.2 fixed the hardcoded path bug from issue #2. After push I checked `gh run list` (per my own new checklist) — **CI still red**. Different failure mode from issue #2.
+
+### Real root cause for the CI red streak
+
+CI runs `vulture karma/ --min-confidence 60` but my local checks use `--min-confidence 70`. The 60-confidence threshold flags 5 items my local runs never see:
+
+| File / Line | Item | Verdict |
+|---|---|---|
+| `karma/cli.py:67-68` | `EXAMPLE_RULES` / `EXAMPLE_RULES_MINIMAL` aliases | **truly dead** — 0 callers, delete |
+| `karma/i18n.py:99` | `current_locale()` (docstring says "for diagnostics") | **truly dead** — 0 callers, delete |
+| `karma/i18n.py:104` | `reset_cache()` (docstring says "for tests / config-reload") | **truly dead** — 0 callers, delete |
+| `karma/signals.py:205` | `reset_cache()` | **vulture false positive** — `tests/test_signals.py` imports + uses it (vulture only scans `karma/`, doesn't see test usage) |
+
+### Fix
+
+- Deleted the 4 truly-dead items
+- Added `whitelist.py` referencing `karma.signals.reset_cache` so vulture sees it as "used"
+- Updated `.github/workflows/ci.yml`: `vulture karma/ whitelist.py --min-confidence 60`
+
+### Loud-failure admission (continued from v0.9.2)
+
+The v0.9.2 CHANGELOG already admitted "I shipped 'pytest 460/460 passing' without checking CI." This release confirms it took a second failed CI run before I realized one bug (issue #2) wasn't the whole story — vulture was failing too, independent of the path bug.
+
+For the v0.9.0/v0.9.1 CI failures specifically, the vulture issue likely started at v0.8.5 when my "code review pass" introduced unused names. I never noticed because I ran vulture locally with `--min-confidence 70` not 60.
+
+**Mismatch root cause**: my local quality gates were less strict than CI's. Fixing that going forward: my checklist now also includes "run vulture with `--min-confidence 60` matching CI before tag/release."
+
+### Verification
+
+- 460/460 passing locally
+- `vulture karma/ whitelist.py --min-confidence 60` → exit 0 locally (CI command exactly)
+- `ruff` clean
+- This push's CI run should finally be green
+
 ## [0.9.2] — 2026-05-15 (fix — `test_compact_hooks.py` hardcoded `/Users/jhz/karma` path → dynamic resolution; issue #2 from @fyn1320068837-source)
 
 ### Real-user bug report (2nd from same external contributor)

@@ -96,11 +96,3 @@ def tr(key: str, lang: str | None = None, **fmt: Any) -> str:
     return str(val)
 
 
-def current_locale() -> str:
-    """Get currently-resolved locale ("en" or "zh"). For diagnostics."""
-    return _resolve_locale()
-
-
-def reset_cache() -> None:
-    """Clear locale-load cache. For tests / config-reload scenarios."""
-    _load_locale_dict.cache_clear()

@@ -63,9 +63,6 @@ EXAMPLE_RULES_EN = _DATA_DIR / "rules.dev.example.yaml"        # English default
 EXAMPLE_RULES_ZH = _DATA_DIR / "rules.dev.example.zh.yaml"     # 中文
 EXAMPLE_RULES_MINIMAL_EN = _DATA_DIR / "rules.dev.minimal.example.yaml"
 EXAMPLE_RULES_MINIMAL_ZH = _DATA_DIR / "rules.dev.minimal.example.zh.yaml"
-# Default English templates (selected per-locale in _select_rule_template).
-EXAMPLE_RULES = EXAMPLE_RULES_EN
-EXAMPLE_RULES_MINIMAL = EXAMPLE_RULES_MINIMAL_EN
 EXAMPLE_CONFIG = _DATA_DIR / "config.example.yaml"
 # v0.5.16: karma skill source — Markdown source of truth; auto-installed to
 # all detected backends with format conversion (Markdown → TOML for Gemini commands path).

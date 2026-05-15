@@ -6,6 +6,44 @@
 
 ## [Unreleased]
 
+## [0.9.3] — 2026-05-15（fix — 真正让 CI 绿：3 处死代码 + vulture whitelist）
+
+### 接 v0.9.2
+
+v0.9.2 修了 issue #2 硬编码路径 bug。push 后我按自己新加的 checklist 跑 `gh run list` —— **CI 仍然红**。跟 issue #2 不同的失败模式。
+
+### CI 红 3 个 release 的真根因
+
+CI 跑 `vulture karma/ --min-confidence 60`，但我本机跑 `--min-confidence 70`。60 confidence 阈值找到 5 处我本机看不到的「死代码」：
+
+| 文件 / 行号 | 项 | 判定 |
+|---|---|---|
+| `karma/cli.py:67-68` | `EXAMPLE_RULES` / `EXAMPLE_RULES_MINIMAL` 别名 | **真死** — 0 调用者，删 |
+| `karma/i18n.py:99` | `current_locale()`（docstring 说「for diagnostics」）| **真死** — 0 调用者，删 |
+| `karma/i18n.py:104` | `reset_cache()`（docstring 说「for tests / config-reload」）| **真死** — 0 调用者，删 |
+| `karma/signals.py:205` | `reset_cache()` | **vulture 假阳** — `tests/test_signals.py` import 用了（vulture 只扫 `karma/` 看不到 test 调用）|
+
+### Fix
+
+- 删 4 个真死代码
+- 加 `whitelist.py` 引用 `karma.signals.reset_cache` 让 vulture 看到「被用」
+- 改 `.github/workflows/ci.yml`：`vulture karma/ whitelist.py --min-confidence 60`
+
+### 响亮失败承认（接 v0.9.2）
+
+v0.9.2 CHANGELOG 已经承认「我说 460/460 通过没看 CI」。这一版又确认：直到第 2 次 CI fail 我才意识到一个 bug（issue #2）不是全部 — vulture 也独立 fail。
+
+v0.9.0/v0.9.1 时期的 CI fail 应该是 v0.8.5「第 3 轮代码审查」时引入的 unused names。我本机用 `--min-confidence 70` 跑没看到。
+
+**核心根因**：本机质量门禁比 CI 宽松。后续 checklist 加：「tag/release 前用 `--min-confidence 60` 跑 vulture 匹配 CI」。
+
+### 验证
+
+- 本机 460/460 通过
+- 本机跑 CI 同款命令 `vulture karma/ whitelist.py --min-confidence 60` → exit 0
+- `ruff` 干净
+- 这次 push 的 CI 应该终于绿
+
 ## [0.9.2] — 2026-05-15（fix — `test_compact_hooks.py` 硬编码 `/Users/jhz/karma` 路径 → 动态解析；issue #2 来自 @fyn1320068837-source）
 
 ### 真实用户 bug 报告（同一外部贡献者的第 2 个 issue）
