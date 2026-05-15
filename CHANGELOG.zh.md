@@ -6,6 +6,34 @@
 
 ## [Unreleased]
 
+## [0.5.20] — 2026-05-15（docs — rule 10 自审 follow-up: 补 v0.5.19 漏的 ARCHITECTURE + HANDOFF 同步）
+
+### 这版动机
+
+用户让我自审过去 4 个 release 是不是真做到 rule 10「commit 后同步所有受影响 doc」。审计发现一个真漏：**v0.5.19 commit 时没更新 `docs/ARCHITECTURE.md` milestone 表也没更 `docs/HANDOFF.md` current status**。CHANGELOG 有条目，但技术档案 doc 没有。rule 10 例外条款「内部 refactor → 只更 CHANGELOG + HANDOFF」我之前理解成「只更 CHANGELOG」漏了 HANDOFF。
+
+### 改了啥
+
+- `docs/ARCHITECTURE.md` + `.zh.md` — milestone 表加 v0.5.19 行（饱和豁免根因 + 跟 v0.4.41 对偶 note）
+- `docs/HANDOFF.md` — current status section 加 v0.5.19 条目（dogfood 触发 context: 被它要 fix 的同一个 Stop hook 拦到）
+
+### 完整审计结果
+
+| Rule-10 要求 | v0.5.16–19 结果 |
+|---|---|
+| ① commit 后立刻 audit doc | ✅ v0.5.16/17/18；❌ v0.5.19（本版 fix） |
+| ② 功能放主语 version 放从句 | ✅ README hero / `/karma` section / PRD F5 都做到；ARCHITECTURE milestone 表是 patch 体（按格式可接受 — milestone 表本质就是时间线） |
+| ③ 重要亮点进 README 顶部 | ✅ v0.5.16 skill 进 hero + Real-problems 行 + 新顶级 section |
+| ④ 双语 `.md` + `.zh.md` 同步 | ✅ v0.5.16-18 的 README/PRD/ARCH/HANDOFF 同步；❌ v0.5.19（本版 fix） |
+| ⑤ 内部 refactor 例外 | ✅ v0.5.18/19 正确没动 README/PRD（无 user-visible CLI 变化），但 HANDOFF 仍需要 v0.5.19 漏了 |
+
+净结: 5 条做到 4 条. miss 由 rule 10 显式自审触发, 几分钟内 fix — 正是 rule 10 写来 enable 的 dogfood 驱动纠正闭环.
+
+### 验证
+
+- `pytest`：418/418 通过（纯文档无代码改）
+- `ruff`：0 issues
+
 ## [0.5.18] — 2026-05-15（fix — `bypass_karma` 区分「读 karma 写别处」vs「写到 karma 路径」）
 
 ### dogfooding 真假阳触发的根因 fix

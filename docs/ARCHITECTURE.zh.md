@@ -369,6 +369,7 @@ violations / session_state / config / cli）都用它读 env。
 | v0.5.16 `/karma <自然语言>` skill 第一次真工作 — 多 backend 装机（Claude Code / Codex / Gemini）含 Markdown → TOML 格式适配给 Gemini commands 路径；v0.5.1-15 诚实披露（装机路径错 → skill 从未真触发）| ✅ |
 | v0.5.17 README narrative 重写 — `/karma <NL>` skill 提升为顶级 section 而不是 patch 式提及；PRD F5 重写；ARCHITECTURE + HANDOFF 同步到 v0.5.16 现实 | ✅ |
 | v0.5.18 `bypass_karma` false positive fix（dogfood 真触发驱动）— redirect target 必须真是 karma 路径才算绕过，不是「命令含 karma 路径 + 任何 write op」一刀切；`has_internal` field-name 维度对称收紧 | ✅ |
+| v0.5.19 `keep_pushing` Agent 饱和声明豁免（dogfood 真触发驱动）— 强饱和信号字眼 (`真饱和` / `卡在 X` / `明天接力` 等) 豁免反思 hook，跟 v0.4.41 用户叫停豁免对偶；无强饱和信号的柔性停顿 (`今天到此为止` / `就这样吧`) 仍按 v0.4.22 拦 | ✅ |
 
 详见 [CHANGELOG.md](../CHANGELOG.md) 每版本的设计动机；[HANDOFF.md](./HANDOFF.md) 内部接力 context。
 

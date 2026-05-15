@@ -10,6 +10,34 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.5.20] — 2026-05-15 (docs — rule-10 self-audit follow-up: sync ARCHITECTURE + HANDOFF for v0.5.19)
+
+### Why this micro-release
+
+User asked me to self-audit whether the past 4 releases honored rule 10 ("after every commit, sync all affected docs to latest"). The audit found one real omission: **v0.5.19 shipped without updating `docs/ARCHITECTURE.md` milestone table or `docs/HANDOFF.md` current status**. The CHANGELOG had the entry, but the technical-archive docs did not. Rule 10's exception ("internal refactor → only update CHANGELOG + HANDOFF") was misapplied — HANDOFF was specifically called out as still-required.
+
+### What changed
+
+- `docs/ARCHITECTURE.md` + `.zh.md` — milestone table gains v0.5.19 row (saturation exemption rationale + paired-asymmetry note with v0.4.41)
+- `docs/HANDOFF.md` — current status section gains v0.5.19 entry (dogfood trigger context: caught by the same Stop hook v0.5.19 was fixing)
+
+### Audit summary (full)
+
+| Rule-10 requirement | v0.5.16–19 result |
+|---|---|
+| ① after-commit doc audit | ✅ for v0.5.16/17/18; ❌ for v0.5.19 (fixed by this release) |
+| ② "feature as subject, version as clause" | ✅ in README hero, `/karma` section, PRD F5; ARCHITECTURE milestone table is patch-style by format (acceptable — milestone tables are chronological by nature) |
+| ③ flagship features in README top | ✅ v0.5.16 skill promoted to hero + Real-problems row + new top-level section |
+| ④ bilingual `.md` + `.zh.md` sync | ✅ for README/PRD/ARCH/HANDOFF on v0.5.16-18; ❌ for v0.5.19 (fixed) |
+| ⑤ internal-refactor exception | ✅ v0.5.18/19 correctly skipped README/PRD (no user-visible CLI change), but HANDOFF was still required and missed for v0.5.19 |
+
+Net: 4/5 honored across the 4 releases. The miss was caught by explicit rule-10 self-audit and fixed within minutes — exactly the dogfood-driven correction loop rule 10 was written to enable.
+
+### Verification
+
+- `pytest`: 418/418 passing (pure docs, no code change)
+- `ruff`: 0 issues
+
 ## [0.5.18] — 2026-05-15 (fix — `bypass_karma` distinguishes "read karma + write elsewhere" from "write to karma path")
 
 ### Root-cause fix triggered by live dogfooding false-positive

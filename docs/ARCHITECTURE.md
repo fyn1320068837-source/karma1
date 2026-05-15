@@ -351,6 +351,7 @@ Performance hasn't been a bottleneck — measured far below budget.
 | v0.5.16 `/karma <natural language>` skill actually works — first release; multi-backend install (Claude Code / Codex / Gemini) with Markdown → TOML format adaptation for Gemini commands path; v0.5.1-15 honest disclosure (wrong install path → skill never triggered before) | ✅ |
 | v0.5.17 README narrative rewrite — `/karma <NL>` skill promoted to top-level section instead of patch-style mention; PRD F5 rewritten; ARCHITECTURE + HANDOFF synced to v0.5.16 reality | ✅ |
 | v0.5.18 `bypass_karma` false-positive fix (dogfood-found) — redirect target must actually be a karma path to count as bypass, not just "command mentions karma path + any write op"; symmetric tightening for `has_internal` field-name dimension | ✅ |
+| v0.5.19 `keep_pushing` Agent saturation exemption (dogfood-found) — strong "saturation declaration" phrases (`真饱和` / `卡在 X` / `明天接力` etc.) exempt from the reflection nudge, paired with v0.4.41 user-stop exemption; soft stop phrases (`今天到此为止` / `就这样吧`) without saturation signal still blocked per v0.4.22 design | ✅ |
 
 Details in [CHANGELOG.md](../CHANGELOG.md) for per-release rationale; [HANDOFF.md](./HANDOFF.md) for internal context.
 
