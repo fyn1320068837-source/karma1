@@ -6,6 +6,34 @@
 
 ## [Unreleased]
 
+## [0.5.11] — 2026-05-15（docs — `skills/karma-rule.md` 清晰度 audit，补 5 个 gap）
+
+### docs — `/karma rule` skill template 5 个清晰度 gap 修复
+
+Dogfooding 驱动的 audit。真用自然语言录入流程跑了一遍 `/karma rule` 之后，发现 5 个陌生 Agent 容易默默猜错的地方：
+
+1. **Step 1 漏 anchor-vs-scope 歧义识别** — 用户原话「在 X 场景下要 Y」通常意思是「X 是引发例子」而不是「Y 只在 X 时生效」，但 karma v2 是 always-on 注入（无 scene routing）。skill 现在要求 Agent 直接把这个歧义明说出来对齐而不是默默猜作用域。还加了「one-off vs long-term」识别清单（`"for this PR" → one-off` / `"I always want" → long-term`），让「这事到底该不该入 karma」的判断有具体抓手。
+
+2. **Step 2 overlap 判断无标准** — skill 之前只说「check existing rules」但没说怎么算 overlap（id 匹配？语义相似？keyword 交集？）。补了 4 行决策表覆盖 4 种 overlap 情况各自的处理动作（修改现有 / 两选项询问 / 提及 keyword 交集 / 直接新加）。
+
+3. **Step 3 → Step 5 缺用户内联草稿审阅** — 原流程是「起草 → 写 tmp 文件 → preview → 用户看到成品 yaml」。用户想动文案要 Agent 重起一遍。skill 现在要求 Step 3 在写盘前先 inline 给用户看草稿，明说「现在说要不要动」。
+
+4. **缺 locale-aware tone 指引** — v0.5.2 i18n 之后 karma 双 locale，但 skill 全英文示例。加了明确规则「用户跟你说哪种语言就用哪种写 preference；violation_checks 函数名保持英文不变」。中文 locale Agent 被指向 `data/rules.dev.example.zh.yaml` 作为参考模式。
+
+5. **Step 7「啥时候生效」埋在底部** — 原 skill 在末尾独立 `## Restart Claude Code after karma rule add` section，容易漏。把「下个 UserPromptSubmit 起注入」notice 搬进 Step 7 内联第 4 条，同时把「建议删改」步骤改具体（直接点名冗余的具体规则对，不要泛泛「review for duplicates」）。删了底部独立 section。
+
+底部 `## Common mistakes to avoid` 列表加 3 条对应 gap 1 / 4 / 3 的反例，让快速扫一眼也能 catch 高影响失败模式。
+
+### 发现但 v0.5.11 没修
+
+audit 顺手发现 `skills/karma-rule.md` **没被 `karma init` 自动装到** `~/.claude/skills/karma-rule.md` — 用户得手工 copy。意思是当前 `/karma rule <NL>` 流程只有手工装 skill 的用户能用。本 release 是纯文档版不在 scope，但值得 v0.5.12 加个 `karma install-skill` 或扩 `karma init`。
+
+### 验证
+
+- skill 结构完整：7 个 `### Step N` 标题在位（原 7 → 现 7）
+- 长度：225 → 269 行（净 +44，是具体指引不是水分）
+- 无代码改动 — `pytest 404/404`、`ruff 0` 不变
+
 ## [0.5.10] — 2026-05-15（docs — `karma --help` 补 `rule add` / `rule preview` 子命令列表）
 
 ### docs — `karma --help` 之前藏着 `karma rule add` / `karma rule preview`

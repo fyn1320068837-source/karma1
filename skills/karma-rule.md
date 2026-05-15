@@ -85,9 +85,32 @@ Ask clarifying questions if needed:
 
 If it's a one-off request, suggest they handle it via in-context prompt instead — karma is for **long-term directional preferences**, not single-task instructions.
 
+**Critical: watch for anchor-vs-scope ambiguity.** User language like "when I do X, I want Y" often means "X is an example trigger" not "Y only applies during X." karma v2 rules are **always-on injection** (CLAUDE.md line 21: "5-10 rules all always-on, no selection needed") — there's no scene routing. If the user's request sounds scoped to a specific situation, surface the ambiguity:
+
+> "Just to check: do you want this whenever we collaborate, or strictly during [the X scenario you mentioned]? karma injects this rule into every turn header — it can't be scoped to one situation. If you only want it for [X], we'd handle that outside karma."
+
+Don't silently guess. If you guess wrong, the rule either over-fires (annoying) or under-applies (useless).
+
+**Common one-off vs long-term tells**:
+- "for this PR / this task / today" → one-off, suggest in-context prompt
+- "I always want / I prefer / generally" → long-term, karma fits
+- "let's try this approach this time" → one-off
+- "in this codebase / for this kind of work" → long-term
+
 ### Step 2: Check existing rules
 
-Run `karma rule list` to see if existing rules already cover this case. If so, suggest the user modify the existing rule instead of adding a new one.
+Run `karma rule list` to see if existing rules already cover this case. **Compare by semantics, not by id/name** — a rule named `loud-failure-with-evidence` and a new request "I want Agent to attach test logs when claiming done" are semantically the same even though the words don't overlap.
+
+**Overlap decision table**:
+
+| Situation | Action |
+|---|---|
+| New request's preference text says >50% the same thing as existing rule | Suggest modifying the existing rule (`karma rule edit`) instead of adding |
+| Existing rule covers a superset but new request adds a specific dimension | Two options: (a) modify existing to add the dimension, or (b) add new as a sibling — ask user which |
+| New request shares 1-2 violation_keywords with existing but different intent | Add as separate rule, but mention the keyword overlap so user can decide |
+| No semantic overlap | Add as new rule |
+
+Don't be paranoid — most new rules don't overlap. But if they do, flag it before drafting (saves a Step 3 → Step 5 → "wait, this duplicates X" loop).
 
 ### Step 3: Refine into yaml
 
@@ -98,7 +121,24 @@ Draft a yaml snippet with:
 - `violation_checks` — pick 0 or 1 of the 8 built-in functions
 - `force_block_exempt` — usually omit (default false)
 
-Save to a temp file (e.g., `/tmp/karma-new-rule.yaml`).
+**Show the draft to the user inline before saving to a temp file.** Don't go straight to `preview` — the user should have a chance to react to wording / structure choices in conversation, not face a finished yaml.
+
+A good flow:
+
+> "Here's a draft based on what you said:
+>
+> ```yaml
+> id: must-run-tests-before-done
+> preference: |
+>   ...
+> violation_keywords: [...]
+> ```
+>
+> Look right? If yes I'll preview + add. If you want to adjust the wording / keywords / scope, say so now."
+
+If the user is OK or wants minor tweaks, then save to `/tmp/karma-new-rule.yaml` and move to Step 4.
+
+**Locale-aware tone**: write `preference` in the language the user is talking to you in. Chinese user → Chinese preference text (using «协作默契» collaborative-agreement phrasing — see existing `data/rules.dev.example.zh.yaml` for reference patterns). English user → English text. Mixed-locale users typically prefer their primary language; if unsure, ask. The 8 built-in `violation_checks` function names stay English regardless (they're stable identifiers).
 
 ### Step 4: Preview test
 
@@ -117,6 +157,11 @@ Show the refined yaml + preview output. Ask:
 
 If user wants changes, iterate (back to Step 3).
 
+**Also surface any of these if true** (don't let the user discover them after `add`):
+- "Heads up: this rule will be always-on, not just during [the X scenario]. If you only want X, we'd need a different mechanism."
+- "This overlaps semantically with existing rule `[id]` — want me to merge / replace, or keep both?"
+- "Current library is at N/10 — adding this puts you at N+1. After ~10, LLM attention to individual rules drops. Consider removing [Y] if it's redundant."
+
 ### Step 6: Write to rules.yaml
 
 Once user confirms:
@@ -133,8 +178,9 @@ After `karma rule add` succeeds, summarize for the user:
 1. **What was added** — show the final yaml (refined from their natural language)
 2. **karma tests passed** — schema validation + violation_checks existence verified
 3. **Current rule library count** — X of soft cap 10 / hard cap 12
-4. **Suggest deletions/modifications**:
-   - If close to soft cap (8+), suggest reviewing existing rules for duplicates/merging
+4. **When it takes effect** — "Takes effect on the next UserPromptSubmit. Send any new message (or restart Claude Code) to see it injected in the header." Don't make the user hunt for this.
+5. **Suggest deletions/modifications**:
+   - If close to soft cap (8+), suggest reviewing existing rules for duplicates/merging. Be concrete: name the specific rule pair that looks redundant ("`[X]` and `[Y]` both target evidence-attaching — consider merging") rather than vague "review for duplicates."
    - If any existing rule seems related, suggest adjusting it instead of keeping both
    - Ask: "Do you want to remove or modify any existing rules?"
 
@@ -210,10 +256,6 @@ After `karma rule add` succeeds, summarize for the user:
 >
 > 💡 **Suggestion**: You're at 8 of soft cap 10. The new rule overlaps with `loud-failure-with-evidence` in concept (both about evidence). If you find one redundant after a few days of use, consider running `karma rule remove <id>`. Want to do that now?
 
-## Restart Claude Code after `karma rule add`
-
-The new rule takes effect on the **next** UserPromptSubmit — restart Claude Code or just send a new message to see it injected.
-
 ## Common mistakes to avoid
 
 - ❌ Don't write rules in "rule-system" tone ("you must always...")
@@ -222,3 +264,6 @@ The new rule takes effect on the **next** UserPromptSubmit — restart Claude Co
 - ❌ Don't skip the preview step — always preview before `add`
 - ❌ Don't add a new rule without checking for overlap with existing ones
 - ❌ Don't exceed the soft cap 10 / hard cap 12 — too many rules backfire (LLMs pattern-match rule existence instead of truly reading)
+- ❌ Don't silently treat scoped-sounding requests ("during X, do Y") as scoped — karma is always-on. Surface the ambiguity in Step 1.
+- ❌ Don't write English `preference` text when the user is talking to you in Chinese (or vice versa) — match the user's language. Only `violation_checks` function names stay English (stable identifiers).
+- ❌ Don't go straight from Step 1 → Step 4 preview without showing the user a draft inline in Step 3 — they should react to wording before it's written to disk.
