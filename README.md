@@ -379,7 +379,7 @@ karma 是**让你注意自己偏好被 Agent 偏离时收到提示**，不是「
 | `no_testset_no_future_leakage` | ✓（仅 dev.example，minimal 砍掉） | gold_cases 反喂 / 跨 split 复制 / 长 hash 字面 |
 | `read_before_write` | ✓ | Edit / Write 前未 Read 过该 file_path（路径规范化等价） |
 | `bypass_karma_detection` | ✓ | Bash 命令含 karma 内部字面 + 写操作 → 拦绕开检测 |
-| `keep_pushing_no_stop` | **可选**（自加 sticky 引用） | response 末尾推进信号 / 问号 / 停顿词 / 默认四路检测。给「全权委托型」用户用 — 想开就在 sticky.yaml 加一条 `id: keep-pushing-no-stop` + `violation_checks: [keep_pushing_no_stop]` + 建议 `force_block_exempt: true` |
+| `keep_pushing_no_stop` | **可选**（自加 sticky 引用） | 优先级 5 路：0) user prompt 上文叫停字眼（不用了 / 休息吧 / 明天再说 等 sticky #8 例外清单）→ 整 turn 豁免 1) response 末尾含推进信号 → 豁免 2) 含问号 → 豁免 3) 含停顿语气词 → 命中 4) 默认命中。给「全权委托型」用户用 — 想开就在 sticky.yaml 加一条 `id: keep-pushing-no-stop` + `violation_checks: [keep_pushing_no_stop]` + 建议 `force_block_exempt: true` |
 
 软上限 10 条，硬上限 12 条（超过 karma 拒绝加载）。
 
@@ -395,7 +395,7 @@ karma 是**让你注意自己偏好被 Agent 偏离时收到提示**，不是「
 7. `deep-fix-not-bypass`（**元层**）karma 拦截时深挖根因，禁止手动改 karma 内部状态绕开
 
 可选个人 sticky（全权委托型用户）：
-- `keep-pushing-no-stop`（**元层**）完成一波后立即推下个，不停下等用户决定。Stop hook 配合 `decision=block` 让 Agent 不真停继续生成（safeguard：单 turn 累积 ≥ 3 次后真放停）。
+- `keep-pushing-no-stop`（**元层**）完成一波后立即推下个，不停下等用户决定。Stop hook 配合 `decision=block` 让 Agent 不真停继续生成（safeguard：单 turn 累积 ≥ 2 次 `stop_block_max_per_turn` 默认值后真放停）。v0.4.41 加 user prompt 上文叫停字眼整 turn 豁免（sticky #8 例外清单工程层 enforced）。
 
 ## 状态
 
