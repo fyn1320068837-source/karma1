@@ -108,8 +108,24 @@ Three hook feedback points:
 
 - `karma stats` — Each rule's violation count + last trigger time
 - `karma violations recent [N]` — Last N violation details
-- `karma doctor` — Check environment (rule validity + all hook install status, Claude Code 8 events)
+- `karma doctor` — Check environment (rule validity + all hook install status + skill install status, Claude Code 8 events)
+- `karma audit` — Per-rule top trigger frequency + locale-agnostic grouping (v0.5.7+)
 - `karma install-hooks / uninstall-hooks` — Auto-write/clean settings.json (idempotent + backup + preserve other hooks)
+- `karma install-skill [--force]` — Install / upgrade the `karma-rule` Claude Code skill (`karma init` runs this automatically; standalone command for upgrades)
+
+### F5. Natural-language rule input via Claude Code skill ✅ (v0.5.1+)
+
+- `karma rule add --from-yaml <file>` / `karma rule add --from-stdin` — Programmatic rule write with schema + id-conflict + REGISTRY validation
+- `karma rule preview --from-yaml/--from-stdin` — Dry-run schema check + header-injection preview before writing
+- `skills/karma-rule.md` Claude Code skill template — User types `/karma rule <natural language>`, Agent walks a 7-step workflow (intent → existing-rule overlap check → draft yaml → preview → confirm with user → write → report). Skill handles tone refinement (collaborative-agreement phrasing), locale-aware drafting (Chinese/English by user's language), overlap decisions (modify / merge / add-sibling), and modify recipe (`remove + add` composition — no separate "replace" command)
+
+### F6. Internationalization (v0.5.2+) ✅
+
+- `karma/i18n.py` with `tr(key, **fmt)` lookup, `{placeholder}` interpolation, fail-open on missing keys
+- Locale resolution chain: `KARMA_LOCALE` env > `config.yaml` `locale` field > auto-detect via `karma.locale_detect.is_chinese_user()` > `en` fallback
+- All hook injection text (header / drift marker / mid-injection / strong reminder / Stop reason / SessionStart variants / SubagentStart) + all 28 check `suggested_fix` strings + all 28 `CheckHit.trigger` audit labels switchable en/zh via `data/locales/{en,zh}.yaml`
+- `Violation.trigger_key` + `CheckHit.trigger_key` (v0.5.7+) — locale-agnostic stable identifier for `karma audit` cross-locale grouping (users switching locale mid-week still see correct aggregation)
+- `karma init` selects rule template by detected locale (`rules.dev.example.zh.yaml` for Chinese users, English default otherwise)
 
 ### M3 completeness supplements (engineering refinement above v0 MVP)
 

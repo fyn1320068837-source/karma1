@@ -17,11 +17,19 @@ If you're a new contributor reading this:
 
 ## Current status
 
-- ✅ karma v0.5.0 released — sticky → rule rename complete with backward-compat migration
-- ✅ i18n English-default documentation swap complete (this turn 2026-05-15)
-- 🔜 v0.5.1 pending — `karma rule add` CLI + Claude Code skill for natural-language rule input
-- 🔜 v0.5.2 pending — engineering-layer i18n (`karma/i18n.py` + hook injection text translation)
-- 🔜 v0.5.3 pending — full English text for all user-facing strings
+All v0.5.x phases delivered as of 2026-05-15 (12 releases v0.5.3 → v0.5.14 shipped in one focused session):
+
+- ✅ v0.5.0 — `sticky` → `rule` rename across entire codebase, backward-compat `.sticky_id` alias preserved until v0.6.0
+- ✅ i18n English-default documentation swap (README / PRD / ARCHITECTURE / SECURITY / CODE_OF_CONDUCT / CLAUDE / HOWTO / .github templates all English primary + `.zh.md` backup)
+- ✅ v0.5.1 — `karma rule add` / `karma rule preview` CLI + Claude Code skill template at `skills/karma-rule.md` for natural-language rule input
+- ✅ v0.5.2 — engineering-layer i18n: `karma/i18n.py` module with `tr(key, **fmt)` lookup + locale resolution chain + 5 hook injection paths switchable en/zh
+- ✅ v0.5.3 + v0.5.4 — i18n full coverage: 28 `suggested_fix` + 28 `CheckHit.trigger` audit-log strings tr()-driven
+- ✅ v0.5.5–v0.5.9 — dogfood-driven correctness fixes: testset `python -c` literal exemption, keep_pushing "next push point" planning phrases, locale-agnostic `trigger_key` audit grouping, Bash heredoc description-context exemption (testset local helper → `description_context.py` shared layer)
+- ✅ v0.5.10–v0.5.12 — UX polish: `karma --help` lists `rule add/preview` subcommands, `skills/karma-rule.md` clarity audit (5 gaps closed), `karma init` auto-installs skill + new `karma install-skill [--force]` command
+- ✅ v0.5.13 — audit-driven dedup: `is_python_c_command` helper extracted to `karma/checks/common.py` (was duplicated across 3 check files), 34 `.sticky_id` callsites cleaned to `.rule_id`, `karma doctor` reports skill installation status
+- ✅ v0.5.14 — `karma-rule` skill teaches the modify recipe (`rule preview` → `rule remove && rule add`) via existing commands; no new CLI added, by user principle: don't grow surface area for rare flows
+
+🔜 v0.6.0 — remove the `.sticky_id` backward-compat alias on `CheckHit` + `Violation` (all internal callsites migrated in v0.5.13; external user code had one release cycle to update)
 
 ## Why Chinese is the primary internal handoff language
 

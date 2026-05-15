@@ -115,8 +115,24 @@ karma 只做**「核心方向永驻 + 违反检测」**这一件事。
 
 - `karma stats` — 每条规则违反次数 + 最近触发时间
 - `karma violations recent [N]` — 最近 N 条违反详情
-- `karma doctor` — 检查环境（sticky 合法 + 全部 hook 装机状态，Claude Code 8 个 event）
+- `karma doctor` — 检查环境（规则合法 + 全部 hook 装机状态 + skill 装机状态，Claude Code 8 个 event）
+- `karma audit` — 每条规则 top 触发词频次 + 跨 locale 稳定分组（v0.5.7+）
 - `karma install-hooks / uninstall-hooks` — 自动写/清 settings.json（idempotent + 备份 + 保留他人 hook）
+- `karma install-skill [--force]` — 装 / 升级 `karma-rule` Claude Code skill（`karma init` 自动跑过；独立命令给升级用）
+
+### F5. 自然语言规则录入（Claude Code skill）✅（v0.5.1+）
+
+- `karma rule add --from-yaml <file>` / `karma rule add --from-stdin` — 程序化写规则，含 schema + id 唯一性 + REGISTRY 校验
+- `karma rule preview --from-yaml/--from-stdin` — dry-run schema 检查 + 头部注入预览，写盘前可看效果
+- `skills/karma-rule.md` Claude Code skill 模板 — 用户在 Claude Code 里输 `/karma rule <自然语言>`，Agent 走 7 步流程（识别意图 → 检查现有规则重叠 → 起草 yaml → preview → 跟用户确认 → 写入 → 反馈报告）。skill 负责语气优化（协作默契语气）、locale 感知（用户讲哪种语言写哪种 preference）、重叠决策（修改/合并/新加 sibling）、modify recipe（`remove + add` 组合 — 无需单独的「replace」命令）
+
+### F6. 国际化（v0.5.2+）✅
+
+- `karma/i18n.py` 含 `tr(key, **fmt)` lookup，`{placeholder}` 插值，缺 key fail-open
+- locale 解析链：`KARMA_LOCALE` env > `config.yaml` `locale` 字段 > `karma.locale_detect.is_chinese_user()` 自动检测 > `en` fallback
+- 所有 hook 注入文本（头部 / 偏离标记 / 中段注入 / 强提醒 / Stop reason / SessionStart 变体 / SubagentStart）+ 28 处 check `suggested_fix` + 28 处 `CheckHit.trigger` audit 标签全部走 `data/locales/{en,zh}.yaml` 双语切换
+- `Violation.trigger_key` + `CheckHit.trigger_key`（v0.5.7+）— locale-agnostic 稳定标识符让 `karma audit` 跨 locale 分组（用户中途切语言仍能正确聚合）
+- `karma init` 按 detected locale 选规则模板（中文用户装 `rules.dev.example.zh.yaml`，其他用英文 default）
 
 ### M3 完整化补充（v0 MVP 之上的工程精细化）
 

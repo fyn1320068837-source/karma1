@@ -335,8 +335,20 @@ Performance hasn't been a bottleneck — measured far below budget.
 | M3 1-6 waves comprehensive false-positive reduction + false-negative pairs + install automation + long-term quality + description context completeness + audit strictening | ✅ |
 | v0.4.x v3 evolution (mid-injection / SessionStart baseline / PreCompact dump / SubagentStart+Stop / per-model adaptive thresholds / "collaborative agreement" tone refactor / hook schema strict compliance) | ✅ |
 | v0.5.0 sticky → rule rename + backward-compat migration | ✅ |
+| v0.5.1 `karma rule add` / `rule preview` CLI + Claude Code skill template for natural-language rule input | ✅ |
+| v0.5.2 i18n MVP — `karma/i18n.py` + 5 hook injection paths switchable en/zh | ✅ |
+| v0.5.3 + v0.5.4 i18n full coverage — 28 `suggested_fix` + 28 `CheckHit.trigger` strings tr()-driven | ✅ |
+| v0.5.5 testset check `python -c` literal exemption (dogfood-found false positive) | ✅ |
+| v0.5.6 `keep_pushing._PUSH_SIGNAL_RE` covers "next push point / next step is" planning phrases | ✅ |
+| v0.5.7 `trigger_key` field on `CheckHit` + `Violation` — locale-agnostic `karma audit` grouping | ✅ |
+| v0.5.8 + v0.5.9 Bash heredoc → description-context path exemption, lifted into `description_context.py` shared layer | ✅ |
+| v0.5.10 `karma --help` lists `rule add` / `rule preview` subcommands (doc-only) | ✅ |
+| v0.5.11 `skills/karma-rule.md` clarity audit — 5 gaps closed (anchor-vs-scope / overlap decision table / inline draft review / locale-aware tone / when-takes-effect) | ✅ |
+| v0.5.12 `karma init` auto-installs `karma-rule` skill + new `karma install-skill [--force]` command | ✅ |
+| v0.5.13 audit-driven dedup — shared `is_python_c_command` helper + 34 `.sticky_id` callsites → `.rule_id` + `karma doctor` reports skill status | ✅ |
+| v0.5.14 skill teaches modify recipe via existing `remove + add` composition (no new CLI; user principle: don't grow surface area for rare flows) | ✅ |
 
-Details in [HANDOFF.md](./HANDOFF.md).
+Details in [CHANGELOG.md](../CHANGELOG.md) for per-release rationale; [HANDOFF.md](./HANDOFF.md) for internal context.
 
 ## Continuous observation = continuous development
 

@@ -351,8 +351,22 @@ violations / session_state / config / cli）都用它读 env。
 | M2.1 适配 Claude Code 真实协议 | ✅ |
 | M2.2 长 term check 按 tool 分组 + 文档豁免 | ✅ |
 | M3 1-6 波 全面降假阳 + 假阴对偶 + 装机自动化 + 长期质量 + 描述上下文完整化 + 加严审计 | ✅ |
+| v0.4.x v3 演化（中段注入 / SessionStart baseline / PreCompact dump / SubagentStart+Stop / 按模型自适应阈值 / 「协作默契」语气重写 / hook schema 严格合规）| ✅ |
+| v0.5.0 sticky → rule 全代码库改名 + 向后兼容 alias 保留 | ✅ |
+| v0.5.1 `karma rule add` / `rule preview` CLI + Claude Code skill 自然语言录入 | ✅ |
+| v0.5.2 i18n MVP — `karma/i18n.py` + 5 个 hook 注入路径双语切换 | ✅ |
+| v0.5.3 + v0.5.4 i18n 全覆盖 — 28 处 `suggested_fix` + 28 处 `CheckHit.trigger` 全 tr() | ✅ |
+| v0.5.5 testset check `python -c` 字符串字面豁免（dogfooding 真根因 fix）| ✅ |
+| v0.5.6 `keep_pushing._PUSH_SIGNAL_RE` 补「下一推进点 / 下一步是」类未来规划短语 | ✅ |
+| v0.5.7 `CheckHit` + `Violation` 加 `trigger_key` 字段 — `karma audit` 跨 locale 稳定分组 | ✅ |
+| v0.5.8 + v0.5.9 Bash heredoc → 描述上下文路径豁免，从 testset.py 局部 helper 提到 `description_context.py` 共享层 | ✅ |
+| v0.5.10 `karma --help` 顶部 docstring 列 `rule add/preview` 子命令（纯文档）| ✅ |
+| v0.5.11 `skills/karma-rule.md` 清晰度 audit — 补 5 个 gap (anchor-vs-scope / overlap 决策表 / 内联草稿审阅 / locale-aware 语气 / 生效时机) | ✅ |
+| v0.5.12 `karma init` 自动装 `karma-rule` skill + 新加 `karma install-skill [--force]` 命令 | ✅ |
+| v0.5.13 audit 驱动 dedup — `is_python_c_command` helper 共享 + 34 处 `.sticky_id` callsite 清理 + `karma doctor` 报 skill 状态 | ✅ |
+| v0.5.14 skill 教会 Agent 用 `remove + add` 现有命令组合做 modify（不加新 CLI；用户原则：不要为低频场景扩 CLI 表面）| ✅ |
 
-详见 [HANDOFF.md](./HANDOFF.md)。
+详见 [CHANGELOG.md](../CHANGELOG.md) 每版本的设计动机；[HANDOFF.md](./HANDOFF.md) 内部接力 context。
 
 ## 持续观察 = 持续开发
 

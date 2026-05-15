@@ -205,9 +205,28 @@ All hook outputs strictly comply with the AI client's official protocol schema �
 
 ## Customize your own rules
 
-> **⚡ Next-phase priority**: current manual yaml editing has a relatively high threshold. We're designing **visual rule input + real-time preview + one-click regression testing** so any user (not just developers) can finish personalized rule setup in 5 minutes.
+### Recommended: `/karma rule <natural language>` (Claude Code skill, ships out-of-box)
 
-### Current manual `rules.yaml` approach
+The fastest path — describe what you want in plain language, the Agent refines it into karma's structure, previews, confirms with you, then writes. `karma init` auto-installs the skill (v0.5.12+), so it's ready after install.
+
+```
+You (in Claude Code): /karma rule When I say "done" I want test pass evidence attached
+
+Agent: [checks existing rules, drafts yaml, runs `karma rule preview`,
+        confirms with you, then runs `karma rule add` — 30 sec total]
+```
+
+What the skill handles for you:
+- **Tone refinement** — turns "you must always X" into karma's "collaborative agreement" phrasing (LLMs respond better to it)
+- **Overlap detection** — flags semantic conflicts with existing rules; offers modify / merge / add-sibling decisions instead of silently creating duplicates
+- **Anchor-vs-scope check** — surfaces ambiguity like "during X, do Y" (is X just an example, or a hard scope?) before writing
+- **Locale-aware** — writes Chinese `preference` when you're talking Chinese, English when talking English
+- **Schema + REGISTRY validation** — schema check + `violation_checks` function-name verification before any disk write
+- **Modify recipe** — for revising an existing rule, the skill knows the `remove + add` composition pattern (no separate "replace" command needed)
+
+Skill source: [`skills/karma-rule.md`](./skills/karma-rule.md). Install location after `karma init`: `~/.claude/skills/karma-rule.md`. Upgrade: `karma install-skill` (use `--force` only to overwrite local edits — without it, the new version is written to `karma-rule.md.new` so you can diff first).
+
+### Fallback: manual `rules.yaml` editing
 
 `~/.claude/karma/rules.yaml` (`karma init` copies the default template):
 
