@@ -664,7 +664,9 @@ def test_stop_hook_blocks_when_keep_pushing_violated(monkeypatch, tmp_path, caps
     stop.main()
     out = json.loads(capsys.readouterr().out)
     assert out.get("decision") == "block", f"应输出 decision=block，实际：{out}"
-    assert "keep-pushing" in out.get("reason", "")
+    # 2026-05-15 重写：reason 合作回顾语气取代「反思提醒 + 自检」指控式
+    reason = out.get("reason", "")
+    assert "karma" in reason and ("推进" in reason or "默契" in reason)
 
 
 def test_user_prompt_submit_injects_strong_reminder_when_last_response_stopped(

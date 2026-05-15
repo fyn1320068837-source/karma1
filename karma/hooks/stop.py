@@ -280,12 +280,13 @@ def main() -> int:
                 session_state.save(state)
             except OSError:
                 pass
+            # 2026-05-15 重写：合作回顾语气取代「反思提醒 + 自检」指控式
             reason = (
-                f"karma stop hook 反思提醒 [keep-pushing-no-stop]：本 response 末尾没下一步"
-                f"推进信号。请自检 — 你是真有问题需要用户判断（如果是就明确问出来），"
-                f"还是知道要做什么但停下来等用户反馈（如果是就继续推进不停）？"
-                f"任务真饱和也算合理停下，但明说卡在哪让用户知道。"
-                f"（本 turn 已提醒 {state.stop_block_count}/{block_max} 次）"
+                f"[karma — 上一回应没看到下一步推进信号]"
+                f"用户是全权委托型，他期待你完成一波后立刻接着推进。如果有方向"
+                f"需要他判断就明确问出来；如果是任务真饱和合理停下，明说卡在"
+                f"哪一步让他知道，不要默默等。"
+                f"（提醒 {state.stop_block_count}/{block_max}）"
             )
             print(json.dumps({"decision": "block", "reason": reason}, ensure_ascii=False))
             return 0
