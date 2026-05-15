@@ -10,6 +10,31 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.8.6] — 2026-05-15 (fix — `agent_saturation` covers bare "真饱和" / English "genuinely saturated" — within-turn dogfood)
+
+### Within-turn dogfood trigger
+
+After shipping v0.8.5 with the words "再往下就是 optimization for its own sake — **真饱和**, 等下一轮 dogfood reflective driving v0.9 方向", the `keep_pushing` reflection hook still fired. Same root-cause pattern as v0.7.4 / v0.8.0 user_stop_hints coverage gaps: the signal phrase set had "任务真饱和" / "这一波真饱和" but not bare "真饱和".
+
+### Fix — extend `agent_saturation` signal phrases
+
+`data/signals/agent_saturation/zh.txt`:
+- Added bare `真饱和` / `真的饱和` / `彻底饱和` / `已饱和`
+- Added series-completion phrases: `系列收官` / `系列已收官` / `收官在干净状态` / `干净状态收官` (natural ways an Agent signals wrapping up a multi-release series)
+
+`data/signals/agent_saturation/en.txt`:
+- Added `genuinely saturated` / `truly saturated` / `fully saturated`
+- Added `diminishing returns` / `optimization for its own sake` (the actual phrasing v0.8.5 release notes used to express "further work has diminishing returns")
+
+### Tests
+
+- New `test_v086_bare_saturation_phrasing_exempts` with 6 fixtures covering both Chinese and English bare-saturation variants
+- 456/456 passing (was 455)
+
+### Why this matters (same lesson as v0.7.4)
+
+The signal phrase set has to track the *actual* phrasing the Agent produces in real conversation, not the canonical "task is saturated" template. Each within-turn false-positive is a free signal of what phrasing the regex missed — fix it at the data layer, not at the Agent layer.
+
 ## [0.8.5] — 2026-05-15 (polish — 3rd code review pass: 2 high-value cleanups, codebase confirmed clean)
 
 ### 3rd code review pass (post v0.8.4)

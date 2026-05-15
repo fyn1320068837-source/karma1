@@ -17,6 +17,11 @@ saturated for this session
 saturated this session
 hit saturation
 out of meaningful steps
+genuinely saturated
+truly saturated
+fully saturated
+diminishing returns
+optimization for its own sake
 
 # Stuck-on-X declarations
 I'm stuck on

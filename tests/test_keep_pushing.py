@@ -347,6 +347,31 @@ def test_v080_english_agent_saturation_exempts():
         assert result is None, f"英文 Agent 饱和声明 {resp!r} 应豁免: {result}"
 
 
+def test_v086_bare_saturation_phrasing_exempts():
+    """v0.8.6 within-turn dogfood: 「真饱和」单独出现 (非「任务真饱和」)
+    也应豁免反思 hook。
+
+    起因: v0.8.5 release 总结说「再往下就是 optimization for its own
+    sake — 真饱和，等下一轮 dogfood」, agent_saturation/zh.txt 只有
+    「任务真饱和」「这一波真饱和」没单独「真饱和」字眼 → 漏豁免。
+    同款 v0.7.4 user_stop_hints 满意类漏覆盖 pattern。
+    """
+    fn = REGISTRY["keep_pushing_no_stop"]
+    saturation_responses = [
+        # 中文 (v0.8.6 加)
+        "再往下就是 optimization for its own sake — 真饱和。",
+        "彻底饱和，等下次新方向。",
+        "v0.8.x 系列收官在干净状态。",
+        # 英文 (v0.8.6 加)
+        "Genuinely saturated, no obvious next direction.",
+        "Truly saturated at this point.",
+        "Diminishing returns from here.",
+    ]
+    for resp in saturation_responses:
+        result = fn(response=resp)
+        assert result is None, f"饱和声明 {resp!r} 应豁免: {result}"
+
+
 def test_v081_english_push_signal_exempts():
     """v0.8.1 i18n 信号: 英文 Agent push signal 豁免反思 hook。
 

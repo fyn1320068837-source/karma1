@@ -6,6 +6,31 @@
 
 ## [Unreleased]
 
+## [0.8.6] — 2026-05-15（fix — `agent_saturation` 加裸「真饱和」/ 英文「genuinely saturated」— 当 turn dogfood）
+
+### 当 turn dogfood 触发
+
+v0.8.5 ship 时收尾说「再往下就是 optimization for its own sake — **真饱和**，等下一轮 dogfood 反馈驱动 v0.9 方向」，`keep_pushing` 反思 hook 仍触发。同款 v0.7.4 / v0.8.0 user_stop_hints 覆盖漏的 pattern：信号字眼集有「任务真饱和」「这一波真饱和」但没单独「真饱和」。
+
+### Fix — 扩 `agent_saturation` 信号字眼
+
+`data/signals/agent_saturation/zh.txt`：
+- 加裸 `真饱和` / `真的饱和` / `彻底饱和` / `已饱和`
+- 加系列收官类：`系列收官` / `系列已收官` / `收官在干净状态` / `干净状态收官`（Agent 在多 release 系列收尾时自然会用的字眼）
+
+`data/signals/agent_saturation/en.txt`：
+- 加 `genuinely saturated` / `truly saturated` / `fully saturated`
+- 加 `diminishing returns` / `optimization for its own sake`（v0.8.5 release notes 实际用过的「再往下没什么可做」表达）
+
+### 测试
+
+- 新 `test_v086_bare_saturation_phrasing_exempts`，6 个 fixture 覆盖中英文裸饱和变体
+- 456/456 通过（原 455）
+
+### 为什么重要（同 v0.7.4 教训）
+
+信号字眼集得跟 Agent 实际对话产生的字面对齐，不是按标准模板「task is saturated」覆盖。每个当 turn 假阳都是一个免费信号告诉 regex 漏了什么 — 在数据层修，不是在 Agent 层修。
+
 ## [0.8.5] — 2026-05-15（polish — 第 3 轮代码审查：2 处高价值清理，codebase 确认干净）
 
 ### 第 3 轮代码审查（v0.8.4 之后）
