@@ -39,7 +39,7 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.5",
     "vulture>=2.14",   # 死代码扫描 — 跑 `vulture karma/ --min-confidence 60`
-    "mypy>=1.10",      # 静态类型检查 — 跑 `mypy karma/ --ignore-missing-imports`
+    "mypy>=1.10",      # 静态类型检查 — 跑 `mypy karma/`（ignore_missing_imports 已配 [tool.mypy]）
 ]
 
 [build-system]
@@ -62,3 +62,7 @@ python_files = "test_*.py"
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.mypy]
+# PyYAML 没官方 stub（types-PyYAML 是社区维护），karma 不引入额外 stub 依赖
+ignore_missing_imports = true
