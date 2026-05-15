@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+### docs
+
+- **README v4 重写**（2026-05-15 仓库公开后第一轮宣传点优化）— 整合两个爆款参考的 7 大表达要素：
+  - 首屏量化数字 hook（学 Mnilax「错误率 41% → 3%」首屏冲击）
+  - 借 Karpathy 60k stars CLAUDE.md 互补关系建立技术权威背书
+  - 真痛点 + 翻车现场对照表（学 [andrej-karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills)「Problems → Solutions」表格视觉冲击）
+  - 命令式 + 反问风格（每原理段加「Test: ...?」反问）
+  - 「试过但放弃的」段 9 行表格透明披露 anti-pattern
+  - 心智模型收尾（借 Mnilax「不是许愿清单是行为合约」改写）
+  - FAQ 加「跟 Karpathy CLAUDE.md 重叠吗」明确互补关系
+- 顺手 polish：GitHub repo description / 10 个 topics / issue + PR templates / CODE_OF_CONDUCT 简短中文版 / docs/ 归类详细文档 / README TOC 跳转
+
 ## [0.4.44] — 2026-05-15（fix — SubagentStop + PreCompact schema 真合规，跟 v0.4.43 Stop fix 同思路）
 
 ### 触发
