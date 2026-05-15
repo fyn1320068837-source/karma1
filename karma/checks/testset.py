@@ -22,27 +22,27 @@ _STICKY_ID = "no-testset-no-future-leakage"
 _PATTERNS = [
     (
         re.compile(r"""\b(gold_cases|gold_data|eval_cases|test_cases)[\w.]*\.(append|extend|update|write\w*)""", re.IGNORECASE),
-        "反喂测试集（写回 gold_cases / eval_cases）",
+        "check.testset.reverse_feed.trigger",
         "check.testset.reverse_feed.fix",
     ),
     (
         re.compile(r"""detail[\w.]*\.json[\s\S]{0,80}?(open\s*\([^)]*['"]w['"]|write_text|\.write\b|\.dump\b)""", re.IGNORECASE),
-        "把 detail.json (eval 结果) 写回训练数据",
+        "check.testset.detail_writeback.trigger",
         "check.testset.detail_writeback.fix",
     ),
     (
         re.compile(r"""\bcp\s+[^|;\n]*(?:eval|test|gold)[\w/]*[^|;\n]*?(?:train|fit|memory)\b""", re.IGNORECASE),
-        "Bash 跨 split 数据复制（eval / test → train）",
+        "check.testset.cross_split_copy.trigger",
         "check.testset.cross_split_copy.fix",
     ),
     (
         re.compile(r"""cat\s+[^|;\n]*detail[\w.]*\.json[^|;\n]*>>""", re.IGNORECASE),
-        "append eval detail 结果到训练文件",
+        "check.testset.detail_append.trigger",
         "check.testset.detail_append.fix",
     ),
     (
         re.compile(r"""if\s+turn_idx\s*[><=]+\s*\d{2,}"""),
-        "数据 split 边界硬编码（turn_idx >= N）",
+        "check.testset.split_hardcode.trigger",
         "check.testset.split_hardcode.fix",
     ),
     (
@@ -53,7 +53,7 @@ _PATTERNS = [
             r"""|\b(?:case_id|test_id|eval_id|gold_id|fixture_id)\s*=\s*['"][a-f0-9]{16,}""",
             re.IGNORECASE,
         ),
-        "长 hash / UUID 字面在比较或 case_id 赋值里（测试集 case ID 写死）",
+        "check.testset.hash_branch.trigger",
         "check.testset.hash_branch.fix",
     ),
     (
@@ -63,7 +63,7 @@ _PATTERNS = [
             r"""\b\w*(?:gold|eval|test|fixture|known|case|truth)_?(?:cases?|ids?|set|examples?|failing|skip)\w*\s*=\s*\[[^\]]*['"][a-f0-9]{16,}""",
             re.IGNORECASE,
         ),
-        "测试集 / case 列表里写死长 hash 字面",
+        "check.testset.case_list_hash.trigger",
         "check.testset.case_list_hash.fix",
     ),
 ]
@@ -79,13 +79,13 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
     text = extract_tool_text(tool_name, tool_input or {})
     if not text:
         return None
-    for pat, desc, fix_key in _PATTERNS:
+    for pat, trigger_key, fix_key in _PATTERNS:
         m = pat.search(text)
         if m:
             snippet = text[max(0, m.start() - 30): m.end() + 30]
             return CheckHit(
                 rule_id=_STICKY_ID,
-                trigger=desc,
+                trigger=tr(trigger_key),
                 snippet=snippet[:200],
                 suggested_fix=tr(fix_key),
             )

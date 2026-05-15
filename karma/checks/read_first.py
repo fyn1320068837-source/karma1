@@ -39,7 +39,7 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, session_state=
 
     return CheckHit(
         rule_id=_STICKY_ID,
-        trigger=f"未 Read 就 {tool_name} {file_path}",
+        trigger=tr("check.read_first.trigger", tool=tool_name, file_path=file_path),
         snippet=f"{tool_name}({file_path!r})",
         suggested_fix=tr("check.read_first.fix", file_path=file_path),
     )

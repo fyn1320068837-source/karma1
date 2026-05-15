@@ -6,6 +6,29 @@
 
 ## [Unreleased]
 
+## [0.5.4] — 2026-05-15（feat — Phase D 第三波：28 处 CheckHit.trigger 双语切换）
+
+### feat — 所有 CheckHit.trigger audit 标签 i18n 化
+
+`trigger` 字段写入 `~/.claude/karma/violations.jsonl` 用作 audit log 分类标签，是 v0.5.3 留下的最后一个双语缺口。v0.5.4 收尾：8 个 check 模块 28 处 trigger 全部走 `tr()`，跟 fix namespace 平行。
+
+- 14 处 trigger 直接调用 — `chinese_plain` / `non_blocking` / `evidence` / `keep_pushing` / `read_first` / `bypass_karma`（含 `{term}` / `{cmd}` / `{word}` / `{tool}` / `{file_path}` / `{target}` 插值）
+- 14 处 pattern 表 — `long_term` / `testset` tuple 结构改为 `(regex, trigger_key, fix_key)`，命中时双 tr() 同步翻译
+
+### feat — `data/locales/en.yaml` + `zh.yaml` 新增 28 个 `check.*.trigger` key
+
+原 `f"..."` 里的 `!r` 格式说明符保留，让 `'value'` 引号包裹行为不变。
+
+### 验证
+
+- `pytest`：392/392 通过
+- `ruff`：0 issues
+- 手工 probe：28 key 在 EN/ZH 双 locale 下 lookup 正确 + 插值符合预期（`time.sleep(5)`、`'真' 重复 7 次` 等）
+
+### 本版保留中文的部分（刻意）
+
+`data/rules.dev.example.zh.yaml` 内规则正文内容 — 这是**用户偏好**本身（中文用户装中文模板、英文用户装英文模板，靠 `_select_rule_template()` 路由），所以 per-locale 模板才是正解，不该 runtime 翻译。
+
 ## [0.5.3] — 2026-05-15（feat — Phase D 完成：8 个 check 28 处 suggested_fix 双语切换）
 
 ### feat — 8 个 check 函数 suggested_fix 全部 i18n 化

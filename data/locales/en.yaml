@@ -90,3 +90,49 @@ check.testset.detail_append.fix: "Appending eval detail into training / pool fil
 check.testset.split_hardcode.fix: "Hard-coding turn_idx thresholds means future split-size changes require editing code — use a train/test split config so it can evolve."
 check.testset.hash_branch.fix: "Writing test-set case IDs into if branches = special-casing on future eval data, which the user takes seriously as cheating. Use general dispatch logic instead."
 check.testset.case_list_hash.fix: "Hard-coding specific case IDs into a list = suspected reverse-feeding; the user is strict about eval cleanliness. Use general fixtures / algorithmic case-ID generation."
+
+# ===== 28 check trigger entries (v0.5.4) — audit-log classification labels =====
+
+# chinese_plain (3 entries)
+check.chinese_plain.ratio.trigger: "Natural-language Chinese ratio {ratio}% < {min}%"
+check.chinese_plain.jargon.trigger: "Jargon {term!r} not followed by Chinese explanation in parens"
+check.chinese_plain.repeated_prefix.trigger: "Prefix character {prefix!r} repeats {count} times (suspected defensive stacking)"
+
+# non_blocking (4 entries)
+check.non_blocking.python_block.trigger: "Real blocking call inside python -c: {call!r}"
+check.non_blocking.sleep.trigger: "Bash sleep command: {cmd!r}"
+check.non_blocking.wait.trigger: "Bash wait command blocking"
+check.non_blocking.long_task.trigger: "Long task without run_in_background: {cmd!r}"
+
+# evidence (3 entries)
+check.evidence.commit.trigger: "No recent passing-test evidence in session before git commit"
+check.evidence.completion.trigger: "Claimed {word!r} but no recent passing-test evidence in session"
+check.evidence.weak_claim.trigger: "Used '{word}' as a hard claim without test evidence"
+
+# keep_pushing (2 entries)
+check.keep_pushing.stop_hint.trigger: "Response tail contains pause phrase {word!r} — explicit stop"
+check.keep_pushing.default.trigger: "Response is pure-statement conclusion with no push signal / no decision question — real stop without a next step"
+
+# read_first (1 entry)
+check.read_first.trigger: "{tool} {file_path} without prior Read"
+
+# bypass_karma (1 entry)
+check.bypass_karma.trigger: "Bypass attempt — manual write to karma internal state ({target!r})"
+
+# long_term (7 entries)
+check.long_term.long_id_branch.trigger: "Long ID literal in if branch (special-case hard-code)"
+check.long_term.blacklist_literal.trigger: "Black/white list inline literal (variable name matches blacklist semantics)"
+check.long_term.uppercase_const_list.trigger: "UPPER_CASE constant + 5+ string list (suspected hard-coded black/white list)"
+check.long_term.commit_hack.trigger: "git commit subject contains quick fix / hack / temp / workaround"
+check.long_term.git_skip_verify.trigger: "git destructive action with skip-verification flag"
+check.long_term.todo_marker.trigger: "Code contains TODO/FIXME/HACK/XXX marker comment"
+check.long_term.patch_intent.trigger: "Code contains 'patch / bypass / workaround' intent comment"
+
+# testset (7 entries)
+check.testset.reverse_feed.trigger: "Reverse-feeding eval pool (writing back to gold_cases / eval_cases)"
+check.testset.detail_writeback.trigger: "Writing detail.json (eval result) back into training data"
+check.testset.cross_split_copy.trigger: "Bash cross-split data copy (eval / test → train)"
+check.testset.detail_append.trigger: "Appending eval detail to training file"
+check.testset.split_hardcode.trigger: "Data-split boundary hard-coded (turn_idx >= N)"
+check.testset.hash_branch.trigger: "Long hash / UUID literal in comparison or case_id assignment (test-set case ID hard-coded)"
+check.testset.case_list_hash.trigger: "Test-set / case list contains hard-coded long-hash literal"

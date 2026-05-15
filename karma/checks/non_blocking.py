@@ -119,7 +119,7 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
         if m_block:
             return CheckHit(
                 rule_id=_STICKY_ID,
-                trigger=f"python 真阻塞接口: {m_block.group()!r}",
+                trigger=tr("check.non_blocking.python_block.trigger", call=m_block.group()),
                 snippet=cmd_raw[:200],
                 suggested_fix=tr("check.non_blocking.python_block.fix"),
             )
@@ -128,7 +128,7 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
     if m and not is_lang_c:
         return CheckHit(
             rule_id=_STICKY_ID,
-            trigger=f"Bash sleep 命令: {m.group()!r}",
+            trigger=tr("check.non_blocking.sleep.trigger", cmd=m.group()),
             snippet=cmd_raw[:200],
             suggested_fix=tr("check.non_blocking.sleep.fix"),
         )
@@ -138,7 +138,7 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
     if _is_blocking_wait(cmd) and not is_lang_c:
         return CheckHit(
             rule_id=_STICKY_ID,
-            trigger="Bash wait 命令阻塞",
+            trigger=tr("check.non_blocking.wait.trigger"),
             snippet=cmd_raw[:200],
             suggested_fix=tr("check.non_blocking.wait.fix"),
         )
@@ -148,7 +148,7 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
     if m and not is_bg and "&" not in cmd:
         return CheckHit(
             rule_id=_STICKY_ID,
-            trigger=f"长任务不带 run_in_background: {m.group()!r}",
+            trigger=tr("check.non_blocking.long_task.trigger", cmd=m.group()),
             snippet=cmd_raw[:200],
             suggested_fix=tr("check.non_blocking.long_task.fix", cmd=m.group()),
         )

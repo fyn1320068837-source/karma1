@@ -141,7 +141,7 @@ def check(*, response: str = "", **_):
         if ratio < _MIN_CHINESE_RATIO:
             return CheckHit(
                 rule_id=_STICKY_ID,
-                trigger=f"自然语言中文占比 {ratio*100:.0f}% < {_MIN_CHINESE_RATIO*100:.0f}%",
+                trigger=tr("check.chinese_plain.ratio.trigger", ratio=f"{ratio*100:.0f}", min=f"{_MIN_CHINESE_RATIO*100:.0f}"),
                 snippet=natural_for_ratio[:150],
                 suggested_fix=tr("check.chinese_plain.ratio.fix"),
             )
@@ -185,7 +185,7 @@ def check(*, response: str = "", **_):
         # 没括号解释 → 算违反
         return CheckHit(
             rule_id=_STICKY_ID,
-            trigger=f"术语 {m.group()!r} 后无括号内中文解释",
+            trigger=tr("check.chinese_plain.jargon.trigger", term=m.group()),
             snippet=jargon_scan_text[max(0, m.start() - 20): m.end() + _JARGON_CONTEXT_RADIUS],
             suggested_fix=tr("check.chinese_plain.jargon.fix", term=m.group()),
         )
@@ -226,7 +226,7 @@ def _check_repeated_prefix(text: str):
                 continue
             return CheckHit(
                 rule_id=_STICKY_ID,
-                trigger=f"前缀字 {prefix!r} 重复 {count} 次（疑似防御性堆叠）",
+                trigger=tr("check.chinese_plain.repeated_prefix.trigger", prefix=prefix, count=count),
                 snippet=f"「{prefix}」字在本 response 出现 {count} 次开头位置",
                 suggested_fix=tr("check.chinese_plain.repeated_prefix.fix", prefix=prefix),
             )

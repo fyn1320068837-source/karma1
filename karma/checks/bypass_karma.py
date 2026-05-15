@@ -121,7 +121,7 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
         trigger_text = m1.group() if m1 else (m2.group() if m2 else "karma 内部状态")
         return CheckHit(
             rule_id=_STICKY_ID,
-            trigger=f"绕开检测 — 手动写 karma 内部状态 ({trigger_text!r})",
+            trigger=tr("check.bypass_karma.trigger", target=trigger_text),
             snippet=cmd_raw[:200],
             suggested_fix=tr("check.bypass_karma.fix"),
         )

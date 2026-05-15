@@ -93,7 +93,7 @@ def check(
                 return None
             return CheckHit(
                 rule_id=_STICKY_ID,
-                trigger="git commit 前最近 session 内无测试通过证据",
+                trigger=tr("check.evidence.commit.trigger"),
                 snippet=cmd[:200],
                 suggested_fix=tr("check.evidence.commit.fix"),
             )
@@ -108,7 +108,7 @@ def check(
             if not has_recent_test:
                 return CheckHit(
                     rule_id=_STICKY_ID,
-                    trigger=f"声称{m_done.group()!r} 但 session 最近无测试通过证据",
+                    trigger=tr("check.evidence.completion.trigger", word=m_done.group()),
                     snippet=response[max(0, m_done.start()-30): m_done.end()+50],
                     suggested_fix=tr("check.evidence.completion.fix"),
                 )
@@ -119,7 +119,7 @@ def check(
             if not has_recent_test:
                 return CheckHit(
                     rule_id=_STICKY_ID,
-                    trigger=f"用『{m_weak.group()}』做硬声明且无测试证据",
+                    trigger=tr("check.evidence.weak_claim.trigger", word=m_weak.group()),
                     snippet=response[max(0, m_weak.start()-30): m_weak.end()+50],
                     suggested_fix=tr("check.evidence.weak_claim.fix"),
                 )

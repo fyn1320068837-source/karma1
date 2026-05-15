@@ -27,7 +27,7 @@ _PATTERNS_ALL = [
         # （字面如 'install-hooks' / 'no-testset-no-future-leakage' — kebab-case 命令
         # 名 / sticky id 不含数字，是合法分发不是 ID 硬写）
         re.compile(r"""if\s+\w+\s*==\s*(['"])(?=[\w\-]{12,}\1)[\w\-]*\d[\w\-]*\1"""),
-        "长 ID 字面写在 if 分支（特例分支硬编码）",
+        "check.long_term.long_id_branch.trigger",
         "check.long_term.long_id_branch.fix",
     ),
     (
@@ -37,7 +37,7 @@ _PATTERNS_ALL = [
             r"""\b\w*(?:blacklist|whitelist|stopwords?|badwords?|forbidden|banned|excluded?|ignored|filter_?words?|skip_?list|denylist|allowlist)\w*\s*=\s*\[\s*["']""",
             re.IGNORECASE,
         ),
-        "黑/白名单字面量列表 (变量名匹配黑白名单语义)",
+        "check.long_term.blacklist_literal.trigger",
         "check.long_term.blacklist_literal.fix",
     ),
     (
@@ -47,7 +47,7 @@ _PATTERNS_ALL = [
         re.compile(
             r"""\b[A-Z][A-Z0-9_]{2,}\s*=\s*\[\s*(?:["'][^"'\n]+["']\s*,\s*){4,}""",
         ),
-        "全大写常量 + 5+ 元素字符串列表（疑似硬编码黑/白名单）",
+        "check.long_term.uppercase_const_list.trigger",
         "check.long_term.uppercase_const_list.fix",
     ),
 ]
@@ -59,7 +59,7 @@ _PATTERNS_BASH_ONLY = [
         # git 规范标题行 < 72 字。后部长描述里讨论字眼是元层面 ≠ 真违反。
         # `[^"'\n]{0,80}?` 要求字眼前最多 80 个非引号非换行字符。
         re.compile(r"""git\s+commit.*?["'](?:[^"'\n]{0,80}?)(quick\s*fix|hack\b|temp\b|workaround|临时|凑数)""", re.IGNORECASE),
-        "git commit 标题行含 quick fix / hack / temp / 临时 字眼",
+        "check.long_term.commit_hack.trigger",
         "check.long_term.commit_hack.fix",
     ),
     (
@@ -72,7 +72,7 @@ _PATTERNS_BASH_ONLY = [
             r"(?:--no-verify\b|--force(?!-with-lease)\b|--skip-hooks\b)",
             re.IGNORECASE,
         ),
-        "git 危险动作跳过验证 flag",
+        "check.long_term.git_skip_verify.trigger",
         "check.long_term.git_skip_verify.fix",
     ),
 ]
@@ -81,7 +81,7 @@ _PATTERNS_BASH_ONLY = [
 _PATTERNS_WRITE_EDIT_ONLY = [
     (
         re.compile(r"(?:#|//|--)\s*(?:TODO|FIXME|HACK|XXX)(?:\s*[:(]|\s+@)|(?:#|//|--)\s*临时\b", re.IGNORECASE),
-        "代码含 TODO/FIXME/HACK/临时 标记注释",
+        "check.long_term.todo_marker.trigger",
         "check.long_term.todo_marker.fix",
     ),
     (
@@ -90,7 +90,7 @@ _PATTERNS_WRITE_EDIT_ONLY = [
             r"(?:#|//|--)\s*[^\n]{0,60}?(?:先打个?补丁|临时方案|快速绕过|workaround|hack\s*around|quick\s*fix|凑数|短期\s*目标|hack\s+for|patch\s+for\s+now)",
             re.IGNORECASE,
         ),
-        "代码含「打补丁 / 绕过 / 凑数 / workaround」意图注释",
+        "check.long_term.patch_intent.trigger",
         "check.long_term.patch_intent.fix",
     ),
 ]
@@ -122,13 +122,13 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
     elif tool_name in ("Write", "Edit", "NotebookEdit"):
         patterns.extend(_PATTERNS_WRITE_EDIT_ONLY)
 
-    for pat, desc, fix_key in patterns:
+    for pat, trigger_key, fix_key in patterns:
         m = pat.search(text)
         if m:
             snippet = text[max(0, m.start() - 30): m.end() + 30].strip()
             return CheckHit(
                 rule_id=_STICKY_ID,
-                trigger=desc,
+                trigger=tr(trigger_key),
                 snippet=snippet[:200],
                 suggested_fix=tr(fix_key),
             )
