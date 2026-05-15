@@ -61,7 +61,8 @@ print(KARMA_DIR)
 """,
     )
     lines = out.splitlines()
-    assert lines[0] == "/tmp/karma-multi-mod/sticky.yaml"
+    # v0.5.0 起 sticky.yaml → rules.yaml（向后兼容 fallback 还在）
+    assert lines[0] == "/tmp/karma-multi-mod/rules.yaml"
     assert lines[1] == "/tmp/karma-multi-mod/violations.jsonl"
     assert lines[2] == "/tmp/karma-multi-mod/session-state"
     assert lines[3] == "/tmp/karma-multi-mod/config.yaml"
