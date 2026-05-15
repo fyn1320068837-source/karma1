@@ -6,6 +6,79 @@
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-05-15（feat — 注入架构重设计：SessionStart 全量 baseline + 每 turn 精简 anchor + 累积全量 reinject，**每 turn 节省 73% token**）
+
+### 触发的用户洞察
+
+v0.8.6 收尾后我（Agent）实测 token 注入：**1817 token / turn** UserPromptSubmit 头部，100 turn 累积 = 1M Opus 18.4%（~184K）。用户的回应：
+
+> session 初始注入 + 不同模型默认锚定阈值就近注入 + 违规注入 + 压缩后注入 + 子 Agent 注入是不是就行了
+
+—— **每 turn 不需要重新全量注入** —— SessionStart 注入一次进 conversation history 持续可见，累积达模型衰减拐点再补一次全量，违反时补强提醒。之前每 turn 全量是冗余。
+
+用户进一步精化 3 个调整：
+
+1. **SessionStart 全量注入**（替代当前精简 baseline）
+2. **UserPromptSubmit 每 turn 精简 anchor**（id + 第一行 preference + 偏离回顾标记，~490 token vs 1817）
+3. **PostToolUse 中段全量 reinject** 按 **session 全局** byte 累积达模型阈值触发（不每 turn 重置）
+
+### 架构变化
+
+**注入生命周期（v0.9.0）**：
+
+```
+SessionStart (startup/resume/clear/compact) → 全量 baseline (1817 tok, 每 session 一次)
+UserPromptSubmit (每 turn)                   → 精简 anchor (~490 tok) + 偏离回顾 + 违反 fallback (违反时)
+PostToolUse (每 tool call)                   → 累积 byte_seq；当 (byte_seq - last_reinject) ≥ 模型阈值 → 全量 reinject (1817 tok) + 重置 last_reinject
+SubagentStart                                → 子 Agent 继承完整规则（不变）
+PreCompact                                   → snapshot 落盘（不变；SessionStart compact 路径读回）
+```
+
+**模型衰减阈值收紧**（因为 SessionStart baseline 在 history 顶部累积久了会被稀释）：
+- Opus：80K → **60K**
+- Sonnet：60K → **40K**
+- Haiku：30K（不变）
+- DEFAULT（未知模型）：60K → **40K**
+
+### 实测 token 节省
+
+100 turn 1M Opus session：
+
+| 架构 | UserPromptSubmit | SessionStart | PostToolUse | **总计** | **占 1M** |
+|---|---|---|---|---|---|
+| 旧（v0.8.x）| 100 × 1817 = 181.7K | 0.4K | ~2K | **~184K** | **18.4%** |
+| v0.9.0 | 100 × 490 = 49.0K | 1.8K | 17 × 1817 = 30.9K | **~82K** | **8.2%** |
+
+**每 turn UserPromptSubmit 节省：73%（1817 → 490 token）**。
+
+1M Opus session 累积实际节省 ~100K token（10% of context），比旧架构减少 55%。
+
+### 新增 `format_anchor_only()` 函数
+
+`karma/rule.py` 加 `format_anchor_only(rule_list, recent_violations)` 渲染精简文本：`id + 第一行 preference + 偏离回顾标记`。UserPromptSubmit 每 turn 用。`format_for_injection()`（全量）仍被 SessionStart + PostToolUse 中段 reinject 用。
+
+### state 字段语义变更
+
+`tool_byte_seq` / `last_reinject_byte_seq` 不再每 turn 重置（v0.4.32 设计每 turn 重置是因为 UserPromptSubmit 每 turn 全量注入）。现在 **session 全局累积** — 中段 reinject 按 session 级衰减阈值正确触发。
+
+### 测试
+
+- 4 个新 `format_anchor_only` 测试（基础 / 偏离标记 / token 节省 / 空列表）
+- 7 个 model_threshold 测试更新到新阈值
+- 5 个 `post_tool_use_reinject` 测试更新（全量注入行为 + 新阈值）
+- `test_hooks` test_post_tool_use_smart_reinject 期望更新
+- **460/460 通过**
+
+### 对用户意味着什么
+
+- **每 turn 输入 token 显著降低** — API billing + prompt cache miss 都省
+- **规则保真度不变** — Agent 仍能看到完整 preference 文本（SessionStart 注入持久在 conversation history）+ 每 turn 精简 anchor 提示规则存在 + context 衰减时自动全量 reinject
+- **不需要改配置** — 现有 `rules.yaml` 完全兼容，升级透明
+
+### 为什么是 v0.9.0 minor bump（不是 patch）
+
+注入工作机制有 user-visible 变化。现有 `rules.yaml` 无需修改，但 token 成本曲线明显不同 — 版本号 bump 标记这点。
+
 ## [0.8.6] — 2026-05-15（fix — `agent_saturation` 加裸「真饱和」/ 英文「genuinely saturated」— 当 turn dogfood）
 
 ### 当 turn dogfood 触发

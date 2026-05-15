@@ -132,8 +132,8 @@ def test_subagent_state_model_drives_threshold(tmp_path):
 
     main_loaded = session_state.load("sess1", base_dir=tmp_path)
     sub2_loaded = session_state.load("sess1", base_dir=tmp_path, agent_id="sub-2")
-    assert threshold_for_model(main_loaded.model) == 80_000  # opus
-    assert threshold_for_model(sub2_loaded.model) == 60_000  # sonnet
+    assert threshold_for_model(main_loaded.model) == 60_000  # opus (v0.9.0)
+    assert threshold_for_model(sub2_loaded.model) == 40_000  # sonnet (v0.9.0)
 
 
 def test_violation_agent_id_serialized_when_subagent():

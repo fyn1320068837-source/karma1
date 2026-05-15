@@ -8,6 +8,8 @@ inject.header.title: "[karma — Your long-term agreement with the user]"
 inject.header.line1: "You're collaborating with a real human user who listed several long-term priorities."
 inject.header.line2: "This isn't rules and isn't a judgment — these are the collaborative agreements they hope to build with you."
 inject.drift_marker: "  〔Last response had drift on this one — let's realign this turn〕"
+anchor.header.title: "[karma — long-term agreement anchor (compact form; full preferences injected at session start)]"
+anchor.header.line: "This turn: a quick name + one-line reminder of each direction. Full preference text was injected at session start."
 
 # ===== PostToolUse mid-injection (锚定刷新) =====
 mid_inject.header.title: "[karma — After long context, recall the agreement with the user]"

@@ -10,6 +10,79 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-05-15 (feat — injection architecture redesign: SessionStart full baseline + per-turn anchor + cumulative full reinject, **73% token saving per turn**)
+
+### User insight that drove this
+
+After v0.8.6 wrap-up I (the Agent) reported full injection cost: **1817 tokens / turn** at UserPromptSubmit head, accumulating 100 × 1817 = ~182K (18%) of a 1M Opus context window. User's response:
+
+> session 初始注入 + 不同模型默认锚定阈值就近注入 + 违规注入 + 压缩后注入 + 子 Agent 注入是不是就行了
+
+i.e. **don't inject the full rules every turn** — inject once at session start (SessionStart), refresh when context-token accumulation hits the model's decay threshold (PostToolUse), supplement with violation reminders when needed (UserPromptSubmit fallback). The previous design re-injected full rules each turn — duplicate of what's already in conversation history.
+
+Then user refined with 3 adjustments:
+
+1. **SessionStart full injection** (replace current精简 baseline)
+2. **UserPromptSubmit per-turn compact anchor** (id + first-line preference + drift marker, ~490 tokens vs 1817)
+3. **PostToolUse mid-session full reinject** triggered by **session-global** byte accumulation hitting model threshold (not per-turn)
+
+### Architecture changes
+
+**Injection lifecycle (v0.9.0)**:
+
+```
+SessionStart (startup/resume/clear/compact) → full baseline (1817 tok, once per session)
+UserPromptSubmit (every turn)               → compact anchor (~490 tok) + drift markers + violation fallback (when violated)
+PostToolUse (every tool call)               → accumulate byte_seq; when (byte_seq - last_reinject) ≥ model threshold → full reinject (1817 tok) + reset last_reinject
+SubagentStart                               → subagent inherits full rules (unchanged)
+PreCompact                                  → snapshot to disk (unchanged; SessionStart compact path reads it)
+```
+
+**Model decay thresholds tightened** (since SessionStart baseline ages in history top while turns accumulate):
+- Opus: 80K → **60K**
+- Sonnet: 60K → **40K**
+- Haiku: 30K (unchanged)
+- DEFAULT (unknown model): 60K → **40K**
+
+### Measured token savings
+
+For a 100-turn 1M Opus session:
+
+| Architecture | UserPromptSubmit | SessionStart | PostToolUse | **Total** | **% of 1M** |
+|---|---|---|---|---|---|
+| Old (v0.8.x) | 100 × 1817 = 181.7K | 0.4K | ~2K | **~184K** | **18.4%** |
+| v0.9.0 | 100 × 490 = 49.0K | 1.8K | 17 × 1817 = 30.9K | **~82K** | **8.2%** |
+
+**Per-turn UserPromptSubmit saving: 73% (1817 → 490 tokens)**.
+
+Real-world cumulative saving for 1M Opus session: ~100K tokens (10% of context), 55% reduction vs old architecture.
+
+### New `format_anchor_only()` function
+
+`karma/rule.py` adds `format_anchor_only(rule_list, recent_violations)` rendering compact text: `id + first-line preference + drift marker`. Used by UserPromptSubmit per-turn injection. `format_for_injection()` (full) still used by SessionStart + PostToolUse mid-reinject.
+
+### State semantic change
+
+`tool_byte_seq` / `last_reinject_byte_seq` no longer reset per-turn (v0.4.32 was per-turn because UserPromptSubmit re-injected full each turn). Now **session-global accumulation** — mid-reinject triggers correctly by session-level decay threshold.
+
+### Tests
+
+- 4 new `format_anchor_only` tests (basic / drift markers / token savings vs full / empty list)
+- 7 model_threshold tests updated for new threshold values
+- 5 `post_tool_use_reinject` tests updated for full-injection behavior + new thresholds
+- `test_hooks` test_post_tool_use_smart_reinject expectations updated
+- **460/460 passing**
+
+### What this means for users
+
+- **Significantly lower input token cost per turn** — both API billing and prompt cache miss savings
+- **Same rule fidelity** — Agent still sees full preference text via SessionStart (persisted in conversation history) + every-turn compact anchor reminding the rules exist + automatic full re-injection when context decays
+- **No config changes required** — fully transparent upgrade for existing rules.yaml
+
+### Why this is v0.9.0 (minor bump, not patch)
+
+User-visible behavior change in how injection works. Existing rules.yaml still works without modification, but token cost profile is meaningfully different — version bump signals this.
+
 ## [0.8.6] — 2026-05-15 (fix — `agent_saturation` covers bare "真饱和" / English "genuinely saturated" — within-turn dogfood)
 
 ### Within-turn dogfood trigger

@@ -142,7 +142,12 @@ def format_for_injection(
     rule_list: list[Rule],
     recent_violations: dict[str, int] | None = None,
 ) -> str:
-    """渲染 rule 列表为前置注入的 prompt 文本。
+    """渲染 rule 列表为**完整**前置注入的 prompt 文本（含每条 preference 全文）。
+
+    v0.9.0 用法变更：
+    - SessionStart hook 每 session 起手 + compact 重起注入一次（baseline）
+    - PostToolUse 中段衰减拐点累积触发时注入一次（抗稀释）
+    - **不再每 turn 全量注入**（UserPromptSubmit 改用 format_anchor_only）
 
     设计哲学：
     - 把规则从「规则系统」改成「合作默契」语气，让 Agent 看到提醒第一反应
@@ -170,5 +175,36 @@ def format_for_injection(
         lines.append(f"{i}. {pref_lines[0]}{marker}")
         for extra in pref_lines[1:]:
             lines.append(f"   {extra}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def format_anchor_only(
+    rule_list: list[Rule],
+    recent_violations: dict[str, int] | None = None,
+) -> str:
+    """渲染 rule 列表为**精简** anchor 文本（id + 第一行 preference）— v0.9.0 加。
+
+    用于 UserPromptSubmit 每 turn 注入 — 只提示规则名跟核心方向一句话，
+    完整 preference 由 SessionStart baseline 提供（每 session 一次注入进
+    conversation history 持续可见）。
+
+    Token 节省: ~1817 (完整) → ~383 (精简)，每 turn 节省 ~80%。
+
+    recent_violations: rule_id → 最近违反时间戳。出现的规则加偏离回顾标记。
+    """
+    if not rule_list:
+        return ""
+    recent_violations = recent_violations or {}
+    lines = [
+        tr("anchor.header.title"),
+        tr("anchor.header.line"),
+        "",
+    ]
+    drift_marker = tr("inject.drift_marker")
+    for i, r in enumerate(rule_list, 1):
+        marker = drift_marker if r.id in recent_violations else ""
+        first_line = r.preference.strip().split("\n")[0]
+        lines.append(f"{i}. [{r.id}] {first_line}{marker}")
     lines.append("")
     return "\n".join(lines)

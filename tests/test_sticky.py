@@ -165,6 +165,57 @@ def test_format_for_injection_empty_list() -> None:
     assert format_for_injection([]) == ""
 
 
+# -------- v0.9.0 format_anchor_only tests --------
+
+
+def test_format_anchor_only_basic() -> None:
+    """v0.9.0: 精简 anchor format — id + 第一行 preference (不含详细 preference)。"""
+    from karma.rule import format_anchor_only
+    rules = [
+        Rule(id="r1", preference="方向 1 的核心一句\n  详细说明 (anchor 不该含此行)"),
+        Rule(id="r2", preference="方向 2 的核心"),
+    ]
+    out = format_anchor_only(rules)
+    assert "[karma" in out
+    assert "精简版" in out  # anchor 头部含「精简版」说明
+    # 含规则 id (跟 format_for_injection 不同 — anchor 必须带 id)
+    assert "[r1]" in out
+    assert "[r2]" in out
+    # 第一行 preference 进 anchor
+    assert "方向 1 的核心一句" in out
+    assert "方向 2 的核心" in out
+    # 详细说明**不**进 anchor (精简 anchor 的核心特点)
+    assert "详细说明" not in out
+
+
+def test_format_anchor_only_marks_recent_violation() -> None:
+    """v0.9.0: 偏离回顾标记跟 format_for_injection 一致。"""
+    from karma.rule import format_anchor_only
+    rules = [Rule(id="r1", preference="方向 1")]
+    out = format_anchor_only(rules, recent_violations={"r1": 12345})
+    assert "偏离" in out
+    assert "对齐" in out
+
+
+def test_format_anchor_only_token_savings_vs_full() -> None:
+    """v0.9.0 设计意图: anchor 精简版应比 format_for_injection 全量版 token 少很多。"""
+    from karma.rule import format_anchor_only
+    rules = [
+        Rule(id=f"r{i}", preference=f"方向 {i} 的核心\n   详细说明 1\n   详细说明 2\n   详细说明 3")
+        for i in range(10)
+    ]
+    anchor = format_anchor_only(rules)
+    full = format_for_injection(rules)
+    # 精简版字符数应该至少节省 30% (实际 v0.9.0 设计预期节省 ~80%)
+    assert len(anchor) < len(full) * 0.7, f"anchor 应远短于 full: {len(anchor)} vs {len(full)}"
+
+
+def test_format_anchor_only_empty_list() -> None:
+    """空规则列表 → 空 anchor。"""
+    from karma.rule import format_anchor_only
+    assert format_anchor_only([]) == ""
+
+
 # -------- v0.6.0 deletion-lock tests --------
 
 def test_v0600_karma_sticky_module_removed():

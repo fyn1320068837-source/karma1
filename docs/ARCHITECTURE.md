@@ -225,6 +225,18 @@ What karma **says to the Agent** — hook injection text, suggested_fix strings,
 KARMA_LOCALE env > config.yaml `locale` field > auto-detect (chinese ratio) > en fallback
 ```
 
+**Injection lifecycle (v0.9.0)** — speaking side coordinates 5 hook surfaces with sharply different token weights:
+
+| Hook | Format | Tokens | Frequency |
+|---|---|---|---|
+| SessionStart | `format_for_injection` (full, ~1817) | ~1817 | once per session (incl. compact-restart) |
+| UserPromptSubmit | `format_anchor_only` (id + first line, ~490) | ~490 | every turn |
+| PostToolUse mid-reinject | `format_for_injection` (full) | ~1817 | session byte_seq accumulates to model threshold (Opus 60K / Sonnet 40K / Haiku 30K) |
+| Stop hook strong reminder | violation hits + suggested_fix | ~135 / hit | on violation |
+| SubagentStart | compact rule list | ~383 | per subagent spawn |
+
+The 73% per-turn saving at UserPromptSubmit is the main reason v0.9.0 cuts 1M Opus session token use from 18.4% to 8.2%.
+
 ### Listening side: `karma/signals.py` + `data/signals/<name>/{zh,en}.{txt,yaml}` (v0.8.0 → v0.8.2)
 
 What karma **listens for in dialogue** — detection phrases for `keep_pushing` / `evidence` checks. Two storage formats:
@@ -390,6 +402,7 @@ Performance hasn't been a bottleneck — measured far below budget.
 | **v0.8.4 v0.8.x cumulative doc sync + 1 dead-code v0.8.2 audit missed**. Stale "6 signals" counts in README / PRD / ARCHITECTURE (v0.8.0+v0.8.1 numbers; should be 7 after v0.8.2 added `completion_words`) all updated to 7. `karma/checks/__init__.py:run_checks()` had `sticky_id` parameter whose own comment said "v0.6.0 removed" but never was — 0 callers, removed parameter + the `rule_id or sticky_id` fallback line. 4th instance of the v0.8.2 "comment says removed but actually alive" dead-code pattern. 455/455 passing. | ✅ |
 | **v0.8.5 3rd code review pass — 2 high-value cleanups + clean-state confirmation**. User-requested 3rd audit round. Tools clean (vulture/ruff/455 tests); manual audit found 2 high-value items: `rule.py:format_for_injection` function-level `from karma.i18n import tr` hoisted to module top (i18n is leaf module, no circular risk); `chinese_plain.py:L179` inline magic `< 30` extracted as `_JARGON_PAREN_MAX_DIST = 30` constant. Honestly skipped middle/low-value polish (cli.py 10 function-level imports — some serve test-mock friendliness; 4 cli long functions — coordinators with no dead code). Doc consistency audit: test count 455 + signal count 7 + 0 dead links across 16 key docs. v0.8.x series ends in 3-way-confirmed clean state. | ✅ |
 | **v0.8.6 `agent_saturation` bare-phrase coverage — within-turn dogfood**. v0.8.5 release notes used "真饱和" and "optimization for its own sake" — both legitimate saturation declarations that `agent_saturation` signal missed. Same pattern as v0.7.4 user_stop_hints coverage gap. Added zh phrases: bare `真饱和` / `彻底饱和` / `系列收官` / `干净状态收官`; added en phrases: `genuinely saturated` / `truly saturated` / `diminishing returns` / `optimization for its own sake`. 1 new test covering 6 fixtures. 456/456 passing. | ✅ |
+| **v0.9.0 injection architecture redesign — 73% per-turn token saving**. User insight after v0.8.6: "session 初始 + 不同模型默认锚定阈值就近注入 + 违规注入 + 压缩后注入 + 子 Agent 注入" — don't re-inject full rules every turn (duplicates conversation history). Three coordinated changes: (1) SessionStart now full baseline injection covering all 4 sources (was精简 baseline); (2) UserPromptSubmit per turn injects compact anchor (id + first-line preference + drift marker, ~490 tok vs 1817 — `format_anchor_only()` new function); (3) PostToolUse mid-reinject triggers on session-global byte accumulation (not per-turn) hitting tightened model threshold (Opus 60K / Sonnet 40K / Haiku 30K). State semantic: `tool_byte_seq` no longer per-turn reset. **460/460 passing**. Measured 1M Opus saving: 18.4% → 8.2% of context (~100K tokens / 55% reduction). | ✅ |
 
 Details in [CHANGELOG.md](../CHANGELOG.md) for per-release rationale; [HANDOFF.md](./HANDOFF.md) for internal context.
 

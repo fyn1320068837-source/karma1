@@ -237,6 +237,18 @@ karma **说给 Agent 听**的内容 — hook 注入文本、suggested_fix 字符
 KARMA_LOCALE env > config.yaml `locale` 字段 > 自动检测（中文比例）> en fallback
 ```
 
+**注入生命周期（v0.9.0）** — 说话端跨 5 个 hook 注入点，token 成本差距大：
+
+| Hook | 格式 | token | 频率 |
+|---|---|---|---|
+| SessionStart | `format_for_injection`（全量，~1817）| ~1817 | 每 session 一次（含 compact 重起）|
+| UserPromptSubmit | `format_anchor_only`（id + 第一行，~490）| ~490 | 每 turn |
+| PostToolUse 中段 reinject | `format_for_injection`（全量）| ~1817 | session byte_seq 累积达模型阈值（Opus 60K / Sonnet 40K / Haiku 30K）|
+| Stop hook 强提醒 | 违反 + suggested_fix | ~135 / 条 | 违反时 |
+| SubagentStart | 子 Agent 精简规则 | ~383 | 起子 Agent 时 |
+
+UserPromptSubmit 每 turn 73% 节省是 v0.9.0 把 1M Opus session token 使用从 18.4% 降到 8.2% 的主因。
+
 ### 听话端：`karma/signals.py` + `data/signals/<name>/{zh,en}.{txt,yaml}`（v0.8.0 → v0.8.2）
 
 karma **从对话里听**的内容 — `keep_pushing` / `evidence` check 用的检测字眼。两种存储格式：
@@ -412,6 +424,7 @@ violations / session_state / config / cli）都从它读 env。
 | **v0.8.4 v0.8.x 累积文档同步 + v0.8.2 audit 漏的 1 处死代码**。README / PRD / ARCHITECTURE 里过时的「6 个信号」数字（v0.8.0+v0.8.1 时期数字；v0.8.2 加 `completion_words` 后该是 7）全更新到 7。`karma/checks/__init__.py:run_checks()` 有个 `sticky_id` 参数注释自己写「v0.6.0 移除」但没真删 — 0 调用者，删参数 + 引用它的 `rule_id or sticky_id` fallback 行。是 v0.8.2「注释说移除但还活着」死代码 pattern 的第 4 例。455/455 通过。| ✅ |
 | **v0.8.5 第 3 轮代码审查 — 2 处高价值清理 + 干净状态确认**。用户要求第 3 轮 audit。工具扫干净（vulture/ruff/455 测试）；手工 audit 找到 2 处高价值：`rule.py:format_for_injection` function-level `from karma.i18n import tr` 上提到 module 顶部（i18n 是 leaf module，无循环风险）；`chinese_plain.py:L179` inline magic `< 30` 抽 `_JARGON_PAREN_MAX_DIST = 30` 常量。诚实跳过中低价值 polish（cli.py 10 处 function-level import — 部分服务测试 mock 友好性；4 个 cli 长函数 — coordinator 无死代码）。文档一致性 audit：测试数 455 + 信号数 7 + 16 个关键文档 0 死链。v0.8.x 系列以「工具+手工+文档」三方一致干净状态收官。| ✅ |
 | **v0.8.6 `agent_saturation` 裸字眼覆盖 — 当 turn dogfood**。v0.8.5 release notes 用了「真饱和」和「optimization for its own sake」— 都是合理饱和声明但 `agent_saturation` 信号漏命中。同 v0.7.4 user_stop_hints 覆盖漏 pattern。zh 加：裸 `真饱和` / `彻底饱和` / `系列收官` / `干净状态收官`；en 加：`genuinely saturated` / `truly saturated` / `diminishing returns` / `optimization for its own sake`。1 个新测试覆盖 6 个 fixture。456/456 通过。| ✅ |
+| **v0.9.0 注入架构重设计 — 每 turn 节省 73% token**。v0.8.6 后用户洞察：「session 初始 + 不同模型默认锚定阈值就近注入 + 违规注入 + 压缩后注入 + 子 Agent 注入」— 每 turn 不需要重新全量注入（跟 conversation history 重复）。3 个协同改动：(1) SessionStart 改全量 baseline 覆盖 4 source；(2) UserPromptSubmit 每 turn 精简 anchor（id + 第一行 + 偏离标记，~490 tok vs 1817 —— 新 `format_anchor_only()` 函数）；(3) PostToolUse 中段 reinject 按 session 全局 byte 累积达模型阈值触发（不每 turn 重置），阈值收紧到 Opus 60K / Sonnet 40K / Haiku 30K。state 字段语义：`tool_byte_seq` 不再每 turn 重置。**460/460 通过**。1M Opus session 实测节省：18.4% → 8.2% (~100K token / 55% 减少)。| ✅ |
 
 详见 [CHANGELOG.md](../CHANGELOG.md) 每版本的设计动机；[HANDOFF.md](./HANDOFF.md) 内部接力 context。
 

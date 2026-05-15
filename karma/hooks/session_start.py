@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import sys
 
-from karma.rule import RuleConfigError, load as load_sticky
+from karma.rule import RuleConfigError, format_for_injection, load as load_sticky
 
 
 def _passthrough() -> None:
@@ -107,9 +107,13 @@ def main() -> int:
         lines.append(tr("session_start.resume.title"))
     else:
         lines.append(tr("session_start.startup.title", source=source or "startup"))
-    for s in rule_list:
-        first_line = s.preference.strip().split("\n")[0]
-        lines.append(f"  ▸ {s.id}: {first_line}")
+    # v0.9.0: 注入**完整 baseline**（含每条 preference 全文）— 这是 session
+    # 唯一一次全量注入进 conversation history 持续可见。每 turn UserPromptSubmit
+    # 只注入精简 anchor，累积达模型阈值后 PostToolUse 中段全量补一次抗稀释。
+    # 旧 v0.4.28 精简版（id + 第一行）在 v0.9.0 之前因为 UserPromptSubmit 每
+    # turn 全量, 这里精简就够；现在 UserPromptSubmit 精简了, 这里必须扛起
+    # 完整 preference 的注入责任。
+    lines.append(format_for_injection(rule_list))
     if source == "compact":
         lines.append(tr("session_start.compact.tail"))
     _emit("\n".join(lines))

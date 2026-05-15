@@ -25,9 +25,15 @@ from __future__ import annotations
 # 模型衰减区入口阈值表（token，按 attention 衰减区入口贴近）
 # 关键词匹配（不区分大小写）— 模型 ID 含关键词就用对应阈值
 # 顺序敏感：先匹配长串避免 sonnet 被 son 误命中
+#
+# v0.9.0 调整：从 80K / 60K / 30K 收紧到 60K / 40K / 30K
+# 理由：v0.9.0 改成「SessionStart 全量 baseline + 每 turn 精简 anchor +
+# 中段累积达阈值全量补」架构。SessionStart baseline 在 history 顶部
+# 累积久了会被稀释，需要更早补回完整规则维持 attention 锚定 —
+# 比 v0.4.35 时期「每 turn 都全量」架构更早的中段补一次。
 _MODEL_THRESHOLDS: tuple[tuple[str, int], ...] = (
-    ("opus", 80_000),
-    ("sonnet", 60_000),
+    ("opus", 60_000),
+    ("sonnet", 40_000),
     ("haiku", 30_000),
     # 老模型识别（向后兼容 — 老模型实际在 8K 衰减）
     ("gpt-3.5", 8_000),
@@ -36,8 +42,8 @@ _MODEL_THRESHOLDS: tuple[tuple[str, int], ...] = (
     ("claude-instant", 8_000),
 )
 
-# 未知模型 fallback — 按用户「至少 60K」要求保守
-DEFAULT_THRESHOLD = 60_000
+# 未知模型 fallback — v0.9.0 跟 sonnet 一致 40K
+DEFAULT_THRESHOLD = 40_000
 
 
 def threshold_for_model(model: str | None) -> int:

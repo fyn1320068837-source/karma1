@@ -139,9 +139,9 @@ def test_post_tool_use_smart_reinject_when_recent_violation(monkeypatch, tmp_pat
     )], path=violations_path)
     state = session_state.SessionState(session_id="anchor_test")
     state.turn_count = 5
-    # v0.4.35 模型自适应阈值：默认 sonnet 60K，预设 70K byte_seq 触发注入
+    # v0.9.0: sonnet 阈值 40K (v0.4.35 是 60K)，预设 50K byte_seq 触发全量注入
     state.model = "claude-sonnet-4-6"
-    state.tool_byte_seq = 70000
+    state.tool_byte_seq = 50000
     state.last_reinject_byte_seq = 0
     session_state.save(state, base_dir=tmp_path)
 
@@ -157,9 +157,11 @@ def test_post_tool_use_smart_reinject_when_recent_violation(monkeypatch, tmp_pat
     out = json.loads(capsys.readouterr().out)
     assert "hookSpecificOutput" in out, "最近违反时应注入 reinject context"
     ctx = out["hookSpecificOutput"]["additionalContext"]
-    assert "long-term-fundamental" in ctx, "context 应包含触发过的 sticky id"
-    # 2026-05-15 重写：「锚定刷新 / 易被稀释」技术词 → 「回想一下默契」合作语气
-    assert "回想" in ctx and "默契" in ctx, "应有合作回顾语气标记（取代技术化「锚定刷新」表述）"
+    # v0.9.0: 中段全量注入用 format_for_injection — 含 preference 全文 + 头部 +
+    # 偏离回顾标记（违反过的规则带〔...偏离...〕标）
+    assert "[karma" in ctx and "长期默契" in ctx, "v0.9.0 中段全量注入用 format_for_injection 头部"
+    assert "用最根本" in ctx, "应含 preference 文本 (fixture 的 long-term 规则首句)"
+    assert "偏离" in ctx, "违反过的规则应带偏离回顾标记"
     # v0.4.32 注入后 last_reinject_byte_seq 真重置为当前 tool_byte_seq
     # （main 自己又累加了 _estimate_tokens(tool_input, tool_response) 几字节，
     # 所以最终 tool_byte_seq 略大于预设的 10000，但 last_reinject_byte_seq

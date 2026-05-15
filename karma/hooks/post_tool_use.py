@@ -200,38 +200,26 @@ def _build_smart_reinject(session_id: str, state) -> str:
         except Exception:
             reinject_threshold = DEFAULT_THRESHOLD
 
-    # v0.4.32 token 启发式：累积 token 距上次注入未达阈值 → 不注入
+    # token 启发式：累积 token 距上次注入未达阈值 → 不注入
     accumulated = state.tool_byte_seq - state.last_reinject_byte_seq
     if accumulated < reinject_threshold:
         return ""
 
+    # v0.9.0: 中段 reinject 改成**累积达阈值就全量注入**（含每条 preference 全文）
+    # 抗稀释，不再依赖「最近违反过的规则」才注入。
+    #
+    # 理由：v0.9.0 架构是 SessionStart 一次全量 baseline + 每 turn 精简 anchor
+    # + 累积达阈值中段全量补。SessionStart baseline 在 history 顶部累积到模型
+    # 阈值后 attention 被稀释，需要全量重锚定 — 不依赖违反触发（设计意图：
+    # 抗稀释是周期性维护，不是反应式维护）。
+    # recent_v 仍传入 format_for_injection 让偏离规则带回顾标记。
     recent_v = recent_turns(session_id, state.turn_count, window_turns=window_turns)
-    if not recent_v:
-        # 无最近触发 sticky → 即使达阈值也不注入（无内容可提醒）。
-        # 但更新 last_reinject_byte_seq 防止下个 PostToolUse 立即再判定（节流）
-        state.last_reinject_byte_seq = state.tool_byte_seq
-        return ""
-
-    triggered_sticky_ids = set(recent_v.keys())
-    triggered_sticky = [s for s in sticky_list if s.id in triggered_sticky_ids]
-    if not triggered_sticky:
-        state.last_reinject_byte_seq = state.tool_byte_seq
-        return ""
-
-    # 2026-05-15 重写：合作回顾语气 + v0.5.2 i18n 切 locale (en/zh)
-    from karma.i18n import tr
-    lines = [
-        tr("mid_inject.header.title"),
-        tr("mid_inject.header.line1"),
-        tr("mid_inject.header.line2"),
-    ]
-    for s in triggered_sticky[:3]:
-        first_line = s.preference.strip().split("\n")[0]
-        lines.append(f"  ▸ {s.id}: {first_line}")
+    from karma.rule import format_for_injection
+    additional_context = format_for_injection(sticky_list, recent_v)
 
     # 注入后更新 last_reinject_byte_seq — 下次累积重新计算
     state.last_reinject_byte_seq = state.tool_byte_seq
-    return "\n".join(lines)
+    return additional_context
 
 
 if __name__ == "__main__":

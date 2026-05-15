@@ -15,7 +15,7 @@ import sys
 
 from karma import session_state
 from karma.session_state import purge_old_states
-from karma.rule import RuleConfigError, format_for_injection, load
+from karma.rule import RuleConfigError, format_anchor_only, load
 from karma.violations import recent, recent_turns
 
 
@@ -41,8 +41,11 @@ def _advance_turn_state(session_id: str, payload: dict):
         state.catchup_pending_bg()
         state.turn_count += 1
         state.stop_block_count = 0
-        state.tool_byte_seq = 0
-        state.last_reinject_byte_seq = 0
+        # v0.9.0: tool_byte_seq / last_reinject_byte_seq **不再每 turn 重置** —
+        # 改成 session 全局累积，让中段全量 reinject 按 session 视角触发。
+        # 旧 v0.4.32 设计每 turn 重置是因为「每 turn 起手已全量注入」假设，
+        # v0.9.0 改成 SessionStart 一次全量 + 每 turn 精简 anchor，全量注入
+        # 是稀疏事件 — 累积视角必须跨 turn 才能正确按 60K Opus 阈值触发。
         transcript_path = payload.get("transcript_path")
         if transcript_path:
             from karma.model_threshold import extract_model_from_transcript
@@ -195,7 +198,11 @@ def main() -> int:
         recent_v = recent_turns(session_id, current_turn, window_turns=window_turns)
     else:
         recent_v = recent()  # 早期 fallback 用人类时钟（首次 install 没 turn 计数）
-    additional_context = format_for_injection(sticky_list, recent_v)
+    # v0.9.0: 每 turn 注入**精简 anchor**（id + 第一行 + 偏离回顾标记），
+    # 完整 preference 由 SessionStart baseline 一次注入进 history 持续可见。
+    # 长 session 累积达模型阈值（Opus 60K / Sonnet 40K / Haiku 30K）后
+    # PostToolUse 中段全量补一次抗稀释。
+    additional_context = format_anchor_only(sticky_list, recent_v)
 
     # 强提醒 fallback：跑上一 response 通过所有规则的 violation_checks (拆 helper: v0.8.3)
     transcript_path = payload.get("transcript_path", "")
