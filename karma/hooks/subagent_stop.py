@@ -64,10 +64,11 @@ def main() -> int:
         return 0
 
     # 透明度提醒 + sticky 关键方向回声 — 让主 Agent 接子 Agent 结果时自检
+    # 2026-05-15 重写：合作默契语气
     sticky_ids = ", ".join(s.id for s in sticky_list)
     context = (
-        f"[karma 子 Agent {agent_id} 已完成 — 临时 state 已自动销毁]\n"
-        f"sticky 仍生效（{sticky_ids}）— 接结果时自检是否按这些方向处理。"
+        f"[karma — 子 Agent {agent_id} 已结束（临时 state 已销毁）]\n"
+        f"跟用户的默契仍生效（{sticky_ids}）— 接结果时记得按这些方向处理。"
     )
     print(json.dumps({
         "hookSpecificOutput": {

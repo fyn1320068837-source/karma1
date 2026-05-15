@@ -78,10 +78,10 @@ def main() -> int:
         return 0
 
     # baseline 注入 — 精简版（每 sticky 一行：id + 第一行 preference）
-    # compact 场景加强提醒 + 读 PreCompact 落盘 snapshot
+    # 2026-05-15 重写：合作默契语气，去技术词「baseline 重新加载 / 必须留在记忆里」
     lines = []
     if source == "compact":
-        lines.append("[karma 上下文 compact 后重起 — 这些核心方向必须留在记忆里]")
+        lines.append("[karma — context compact 后回想一下跟用户的默契]")
         # v0.4.29 读 PreCompact 落盘 snapshot — 让 Agent 知道 compact 前撞过哪些
         # sticky 不会因 compact 失忆
         try:
@@ -97,20 +97,20 @@ def main() -> int:
                         if ln.strip().startswith("- ")
                     ]
                     if violation_lines:
-                        lines.append("compact 前撞过的 sticky（别在 compact 后又犯）:")
+                        lines.append("compact 前这几条曾经偏离过，重起时多留意：")
                         for vl in violation_lines[:5]:
                             lines.append(f"  {vl}")
         except Exception:
             pass  # 读 snapshot 失败不阻塞 baseline 注入
     elif source == "resume":
-        lines.append("[karma session 恢复 — sticky baseline 重新加载]")
+        lines.append("[karma — session 接力，回想一下跟用户的默契]")
     else:
-        lines.append(f"[karma session 起手 sticky baseline — source={source or 'startup'}]")
+        lines.append(f"[karma — session 起手，跟用户的几条长期默契（source={source or 'startup'}）]")
     for s in sticky_list:
         first_line = s.preference.strip().split("\n")[0]
-        lines.append(f"  - {s.id}: {first_line}")
+        lines.append(f"  ▸ {s.id}: {first_line}")
     if source == "compact":
-        lines.append("compact 后 sticky 容易被压缩淡化 — 留意你正在按这些方向行为。")
+        lines.append("compact 后默契容易在新 context 里淡化 — 留意你正在按这些方向行为。")
     _emit("\n".join(lines))
     return 0
 

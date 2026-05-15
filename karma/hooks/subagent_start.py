@@ -67,11 +67,12 @@ def main() -> int:
         _passthrough()
         return 0
 
-    lines = ["[karma 子 Agent 继承父 session 的核心方向]"]
+    # 2026-05-15 重写：合作默契语气
+    lines = ["[karma — 你是父 session 派来的子 Agent，继承用户的几条长期默契]"]
     for s in sticky_list:
         first_line = s.preference.strip().split("\n")[0]
-        lines.append(f"  - {s.id}: {first_line}")
-    lines.append("这些方向在子 Agent 跑任务时也按这些行为。违反时主 Agent 会收到 SubagentStop 透明度提醒。")
+        lines.append(f"  ▸ {s.id}: {first_line}")
+    lines.append("跑任务时也按这些方向行为，主 Agent 会在你结束时收到摘要提醒。")
 
     print(json.dumps({
         "hookSpecificOutput": {
