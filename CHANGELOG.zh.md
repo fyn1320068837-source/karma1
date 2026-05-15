@@ -6,6 +6,38 @@
 
 ## [Unreleased]
 
+## [0.5.12] — 2026-05-15（feat — `karma init` 自动装 `karma-rule` skill + 新加 `karma install-skill` 命令）
+
+### feat — `/karma rule <NL>` 流程对新用户开箱即用
+
+v0.5.11 audit 发现的 gap：`skills/karma-rule.md` 在仓库里但没自动装到 `~/.claude/skills/karma-rule.md`，第一次用 karma 的用户在 Claude Code 里输 `/karma rule add a new rule about X` 触发不到 — skill 得手工 copy。本版补齐。
+
+### 改动
+
+- **`karma init` 末尾自动装 skill** 到 `~/.claude/skills/karma-rule.md`。首次跑打印「创建 karma-rule skill: <path>」+ `/karma rule <NL>` 用法提示。
+- **新加 `karma install-skill [--force]` 子命令** 给 v0.5.12 之前装过 karma 的用户（或想升级 skill 比如 v0.5.11 clarity audit 之后）。不带 `--force` 时冲突非破坏 — 用户改过本地 skill → 新版写到 `karma-rule.md.new` 提示用户对比/合并。`--force` 强制覆盖。
+- **`pyproject.toml` `force-include`** 把 `skills/karma-rule.md` 打进 wheel 让 `pip install karma` 也能用。
+- **`karma --help`** 列出新的 `install-skill` 子命令带简短用法。
+
+### 冲突处理（sticky #1：不默默覆盖用户改动）
+
+- 文件不存在 → 装，返回 `(True, "installed")`
+- 文件存在 + 内容一致 → skip，返回 `(False, "up-to-date")`
+- 文件存在 + 内容不同 + `force=False` → 写 `.md.new` 兄弟文件，返回 `(False, "exists-diff")`
+- 文件存在 + 内容不同 + `force=True` → 覆盖，返回 `(True, "force-overwritten")`
+- Source missing（shipped wheel 理论不可能，dev install edge case 可能）→ 返回 `(False, "source-missing")`，`cmd_install_skill` 退 1，`cmd_init` 警告但不阻塞
+
+### 验证
+
+- `tests/test_cli.py` 新增 5 个回归测试：
+  - `test_v0512_init_auto_installs_karma_rule_skill` — 首次跑装好 ✓
+  - `test_v0512_init_second_run_skill_up_to_date` — 第二次跑 idempotent ✓
+  - `test_v0512_init_skill_user_modified_writes_new_file` — 用户改动保留，写 `.md.new` ✓
+  - `test_v0512_install_skill_force_overwrites` — `--force` 覆盖 ✓
+  - `test_v0512_install_skill_handles_missing_source` — source 缺失 graceful `exit 1` ✓
+- `pytest`：409/409 通过（之前 404 + 新 5）
+- `ruff`：0 issues
+
 ## [0.5.11] — 2026-05-15（docs — `skills/karma-rule.md` 清晰度 audit，补 5 个 gap）
 
 ### docs — `/karma rule` skill template 5 个清晰度 gap 修复

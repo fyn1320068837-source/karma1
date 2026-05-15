@@ -501,3 +501,81 @@ def test_doctor_reports_fully_installed(fake_home, capsys, monkeypatch):
     # 4 个 hook event 都应该报告 ✓
     for event in ("UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"):
         assert event in out, f"doctor 应列出 {event} 状态"
+
+
+# ---- v0.5.12 karma install-skill / karma init 自动装 skill ----
+
+def test_v0512_init_auto_installs_karma_rule_skill(fake_home, monkeypatch, capsys):
+    """karma init 应自动复制 karma-rule.md 到 ~/.claude/skills/."""
+    # 复用 fake_home: HOME 已指向 tmp, ~/.claude/skills/ 不存在
+    skill_dest = fake_home / ".claude" / "skills" / "karma-rule.md"
+    assert not skill_dest.exists()
+
+    # monkeypatch STICKY_PATH 避免污染真 rules.yaml
+    import karma.rule
+    monkeypatch.setattr(karma.rule, "DEFAULT_PATH", fake_home / ".claude" / "karma" / "rules.yaml")
+    monkeypatch.setattr(cli, "STICKY_PATH", fake_home / ".claude" / "karma" / "rules.yaml")
+
+    rc = cli.cmd_init(minimal=True)
+    assert rc == 0
+    assert skill_dest.exists(), "karma init 应自动装 karma-rule skill"
+    # 内容跟 source 一致
+    src_text = cli.KARMA_RULE_SKILL_SRC.read_text(encoding="utf-8")
+    assert skill_dest.read_text(encoding="utf-8") == src_text
+
+    out = capsys.readouterr().out
+    assert "karma-rule skill" in out
+
+
+def test_v0512_init_second_run_skill_up_to_date(fake_home, monkeypatch, capsys):
+    """第二次 cmd_init → skill up-to-date, 不重复装."""
+    import karma.rule
+    monkeypatch.setattr(karma.rule, "DEFAULT_PATH", fake_home / ".claude" / "karma" / "rules.yaml")
+    monkeypatch.setattr(cli, "STICKY_PATH", fake_home / ".claude" / "karma" / "rules.yaml")
+
+    cli.cmd_init(minimal=True)  # 首次装
+    capsys.readouterr()  # 清 first run output
+
+    cli.cmd_init(minimal=True)  # 第二次
+    out = capsys.readouterr().out
+    assert "up-to-date" in out or "已是最新" in out
+
+
+def test_v0512_init_skill_user_modified_writes_new_file(fake_home, monkeypatch):
+    """用户改过 skill → karma init 不覆盖, 写 .md.new 让用户对比."""
+    import karma.rule
+    monkeypatch.setattr(karma.rule, "DEFAULT_PATH", fake_home / ".claude" / "karma" / "rules.yaml")
+    monkeypatch.setattr(cli, "STICKY_PATH", fake_home / ".claude" / "karma" / "rules.yaml")
+
+    # 预先放一个用户改过的版本
+    skill_dest = fake_home / ".claude" / "skills" / "karma-rule.md"
+    skill_dest.parent.mkdir(parents=True, exist_ok=True)
+    user_modified = "# my customized version\n"
+    skill_dest.write_text(user_modified, encoding="utf-8")
+
+    cli.cmd_init(minimal=True)
+    # 用户版本未被覆盖
+    assert skill_dest.read_text(encoding="utf-8") == user_modified
+    # 新版写到 .md.new
+    new_file = skill_dest.with_suffix(".md.new")
+    assert new_file.exists()
+    assert new_file.read_text(encoding="utf-8") == cli.KARMA_RULE_SKILL_SRC.read_text(encoding="utf-8")
+
+
+def test_v0512_install_skill_force_overwrites(fake_home):
+    """karma install-skill --force 强制覆盖用户改动."""
+    skill_dest = fake_home / ".claude" / "skills" / "karma-rule.md"
+    skill_dest.parent.mkdir(parents=True, exist_ok=True)
+    skill_dest.write_text("# user modified\n", encoding="utf-8")
+
+    rc = cli.cmd_install_skill(force=True)
+    assert rc == 0
+    # 用户版本被覆盖为 source
+    assert skill_dest.read_text(encoding="utf-8") == cli.KARMA_RULE_SKILL_SRC.read_text(encoding="utf-8")
+
+
+def test_v0512_install_skill_handles_missing_source(fake_home, monkeypatch):
+    """skill source 文件不存在 (理论上不该发生) → 返回 1 不崩."""
+    monkeypatch.setattr(cli, "KARMA_RULE_SKILL_SRC", fake_home / "nonexistent" / "skill.md")
+    rc = cli.cmd_install_skill(force=False)
+    assert rc == 1

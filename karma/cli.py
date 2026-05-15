@@ -11,6 +11,10 @@ Usage:
                                    codex 会同时启用 features.hooks；
                                    gemini-cli 写 ~/.gemini/settings.json；
                                    all 装本机检测到的所有 AI 编程客户端
+    karma install-skill [--force]  装 karma-rule Claude Code skill 到 ~/.claude/skills/
+                                   (karma init 已自动跑一次, 老用户 / skill 升级时用)
+                                   已存在且不同 → 写 .md.new 文件让用户对比, 不覆盖；
+                                   --force 强制覆盖（会丢用户对 skill 的本地改动）
     karma uninstall-hooks [--backend ...]   移除 hook 配置
     karma uninstall                一键卸所有 backend（= uninstall-hooks --backend all）
     karma doctor                   检查环境 + hook 装机 + 当前生效 config
@@ -65,6 +69,9 @@ EXAMPLE_RULES_MINIMAL = EXAMPLE_RULES_MINIMAL_EN
 EXAMPLE_STICKY = EXAMPLE_RULES
 EXAMPLE_STICKY_MINIMAL = EXAMPLE_RULES_MINIMAL
 EXAMPLE_CONFIG = _DATA_DIR / "config.example.yaml"
+# v0.5.12: Claude Code skill source — copied to ~/.claude/skills/ at karma init
+_SKILLS_DIR = Path(__file__).parent.parent / "skills"
+KARMA_RULE_SKILL_SRC = _SKILLS_DIR / "karma-rule.md"
 
 
 def _select_rule_template(minimal: bool) -> Path:
@@ -73,6 +80,79 @@ def _select_rule_template(minimal: bool) -> Path:
     if is_chinese_user():
         return EXAMPLE_RULES_MINIMAL_ZH if minimal else EXAMPLE_RULES_ZH
     return EXAMPLE_RULES_MINIMAL_EN if minimal else EXAMPLE_RULES_EN
+
+def _claude_skills_dir() -> Path:
+    """~/.claude/skills/ — Claude Code 加载 user skills 的标准位置.
+
+    karma init / karma install-skill 都装 skill 到这, Claude Code 启动时扫到.
+    XDG 类标准没规范这个, 沿用 Claude Code 文档约定的 ~/.claude/skills/.
+    """
+    return Path.home() / ".claude" / "skills"
+
+
+def _install_karma_rule_skill(force: bool = False) -> tuple[bool, str]:
+    """装 karma-rule skill 到 ~/.claude/skills/karma-rule.md.
+
+    冲突处理 (按 sticky #1 不覆盖用户改动):
+    - 不存在 → 装, 返回 (True, "installed")
+    - 已存在 + 内容一致 → skip, 返回 (False, "up-to-date")
+    - 已存在 + 内容不同 + force=False → 写 .new 文件提示对比, 返回 (False, "exists-diff")
+    - 已存在 + 内容不同 + force=True → 覆盖, 返回 (True, "force-overwritten")
+
+    返回 (changed, reason): changed=True 表示有 write/overwrite 动作.
+    """
+    if not KARMA_RULE_SKILL_SRC.exists():
+        return False, f"source-missing ({KARMA_RULE_SKILL_SRC})"
+    dest_dir = _claude_skills_dir()
+    dest = dest_dir / "karma-rule.md"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    src_text = KARMA_RULE_SKILL_SRC.read_text(encoding="utf-8")
+    if not dest.exists():
+        dest.write_text(src_text, encoding="utf-8")
+        return True, "installed"
+
+    dest_text = dest.read_text(encoding="utf-8")
+    if dest_text == src_text:
+        return False, "up-to-date"
+
+    if force:
+        dest.write_text(src_text, encoding="utf-8")
+        return True, "force-overwritten"
+
+    # 不覆盖用户改动 — 写 .new 文件提示用户对比
+    new_path = dest.with_suffix(".md.new")
+    new_path.write_text(src_text, encoding="utf-8")
+    return False, f"exists-diff (.new written to {new_path})"
+
+
+def cmd_install_skill(force: bool = False) -> int:
+    """单独装 karma-rule skill (已 init 用户补装 / 升级用).
+
+    flow:
+    - karma init 已自动调一次, 但已 init 的用户 (老 sticky.yaml 时代) 需要手工跑
+    - skill 更新后 (v0.5.11 的 clarity audit 等) 用 --force 覆盖
+    """
+    changed, reason = _install_karma_rule_skill(force=force)
+    dest = _claude_skills_dir() / "karma-rule.md"
+    if reason.startswith("source-missing"):
+        print(f"❌ {reason}", file=sys.stderr)
+        return 1
+    if reason == "installed":
+        print(f"✓ 装 karma-rule skill: {dest}")
+    elif reason == "up-to-date":
+        print(f"✓ karma-rule skill 已是最新: {dest}")
+    elif reason == "force-overwritten":
+        print(f"✓ 强制覆盖 karma-rule skill: {dest}")
+    elif reason.startswith("exists-diff"):
+        print(f"⚠ {dest} 已存在且跟当前 karma 版本不一致")
+        print(f"  → 新版写到了 {dest.with_suffix('.md.new')}")
+        print(f"  → diff {dest} {dest.with_suffix('.md.new')} 对比")
+        print("  → 或 karma install-skill --force 直接覆盖 (会丢用户改动)")
+    print()
+    print("Claude Code 用法: 在对话里发 '/karma rule <自然语言描述>' 触发 skill")
+    return 0
+
 
 def cmd_init(minimal: bool | None = None) -> int:
     """创建 ~/.claude/karma/ + 复制 sticky 模板 + config 模板。
@@ -137,6 +217,21 @@ def cmd_init(minimal: bool | None = None) -> int:
     if auto_chose:
         override_flag = "--no-minimal" if minimal else "--minimal"
         print(f"自动选不对？强制覆盖：karma init {override_flag}")
+
+    # v0.5.12: 自动装 Claude Code skill 让 /karma rule <NL> 流程开箱即用
+    skill_changed, skill_reason = _install_karma_rule_skill(force=False)
+    skill_dest = _claude_skills_dir() / "karma-rule.md"
+    if skill_reason == "installed":
+        print(f"创建 karma-rule skill: {skill_dest}")
+        print("  → 在 Claude Code 里发 '/karma rule <自然语言>' 触发录入流程")
+    elif skill_reason == "up-to-date":
+        print(f"karma-rule skill 已是最新: {skill_dest}")
+    elif skill_reason.startswith("exists-diff"):
+        print(f"⚠ karma-rule skill 已存在但跟当前版本不一致 — 新版写到 {skill_dest.with_suffix('.md.new')}")
+        print("  → karma install-skill --force 覆盖 (会丢用户改动)")
+    elif skill_reason.startswith("source-missing"):
+        # dev install / 非 wheel 安装可能找不到 source — 不阻塞 init
+        print(f"⚠ karma-rule skill source 未找到 ({KARMA_RULE_SKILL_SRC}) — 跳过自动装")
     return 0
 
 
@@ -1063,6 +1158,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_reset_session()
     if cmd == "install-hooks":
         return cmd_install_hooks(backend_name=_parse_backend_arg(args))
+    if cmd == "install-skill":
+        return cmd_install_skill(force="--force" in args)
     if cmd == "uninstall-hooks":
         return cmd_uninstall_hooks(backend_name=_parse_backend_arg(args))
     if cmd == "uninstall":

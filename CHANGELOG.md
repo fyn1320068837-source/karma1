@@ -10,6 +10,38 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.5.12] — 2026-05-15 (feat — `karma init` auto-installs `karma-rule` skill + new `karma install-skill` command)
+
+### feat — `/karma rule <NL>` flow now works out-of-box for new users
+
+v0.5.11 audit surfaced the gap: `skills/karma-rule.md` was in the repo but not auto-installed to `~/.claude/skills/karma-rule.md`, so first-time users typing `/karma rule add a new rule about X` in Claude Code would get nothing — the skill needed manual copy. This release closes the gap.
+
+### Changes
+
+- **`karma init` now auto-installs the skill** at the end of its flow. Path: `~/.claude/skills/karma-rule.md`. First run prints `创建 karma-rule skill: <path>` plus the `/karma rule <NL>` usage tip.
+- **New `karma install-skill [--force]` subcommand** for users who installed karma before v0.5.12 (or want to upgrade the skill after a clarity audit like v0.5.11). Without `--force`, conflicts are non-destructive — if the user has a locally-modified `karma-rule.md`, the new version writes to `karma-rule.md.new` and tells the user how to diff/merge. `--force` overwrites.
+- **`pyproject.toml` `force-include`** now packages `skills/karma-rule.md` into the wheel so `pip install karma` works.
+- **`karma --help`** lists the new `install-skill` subcommand with brief usage.
+
+### Conflict handling (sticky #1: don't overwrite user changes silently)
+
+- File doesn't exist → install, return `(True, "installed")`
+- File exists + content identical → skip, return `(False, "up-to-date")`
+- File exists + content differs + `force=False` → write `.md.new` sibling, return `(False, "exists-diff")`
+- File exists + content differs + `force=True` → overwrite, return `(True, "force-overwritten")`
+- Source missing (theoretically impossible in shipped wheel, but possible in dev install edge cases) → return `(False, "source-missing")`, `cmd_install_skill` exits 1, `cmd_init` warns but doesn't block
+
+### Verification
+
+- 5 new regression tests in `tests/test_cli.py`:
+  - `test_v0512_init_auto_installs_karma_rule_skill` — first run installs ✓
+  - `test_v0512_init_second_run_skill_up_to_date` — idempotent on second run ✓
+  - `test_v0512_init_skill_user_modified_writes_new_file` — user changes preserved, `.md.new` written ✓
+  - `test_v0512_install_skill_force_overwrites` — `--force` wins ✓
+  - `test_v0512_install_skill_handles_missing_source` — graceful `exit 1` when source missing ✓
+- `pytest`: 409/409 passing (404 prior + 5 new)
+- `ruff`: 0 issues
+
 ## [0.5.11] — 2026-05-15 (docs — `skills/karma-rule.md` clarity audit, 5 gaps closed)
 
 ### docs — 5 clarity gaps in `/karma rule` skill template closed
