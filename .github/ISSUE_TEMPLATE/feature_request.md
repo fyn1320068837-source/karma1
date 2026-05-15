@@ -1,26 +1,26 @@
 ---
-name: 功能 / 改进建议
-about: 建议新功能 / 新 sticky 场景 / 新 AI 客户端 backend
+name: Feature / Improvement Suggestion (English)
+about: Suggest new features / new rule scenarios / new AI client backend
 title: '[Feature] '
 labels: enhancement
 assignees: ''
 ---
 
-## 你的真实痛点
+## Your real pain point
 
-具体描述场景。karma 设计原则是「用户真痛点驱动」— 不接受「我觉得可能有用」类预防性建议。
+Describe the scenario concretely. karma's design principle is "user-real-pain-driven" — we don't accept "I think this might be useful" type preventive suggestions.
 
-## 提议方案
+## Proposed solution
 
-如有具体思路写出来。包括：
-- 是 sticky 层（用户自己写 sticky.yaml 能解决吗）
-- 还是 check 层（需要新工程层 violation_check 函数）
-- 还是 hook 层（需要新 hook event 或改现有 hook 行为）
+If you have a specific idea, write it out. Include:
+- Is it at the rule layer (can users solve this by writing their own `rules.yaml`)?
+- Or at the check layer (needs new engine-layer violation_check function)?
+- Or at the hook layer (needs new hook event or changes to existing hook behavior)?
 
-## 替代方案考虑过吗
+## Have you considered alternatives
 
-karma 明确**不做**这些 — 看 README「karma 不做的事」段。如果你的需求落在这些边界外，说明为什么必须破例。
+karma explicitly **doesn't do** these things — see README's "What karma doesn't do" section. If your need falls outside those boundaries, explain why an exception is necessary.
 
-## 真用户场景（不是猜测）
+## Real user scenario (not speculation)
 
-karma v1 失败教训之一是「预防性设计」。新功能必须有真实用户场景驱动，不接受「可能有用」类需求。
+One of karma v1's failure lessons was "preventive design." New features must be driven by real user scenarios; we don't accept "might be useful" type needs.

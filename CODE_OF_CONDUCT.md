@@ -1,29 +1,29 @@
-# 行为准则
+# Code of Conduct
 
-**[🇨🇳 中文（当前）](./CODE_OF_CONDUCT.md) · [🇬🇧 English](./CODE_OF_CONDUCT.en.md)**
+**[🇬🇧 English (current)](./CODE_OF_CONDUCT.md) · [🇨🇳 中文](./CODE_OF_CONDUCT.zh.md)**
 
-karma 是为 AI 协作真痛点而生的工具，社区氛围跟项目调性一致 — **直接、诚实、互相尊重**。
+karma is a tool born from real AI-collaboration pain points. Community atmosphere matches the project's character — **direct, honest, mutually respectful**.
 
-## 期望的协作方式
+## Expected collaboration style
 
-- **直接说真话** — 看到 bug / 设计缺陷直接说，不用绕弯子。负面反馈是项目改进的真信号
-- **拿真证据** — 报 bug 附 `karma audit` / `karma doctor` 输出 / 真实复现命令，不要「应该 / 可能」掩盖
-- **尊重边界** — karma 明确**不做**的事（自动蒸馏 / retrieval / LLM 依赖等）有真实历史教训，先看 [README「karma 不做的事」段](./README.md#karma-不做的事)再提建议
-- **接受被拒** — 你提的功能可能不符合 karma 设计哲学被关闭，不代表不尊重你。看 [karma v1 失败归档](https://github.com/jhaizhou-ops/karma-v1) 理解为什么 v2 这么严守边界
+- **Speak truth directly** — see a bug / design flaw, say so directly without beating around the bush. Negative feedback is a real signal for project improvement
+- **Bring evidence** — bug reports should include `karma audit` / `karma doctor` output / actual reproduction commands; don't hide behind "should" / "maybe"
+- **Respect boundaries** — what karma **doesn't do** (auto-distillation / retrieval / LLM dependency etc.) has real historical lessons; read [README's "What karma doesn't do" section](./README.en.md#tried-and-rejected-what-karma-doesnt-do) before suggesting changes
+- **Accept rejections** — features you propose may be closed for not fitting karma's design philosophy. That's not disrespecting you. See [karma v1 archive](https://github.com/jhaizhou-ops/karma-v1) to understand why v2 strictly preserves boundaries
 
-## 不能做的
+## What's not allowed
 
-- ❌ 人身攻击 / 歧视性语言 / 骚扰行为
-- ❌ 不真诚的「问题报告」（如复制 ChatGPT 输出当 issue 内容）
-- ❌ 在 issue / PR 里贴敏感信息（你的 API key / 真实 session-state / 私人 transcript）
-- ❌ 蓄意作弊式提交（伪造测试通过 / 隐藏假阳数据 / 用 karma audit 数字反喂自家训练）
+- ❌ Personal attacks / discriminatory language / harassing behavior
+- ❌ Insincere "problem reports" (e.g., pasting ChatGPT output as issue content)
+- ❌ Posting sensitive info in issues / PRs (your API keys / real session-state / private transcripts)
+- ❌ Intentional cheating submissions (faked passing tests / hidden false-positive data / using karma audit numbers to back-feed your own training)
 
-## 仲裁
+## Enforcement
 
-karma 是个人维护开源项目，没有专职 moderator。我（@jhaizhou-ops）会在 issue / PR 里直接处理边界问题。
+karma is an individually-maintained open-source project with no dedicated moderators. I (@jhaizhou-ops) will handle boundary issues directly in issues / PRs.
 
-行为准则争议**正式仲裁标准**：[Contributor Covenant v2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/)。
+**Formal adjudication standard** for code-of-conduct disputes: [Contributor Covenant v2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/).
 
-## 联系
+## Contact
 
-行为准则相关问题 → [GitHub Issue](https://github.com/jhaizhou-ops/karma/issues) 标 `code-of-conduct` label。
+For code-of-conduct related questions → [GitHub Issue](https://github.com/jhaizhou-ops/karma/issues) tagged `code-of-conduct`.

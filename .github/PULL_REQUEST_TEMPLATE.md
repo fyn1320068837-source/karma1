@@ -1,26 +1,26 @@
-## 这个 PR 做什么
+## What this PR does
 
-简短描述改动。如果是新功能，说明对应 sticky 层 / check 层 / hook 层哪一层。
+Brief description of the change. If it's a new feature, explain whether it's at the rule layer / check layer / hook layer.
 
-## 真实驱动场景
+## Real driving scenario
 
-karma 验证标准是「作者 / 用户能讲出 3 个具体案例」— 这个 PR 解决的真实场景是什么？
+karma's validation criterion is "the author / user can describe 3 concrete cases" — what real scenarios does this PR solve?
 
-## 验证证据
+## Verification evidence
 
-- [ ] 测试全过：`pytest tests/ -q`
-- [ ] 静态检查清干净：`ruff check karma/ tests/ && mypy karma/ tests/ && vulture karma/ --min-confidence 80`
-- [ ] manual run 验证 hook 行为（如果改了 hook）
-- [ ] 如果加 sticky 模板 / check 函数，加对应测试
+- [ ] All tests pass: `pytest tests/ -q`
+- [ ] Static checks clean: `ruff check karma/ tests/ && mypy karma/ tests/ && vulture karma/ --min-confidence 80`
+- [ ] Manual run verifies hook behavior (if hooks changed)
+- [ ] If adding new rule templates / check functions, add corresponding tests
 
-## 边界检查
+## Boundary check
 
-- [ ] 不引入 LLM 依赖
-- [ ] 不引入 retrieval / cosine / 评分系统
-- [ ] 不破现有 sticky 配置兼容（向后兼容）
-- [ ] 不超过 ~200 行（保持改动小可 review，大改动拆多个 PR）
+- [ ] No LLM dependency introduced
+- [ ] No retrieval / cosine / scoring system introduced
+- [ ] No backward-incompatible breakage of existing rule configs
+- [ ] Under ~200 lines (keep changes small and reviewable; large changes split into multiple PRs)
 
-## 相关
+## Related
 
-- 关联 issue: #
-- 相关版本: （从 `karma --version` 看）
+- Related issue: #
+- Related version: (see `karma --version`)
