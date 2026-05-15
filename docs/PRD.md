@@ -137,13 +137,33 @@ Three hook feedback points:
 
 **Honest history**: v0.5.1 shipped the skill template but at the wrong location (`<name>.md` flat file instead of required `<name>/SKILL.md` directory structure). The skill never actually triggered for v0.5.1 through v0.5.15 — manual CLI testing worked but the natural-language → auto-refine path was vapor. v0.5.16 rebuilt installation per Claude Code's documented protocol; the SessionStart hook of the session that shipped v0.5.16 was the first to see karma skill in its available-skills list. See [CHANGELOG.md v0.5.16](../CHANGELOG.md) for the full disclosure.
 
-### F6. Internationalization (v0.5.2+) ✅
+### F6. Internationalization (v0.5.2+ injection text; v0.8.0+ detection signals) ✅
 
+karma has **two-way i18n**: speaking-side (what karma injects into the Agent prompt) and listening-side (what regex phrases karma uses to detect signals in user / Agent dialogue).
+
+**Speaking side — injection text** (v0.5.2+):
 - `karma/i18n.py` with `tr(key, **fmt)` lookup, `{placeholder}` interpolation, fail-open on missing keys
 - Locale resolution chain: `KARMA_LOCALE` env > `config.yaml` `locale` field > auto-detect via `karma.locale_detect.is_chinese_user()` > `en` fallback
 - All hook injection text (header / drift marker / mid-injection / strong reminder / Stop reason / SessionStart variants / SubagentStart) + all 28 check `suggested_fix` strings + all 28 `CheckHit.trigger` audit labels switchable en/zh via `data/locales/{en,zh}.yaml`
 - `Violation.trigger_key` + `CheckHit.trigger_key` (v0.5.7+) — locale-agnostic stable identifier for `karma audit` cross-locale grouping (users switching locale mid-week still see correct aggregation)
 - `karma init` selects rule template by detected locale (`rules.dev.example.zh.yaml` for Chinese users, English default otherwise)
+
+**Listening side — detection signals** (v0.8.0 + v0.8.1):
+- `karma/signals.py` with `load_phrases()` (`.txt` flat phrases) + `load_patterns()` (`.yaml` Cartesian templates) + `compile_alternation()` union compile (long-phrase priority, `re.escape` literals vs raw regex templates)
+- 6 detection signals externalized to `data/signals/<name>/{zh,en}.{txt,yaml}`:
+  - `.txt` flat: `user_stop_hints` / `agent_saturation` / `stop_hints` / `explicit_handoff` / `weak_claims`
+  - `.yaml` Cartesian DSL (`templates` + `subjects`/`verbs` vocab + `phrases`): `push_signals`
+- Cross-language character sets don't overlap (Chinese vs Latin vs kana vs hangul) → no false matches
+- **Adding a new language = ~6 small files per signal directory, zero Python code, zero LLM in the loop**
+
+### F7. `keep_pushing` user-stop exemption (v0.4.41 + v0.7.4) ✅
+
+User explicit stop signals exempt the reflection nudge for the whole turn (rule #8 exception). Two semantic categories covered:
+
+- **Tired / dismissive** (v0.4.41): "不用了 / 休息吧 / 算了 / 明天再说" — user wants to pause
+- **Satisfied / confirmation** (v0.7.4): "不错不错 / 挺稳定 / LGTM / looks good" — user reached a satisfaction point
+
+Both categories live in `data/signals/user_stop_hints/{zh,en}.txt` (v0.8.0 externalization). Combined with `_AGENT_SATURATION_RE` (Agent declares own saturation) and `_EXPLICIT_USER_HANDOFF_RE` (Agent explicitly asks for user decision), the reflection nudge has three orthogonal exemption paths.
 
 ### M3 completeness supplements (engineering refinement above v0 MVP)
 

@@ -225,6 +225,29 @@ UserPromptSubmit 才加。如果你看 `/tmp/karma_stop_trace.log` 实际 sessio
 - `strip_shell_quoted_literals(cmd)` — 剥 shell `'...'` `"..."` 引号字面 + heredoc 智能剥（区分头部命令 bash/sh 保留扫 vs python/cat 剥）+ 间接 shell（`bash -c '...'` 内保留扫）
 - `extract_natural_language(content, file_path)` — 抽出代码注释行（# / // / --）+ docstring（""" ''' /* */）
 
+## i18n 系统 — 双向
+
+karma 有两个 i18n 面，都按「数据不写代码」哲学：
+
+### 说话端：`karma/i18n.py` + `data/locales/{en,zh}.yaml`
+
+karma **说给 Agent 听**的内容 — hook 注入文本、suggested_fix 字符串、audit 标签。`tr(key, **fmt)` lookup + `{placeholder}` 插值 + 缺 key fail-open。locale 解析链：
+
+```
+KARMA_LOCALE env > config.yaml `locale` 字段 > 自动检测（中文比例）> en fallback
+```
+
+### 听话端：`karma/signals.py` + `data/signals/<name>/{zh,en}.{txt,yaml}`（v0.8.0 + v0.8.1）
+
+karma **从对话里听**的内容 — `keep_pushing` / `evidence` check 用的检测字眼。两种存储格式：
+
+- **`.txt` 平面字眼**（一行一个，`#` 注释）：`user_stop_hints` / `agent_saturation` / `stop_hints` / `explicit_handoff` / `weak_claims`
+- **`.yaml` cartesian DSL**：`push_signals` — `templates` 含 `{subject}` / `{verb}` 占位符 + 词集 + 不需 cartesian 的 `phrases`
+
+loader（`compile_alternation()`）扫信号目录所有语言文件，去重 + union + 编译成单 regex（长字眼优先；`.txt` 字面走 `re.escape`；`.yaml` 模板保 raw regex）。跨语言字符集不重叠 → 无误命中。
+
+**加新语言**：每个 signal 目录扔一个 `xx.txt` / `xx.yaml`。零 Python 代码，零 LLM 在循环里。
+
 ## 描述上下文统一豁免（`karma/checks/description_context.py`）
 
 `is_description_context(tool_name, tool_input) → (bool, reason)`：

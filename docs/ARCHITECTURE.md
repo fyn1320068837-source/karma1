@@ -213,6 +213,29 @@ Shared across check functions + hooks:
 - `strip_shell_quoted_literals(cmd)` — Strip shell `'...'` `"..."` quoted literals + heredoc smart strip (distinguishes head-command bash/sh keep-scan vs. python/cat strip) + indirect shell (`bash -c '...'` inside keep-scan)
 - `extract_natural_language(content, file_path)` — Extract code comment lines (# / // / --) + docstrings (""" ''' /* */)
 
+## i18n system — two-way
+
+karma has two i18n surfaces. Both follow the "data not code" philosophy.
+
+### Speaking side: `karma/i18n.py` + `data/locales/{en,zh}.yaml`
+
+What karma **says to the Agent** — hook injection text, suggested_fix strings, audit labels. `tr(key, **fmt)` lookup with `{placeholder}` interpolation, fail-open on missing keys. Locale resolution chain:
+
+```
+KARMA_LOCALE env > config.yaml `locale` field > auto-detect (chinese ratio) > en fallback
+```
+
+### Listening side: `karma/signals.py` + `data/signals/<name>/{zh,en}.{txt,yaml}` (v0.8.0 + v0.8.1)
+
+What karma **listens for in dialogue** — detection phrases for `keep_pushing` / `evidence` checks. Two storage formats:
+
+- **`.txt` flat phrases** (one per line, `#` comments): `user_stop_hints` / `agent_saturation` / `stop_hints` / `explicit_handoff` / `weak_claims`
+- **`.yaml` Cartesian DSL**: `push_signals` — `templates` with `{subject}` / `{verb}` placeholders + vocabulary lists + non-Cartesian `phrases`
+
+Loader (`compile_alternation()`) reads all language files in a signal directory, dedupes, unions, compiles to a single regex (long-phrase priority; `re.escape` for `.txt` literals; raw regex preserved for `.yaml` templates). Cross-language character sets don't overlap → no false matches.
+
+**Adding a new language**: drop in `xx.txt` / `xx.yaml` per signal directory. Zero Python code, zero LLM in the loop.
+
 ## Unified description-context exemption (`karma/checks/description_context.py`)
 
 `is_description_context(tool_name, tool_input) → (bool, reason)`:

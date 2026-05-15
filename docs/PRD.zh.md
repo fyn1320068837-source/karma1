@@ -142,13 +142,33 @@ karma 只做**「核心方向永驻 + 违反检测」**这一件事。
 
 **诚实历史**：v0.5.1 ship 了 skill 模板但路径错（`<name>.md` 裸文件而不是 Claude Code 协议要求的 `<name>/SKILL.md` 目录结构）。v0.5.1 ~ v0.5.15 skill 从未触发 — 手工 CLI 测试能用，但自然语言 → 自动 refine 路径是空气。v0.5.16 按 Claude Code 协议重建装机；ship v0.5.16 那个 session 的 SessionStart hook 是 karma skill 第一次出现在 available skills 列表里。完整披露见 [CHANGELOG.md v0.5.16](../CHANGELOG.md)。
 
-### F6. 国际化（v0.5.2+）✅
+### F6. 国际化（v0.5.2+ 注入文本；v0.8.0+ 检测信号）✅
 
+karma 有**双向 i18n**：说话端（karma 注入到 Agent prompt 里的文本）跟听话端（karma 用什么 regex 字眼检测对话信号）。
+
+**说话端 — 注入文本**（v0.5.2+）：
 - `karma/i18n.py` 含 `tr(key, **fmt)` lookup，`{placeholder}` 插值，缺 key fail-open
 - locale 解析链：`KARMA_LOCALE` env > `config.yaml` `locale` 字段 > `karma.locale_detect.is_chinese_user()` 自动检测 > `en` fallback
 - 所有 hook 注入文本（头部 / 偏离标记 / 中段注入 / 强提醒 / Stop reason / SessionStart 变体 / SubagentStart）+ 28 处 check `suggested_fix` + 28 处 `CheckHit.trigger` audit 标签全部走 `data/locales/{en,zh}.yaml` 双语切换
 - `Violation.trigger_key` + `CheckHit.trigger_key`（v0.5.7+）— locale-agnostic 稳定标识符让 `karma audit` 跨 locale 分组（用户中途切语言仍能正确聚合）
 - `karma init` 按 detected locale 选规则模板（中文用户装 `rules.dev.example.zh.yaml`，其他用英文 default）
+
+**听话端 — 检测信号**（v0.8.0 + v0.8.1）：
+- `karma/signals.py` 含 `load_phrases()`（`.txt` 平面字眼）+ `load_patterns()`（`.yaml` cartesian 模板）+ `compile_alternation()` union 编译（长字眼优先，`re.escape` 字面 vs raw regex 模板）
+- 6 个检测信号外部化到 `data/signals/<name>/{zh,en}.{txt,yaml}`：
+  - `.txt` 平面：`user_stop_hints` / `agent_saturation` / `stop_hints` / `explicit_handoff` / `weak_claims`
+  - `.yaml` cartesian DSL（`templates` + `subjects`/`verbs` 词集 + `phrases`）：`push_signals`
+- 跨语言字符集不重叠（中文 vs 拉丁 vs 假名 vs 谚文）→ 无误命中
+- **加新语言 = 每个 signal 目录写 ~6 个小文件，零 Python，零 LLM 在循环里**
+
+### F7. `keep_pushing` 用户叫停豁免（v0.4.41 + v0.7.4）✅
+
+用户明确叫停信号整 turn 豁免反思 hook（rule #8 例外条款）。覆盖两个语义类别：
+
+- **累了 / 推卸**（v0.4.41）：「不用了 / 休息吧 / 算了 / 明天再说」— 用户想暂停
+- **满意 / 确认**（v0.7.4）：「不错不错 / 挺稳定 / LGTM / looks good」— 用户到了满意点
+
+两类都在 `data/signals/user_stop_hints/{zh,en}.txt`（v0.8.0 外部化）。加上 `_AGENT_SATURATION_RE`（Agent 自己声明饱和）跟 `_EXPLICIT_USER_HANDOFF_RE`（Agent 显式让用户决定），反思 hook 有三条正交的豁免路径。
 
 ### M3 完整化补充（v0 MVP 之上的工程精细化）
 
