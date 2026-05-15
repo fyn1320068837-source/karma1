@@ -785,6 +785,8 @@ def test_stop_hook_respects_block_max(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr("sys.stdin", io.StringIO(payload))
     stop.main()
     out = json.loads(capsys.readouterr().out)
-    # 已达 max → 不再 block，走正常 additionalContext 输出
+    # 已达 max → 不再 block，passthrough 输出 (2026-05-15 fix:
+    # Stop hook 协议不支持 hookSpecificOutput, 改 {} passthrough)
     assert out.get("decision") != "block", "已达 max 应放 Agent 停"
-    assert "hookSpecificOutput" in out
+    # 走 passthrough — output 是空对象 {} 或不含 decision/reason
+    assert out == {} or "decision" not in out

@@ -4,6 +4,73 @@
 
 ## [Unreleased]
 
+## [0.4.43] — 2026-05-15（fix — Stop hook schema 违反 + 注入文本「合作默契」语气收尾 + sticky keyword 假阳治理）
+
+### 触发
+
+用户报真 bug：Stop hook 输出 `{"hookSpecificOutput": {"hookEventName": "Stop",
+"additionalContext": "..."}}` 被 Claude Code 报「Expected schema」错误日志 —
+Stop hook 协议**不支持 hookSpecificOutput**（仅 PreToolUse / UserPromptSubmit /
+PostToolUse / PostToolBatch 支持）。早期 v0.4.x 设计错误，长期被 Claude Code
+静默拒绝。
+
+### Fix 1 — Stop hook 协议层 schema 真合规
+
+`karma/hooks/stop.py:295-301` 删幽灵代码（`hookSpecificOutput` 输出）。
+违反摘要已通过 stderr ⚠️ 通知 + violations.jsonl 落盘 + 桌面通知 + 下次
+UserPromptSubmit sticky 注入的偏离标记 — 不需要 Stop hook 再 echo 一遍。
+无干预原因 → `print(json.dumps({}))` passthrough。
+
+### Fix 2 — Stop hook reason 文本同步「合作默契」语气
+
+v0.4.42 task 2 batch 1 改了 3 处包装文本但漏了 `stop.py decision=block` 的
+`reason` 字段 — 仍是 v0.4.41 老版本「karma stop hook 反思提醒 ... 请自检 ...」
+指控式 + 双重否定句式。改成合作回顾语气：
+
+```
+[karma — 上一回应没看到下一步推进信号]
+用户是全权委托型，他期待你完成一波后立刻接着推进。
+如果有方向需要他判断就明确问出来；
+如果是任务真饱和合理停下，明说卡在哪一步让他知道，不要默默等。
+（提醒 N/M）
+```
+
+### Fix 3 — SessionStart / SubagentStart / SubagentStop 注入文本同步语气
+
+3 个 hook 注入文本残留旧语气：
+- session_start.py：「baseline 重新加载 / 必须留在记忆里 / 别在 compact 后又犯」→
+  「回想一下跟用户的默契 / session 接力 / 重起时多留意」
+- subagent_start.py：「继承父 session 的核心方向」→「你是父 session 派来的子
+  Agent, 继承用户的几条长期默契」
+- subagent_stop.py：「sticky 仍生效」→「跟用户的默契仍生效」
+- 每条 sticky 前缀 `-` → `▸` 跟 user_prompt_submit + post_tool_use 一致
+
+### Fix 4 — sticky #1 + #2 violation_keywords 假阳收紧
+
+本 session dogfooding 真触发：
+- sticky #2「等子 Agent」keyword 在「等子 Agent 完成回报后我 review」描述
+  任务依赖关系场景假阳。改「我先 X / 现在 X」一人称行动声明字面。
+- sticky #1「硬编码 / 临时方案 / 短期目标」名词在「不要硬编码」「这是临时
+  方案」类讨论假阳。改「意图前缀 + 动作」格式（如「我先硬编码 / 先用临时方案」）。
+
+工程层 check（Bash sleep/wait 检测 / TODO/HACK 注释检测）不变，keyword 层
+更精化双保险。
+
+### 验证
+
+- 测试 392/392 ✓（一处 test_stop_hook_respects_block_max assertion 更新为
+  接受 `{}` passthrough 输出）
+- ruff ✓ / mypy karma+tests ✓ / vulture 0 死代码
+- `karma --version` = v0.4.43 ✓
+- manual run Stop hook：干净 `{"decision": "block", "reason": "..."}` schema
+  合规输出，干预原因外 passthrough `{}`，不再被 Claude Code 报「Expected schema」
+
+### 后续
+
+karma stop hook 早期所有 hookSpecificOutput 设计（v0.4.x 早期阶段）都已检查 —
+SubagentStart / SubagentStop / UserPromptSubmit / PostToolUse 用法都协议合规
+（这 4 个 hook 真支持 additionalContext）。
+
 ## [0.4.42] — 2026-05-15（feat — 用户 task 1/2/3/4 元层 4 任务一波落地）
 
 ### 触发

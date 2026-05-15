@@ -291,14 +291,15 @@ def main() -> int:
             print(json.dumps({"decision": "block", "reason": reason}, ensure_ascii=False))
             return 0
 
-    # 也可以通过 additionalContext 让 Claude 看到 — 但 Stop 后 Claude 已停，
-    # 主要给下次 UserPromptSubmit 的 sticky 注入加 RECENT_VIOLATION 标记
-    print(json.dumps({
-        "hookSpecificOutput": {
-            "hookEventName": "Stop",
-            "additionalContext": "\n".join(summary_lines) if summary_lines else "",
-        }
-    }, ensure_ascii=False))
+    # 2026-05-15 真根因 fix：Stop hook 协议**不支持 hookSpecificOutput**
+    # （schema 仅 PreToolUse / UserPromptSubmit / PostToolUse / PostToolBatch 支持）
+    # 之前 v0.4.x 输出 hookSpecificOutput.additionalContext → 被 Claude Code
+    # 报「Expected schema」错误日志，且 Agent 看不到（Stop 后已停）。
+    #
+    # 摘要已通过 stderr ⚠️ 通知（第 178 行）+ violations.jsonl 落盘 + 桌面通知 +
+    # 下次 UserPromptSubmit sticky 注入的偏离标记 — 不需要 Stop hook 再 echo
+    # 一遍违反摘要。无干预原因 → passthrough。
+    print(json.dumps({}))
     return 0
 
 
