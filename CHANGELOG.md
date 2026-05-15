@@ -10,6 +10,39 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.8.5] — 2026-05-15 (polish — 3rd code review pass: 2 high-value cleanups, codebase confirmed clean)
+
+### 3rd code review pass (post v0.8.4)
+
+User asked for another round of code audit + doc consistency review. Tools clean (`vulture` / `ruff` / 455 tests). Manual audit found 2 high-value cleanups; rest are middle/low-value polish with diminishing returns honestly reported and skipped.
+
+### What got fixed
+
+- `karma/rule.py:format_for_injection` had `from karma.i18n import tr` as a function-level import. Verified `karma.i18n` is a leaf module (no `karma.*` imports) — safe to hoist to module top. Reduces function-body noise + matches module-level import convention.
+- `karma/checks/chinese_plain.py` had an inline magic number `< 30` for "jargon-to-explanation parenthesis max distance". Extracted as named constant `_JARGON_PAREN_MAX_DIST = 30` alongside the existing `_JARGON_CONTEXT_RADIUS = 30` — both module-level, both explanatory.
+
+### What was reviewed and intentionally not changed
+
+- cli.py has ~10 function-level `from karma.* import ...` calls. Most are safe to hoist (no circular-import risk verified), but several serve testing mock-friendliness (e.g. `cmd_reset_session` lazy-imports `DEFAULT_DIR as SS_DIR` so `monkeypatch.setattr(karma.session_state, 'DEFAULT_DIR', ...)` sees the patched value). Net benefit of mass-hoisting is small (~3 net lines saved), and individual analysis to separate true-mock-friendly from cruft would burn review time on diminishing returns.
+- cli.py has 4 functions over 100 lines (`cmd_audit` / `cmd_rule_add` / `cmd_doctor` / module `main` dispatcher). Tools find no dead code or duplication; they're long-but-clear coordinator functions. Forced helper extraction would shuffle parameters across 5+ helpers per function without making the code easier to navigate.
+
+### Doc consistency audit (post v0.8.4)
+
+Verified across README / PRD / ARCHITECTURE / HANDOFF (bilingual):
+
+- Test count "455" consistent
+- Signal count "7" consistent (post-`completion_words`)
+- 0 dead local links across 16 key docs
+- v0.8.4 milestone entries present in ARCHITECTURE / HANDOFF / CHANGELOG; correctly absent from README / PRD (patch releases don't belong in those top-level docs)
+
+Conclusion: v0.8.x series ends in a state where tooling, manual review, and doc audit all agree the codebase is clean. Further polish would be optimization-for-its-own-sake.
+
+### Verification
+
+- 455/455 passing
+- `ruff`: 0 issues
+- `vulture --min-confidence 70`: 0 dead code
+
 ## [0.8.4] — 2026-05-15 (docs — v0.8.x cumulative sync + 1 dead-code leftover from v0.8.2 audit)
 
 ### Why this pass

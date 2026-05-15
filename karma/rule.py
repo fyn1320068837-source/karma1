@@ -15,6 +15,7 @@ from pathlib import Path
 
 import yaml
 
+from karma.i18n import tr
 from karma.paths import karma_home
 
 _RULES_PATH = karma_home() / "rules.yaml"
@@ -155,7 +156,6 @@ def format_for_injection(
         return ""
     recent_violations = recent_violations or {}
     # v0.5.2 i18n: header text via tr() lookup (en / zh by locale)
-    from karma.i18n import tr
     lines = [
         tr("inject.header.title"),
         tr("inject.header.line1"),

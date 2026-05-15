@@ -104,6 +104,8 @@ _MIN_ENGLISH_WORDS_FOR_RATIO = 8
 # 术语后多少字符内需要中文跟随才算「解释了」
 _JARGON_CONTEXT_RADIUS = 30
 _MIN_CHINESE_AFTER_JARGON = 2
+# 术语后括号闭合的最大距离 — 太远的括号不当解释看（避免远距离误命中）
+_JARGON_PAREN_MAX_DIST = 30
 
 
 def check(*, response: str = "", **_):
@@ -176,7 +178,7 @@ def check(*, response: str = "", **_):
                 # 找最近的括号闭合
                 bo = after_window.find(bracket_open)
                 bc_in_full = jargon_scan_text.find(bracket_close, m.end() + bo)
-                if 0 < bc_in_full - (m.end() + bo) < 30:
+                if 0 < bc_in_full - (m.end() + bo) < _JARGON_PAREN_MAX_DIST:
                     paren_content = jargon_scan_text[m.end() + bo + 1: bc_in_full]
                     if chinese_char_count(paren_content) >= 2:
                         has_paren_explanation = True

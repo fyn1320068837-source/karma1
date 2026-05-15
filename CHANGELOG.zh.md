@@ -6,6 +6,39 @@
 
 ## [Unreleased]
 
+## [0.8.5] — 2026-05-15（polish — 第 3 轮代码审查：2 处高价值清理，codebase 确认干净）
+
+### 第 3 轮代码审查（v0.8.4 之后）
+
+用户要求再做一轮代码 audit + 文档一致性审查。工具扫干净（`vulture` / `ruff` / 455 测试）。手工 audit 找到 2 处高价值清理；其他是中低价值 polish 边际收益递减，诚实汇报后跳过。
+
+### 实际改的
+
+- `karma/rule.py:format_for_injection` 内有个 function-level `from karma.i18n import tr`。验证 `karma.i18n` 是 leaf module（无 `karma.*` import）— 安全上提到 module 顶部。减少函数体噪音 + 跟 module 顶部 import 惯例一致。
+- `karma/checks/chinese_plain.py` 有个 inline magic number `< 30`（jargon 后括号闭合的最大距离）。抽成命名常量 `_JARGON_PAREN_MAX_DIST = 30`，跟已有的 `_JARGON_CONTEXT_RADIUS = 30` 并排 — 都是 module 级常量，都有解释。
+
+### 审过但故意不改的
+
+- cli.py 有 ~10 处 function-level `from karma.* import ...`。多数可安全上提（验证过无循环 import 风险），但有几处是测试 mock 友好性（如 `cmd_reset_session` 延迟 import `DEFAULT_DIR as SS_DIR` 让 `monkeypatch.setattr(karma.session_state, 'DEFAULT_DIR', ...)` 能拿到 patch 后的值）。大规模上提净收益小（~3 行净减），逐个分析「真 mock 友好」vs「冗余」会在边际收益上耗 review 时间。
+- cli.py 有 4 个 ~100+ 行函数（`cmd_audit` / `cmd_rule_add` / `cmd_doctor` / dispatcher `main`）。工具找不到死代码或重复；都是长但清晰的 coordinator 函数。强行抽 helper 会让 5+ 个参数在 helper 间穿梭，反而不易导航。
+
+### 文档一致性审查（v0.8.4 之后）
+
+跨 README / PRD / ARCHITECTURE / HANDOFF 双语验证：
+
+- 测试数「455」一致
+- 信号数「7」一致（`completion_words` 后）
+- 16 个关键文档 0 个死链
+- v0.8.4 milestone entry 在 ARCHITECTURE / HANDOFF / CHANGELOG 都有；README / PRD 没（合理 — patch release 不该进顶层文档）
+
+结论：v0.8.x 系列收官在「工具 + 手工审查 + 文档审查」三方一致确认 codebase 干净的状态。再往下 polish 就是 optimization for its own sake。
+
+### 验证
+
+- 455/455 通过
+- `ruff`：0 issue
+- `vulture --min-confidence 70`：0 死代码
+
 ## [0.8.4] — 2026-05-15（docs — v0.8.x 累积同步 + v0.8.2 audit 漏的 1 处死代码）
 
 ### 为什么做这一轮
