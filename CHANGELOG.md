@@ -10,6 +10,32 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.7.2] — 2026-05-15 (refactor — remove `chinese_plain` Check 3 reactive monitor: source treated, symptom monitor obsolete)
+
+### Root cause
+
+`chinese_plain.py` Check 3 (`_check_repeated_prefix`) was added in v0.4.40 as **reactive treat-symptom monitoring** for the "真字狂魔" side effect — its own code comment said: *"治症状不治根因，但能减弱视觉别扭程度"* (treats symptom not root cause, but reduces visual awkwardness).
+
+After v0.7.0 + v0.7.1 treated the source (rewrote ~640 mimicry occurrences across rule templates + locale + docs), `karma audit` data confirmed Check 3 has **0 triggers** in 168 total violations across the session. The mimicry source is gone; the reactive monitor is obsolete.
+
+This is the same logic the user applied to `defensive_prefix_stacking` in v0.7.0: **"这显然是你对 karma 的应激反应，咱们要治根不要治表"** (this is clearly your reactive response to karma — treat the root, not the symptom). v0.7.0 reverted that check before adding it; v0.7.2 removes the parallel Check 3 that snuck in three months earlier.
+
+### Removed
+
+- `karma/checks/chinese_plain.py`: `_check_repeated_prefix()` function + `_PREFIX_REPEAT_THRESHOLD` constant + Check 3 invocation in `check()` (~45 lines)
+- `data/locales/zh.yaml`: `check.chinese_plain.repeated_prefix.trigger` + `check.chinese_plain.repeated_prefix.fix` keys
+- `tests/test_checks.py`: `test_v0440_repeated_prefix_check_catches_zhen_zi_kuangmo` + `test_v0440_repeated_common_word_not_triggered` (2 tests, both Check 3-specific)
+
+### Verification
+
+- `pytest`: 427/427 passing (was 429 — 2 tests removed match the 2 deletions)
+- `ruff`: 0 issues
+- `karma audit` chinese-plain breakdown: Check 1 (中文占比) + Check 2 (jargon) still cover all real cases; no Check 3 触发 lost
+
+### Why this matters
+
+karma's core philosophy is **treat root not symptom**. Reactive monitors accumulate as "we'll deal with it engineering-side" hedges, then linger after the root cause is fixed. v0.7.2 closes the loop on v0.7.0's user directive: now that source rewrite is done, the reactive monitor it was hedging against can also go.
+
 ## [0.7.1] — 2026-05-15 (refactor — deeper "真X" cleanup: drop unnecessary modifier synonyms across full repo)
 
 ### Root cause user identified (v0.7.0 follow-up)

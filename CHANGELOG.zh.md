@@ -6,6 +6,32 @@
 
 ## [Unreleased]
 
+## [0.7.2] — 2026-05-15（refactor — 撤掉 `chinese_plain` Check 3 reactive 监控：源已治根，监控冗余）
+
+### 原因
+
+`chinese_plain.py` 的 Check 3（`_check_repeated_prefix`）是 v0.4.40 加的「真字狂魔」副作用 **reactive 治表监控** — 自己代码注释里都写：*「治症状不治根因，但能减弱视觉别扭程度」*。
+
+v0.7.0 + v0.7.1 治根（重写 ~640 处 mimicry 跨规则模板 + locale + 文档）后，`karma audit` 数据确认 Check 3 在本 session 168 条 violation 里 **0 次触发**。源头清了，reactive 监控冗余。
+
+这就是用户 v0.7.0 对 `defensive_prefix_stacking` 用过的同款逻辑：**「这显然是你对 karma 的应激反应，咱们要治根不要治表」**。v0.7.0 在加这个 check 前撤了；v0.7.2 撤掉三个月前同款思路漏掉的 Check 3。
+
+### 删除
+
+- `karma/checks/chinese_plain.py`：`_check_repeated_prefix()` 函数 + `_PREFIX_REPEAT_THRESHOLD` 常量 + `check()` 里 Check 3 调用（~45 行）
+- `data/locales/zh.yaml`：`check.chinese_plain.repeated_prefix.trigger` + `check.chinese_plain.repeated_prefix.fix` 两个 key
+- `tests/test_checks.py`：`test_v0440_repeated_prefix_check_catches_zhen_zi_kuangmo` + `test_v0440_repeated_common_word_not_triggered`（2 个 Check 3 专用测试）
+
+### 验证
+
+- `pytest`：427/427 通过（原 429 — 删了对应的 2 个测试匹配）
+- `ruff`：0 issue
+- `karma audit` chinese-plain 分解：Check 1（中文占比）+ Check 2（jargon）仍覆盖所有真实 case；没丢任何 Check 3 触发场景
+
+### 价值
+
+karma 核心哲学是**治根不治表**。reactive 监控容易作为「工程层兜底」对冲堆积，治根后还留着。v0.7.2 闭环了 v0.7.0 用户指令：源重写做了，对冲的 reactive 监控也能撤。
+
 ## [0.7.1] — 2026-05-15（refactor — 「真X」深度清理：去掉不必要修饰同义词覆盖全仓库）
 
 ### 用户识别的原因（v0.7.0 接力）

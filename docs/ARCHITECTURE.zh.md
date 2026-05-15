@@ -375,6 +375,7 @@ violations / session_state / config / cli）都用它读 env。
 | v0.6.1 issue #1 用户 bug fix — `record_edit` 豁免非代码路径（README / CHANGELOG / docs/ / .gitignore 等）不推 `last_edit_ts`，所以 `docker pytest` 通过后改 README 再 git commit 不会被 `loud-failure-with-evidence` 误拦。实测复现根因是非代码 edit 后 `last_edit_ts > last_test_pass_ts`，不是 reporter 最初诊断的 regex 层。 | ✅ |
 | v0.7.0 治根 refactor — 改写 karma 源规则文本里「真X」防御性前缀。用户抓到 Agent 从 karma 自身规则注入头部 in-context mimicry 出「真X」堆叠。撤销原计划的 `defensive_prefix_stacking` engine check（治表）改清源。规则模板 + locale + 用户面文档共 ~140 处重写。| ✅ |
 | v0.7.1「真X」深度清理接力 — 用户指出 v0.7.0 同义词替换（`真→实际/确实`）不够，防御修饰本身大部分上下文里不必要。10 波 perl pipeline 覆盖 100 文件：767 → 120（84% 减少）。剩 120 处全是合理保留（named concept 真字狂魔 / eval 术语 真阳 / 工程对偶 真阻塞 / test fixture / 自然搭配 真心 真话）。修 doubled artifact `任务任务到饱和` bug。按用户「一次性修复完再提交」一次 commit。| ✅ |
+| v0.7.2 撤掉 `chinese_plain` Check 3 reactive 监控 — v0.7.0+v0.7.1 治根后监控冗余。Check 3 是 v0.4.40 加的 reactive 治表对冲（代码注释自承「治症状不治根因」）。`karma audit` 确认治根后 168 条 violation 里 0 次触发。跟用户 v0.7.0 对 `defensive_prefix_stacking` 用过的同款逻辑；v0.7.2 闭环三个月前漏掉的同款思路。撤：`_check_repeated_prefix()` + 2 个 locale key + 2 个专用测试。| ✅ |
 
 详见 [CHANGELOG.md](../CHANGELOG.md) 每版本的设计动机；[HANDOFF.md](./HANDOFF.md) 内部接力 context。
 

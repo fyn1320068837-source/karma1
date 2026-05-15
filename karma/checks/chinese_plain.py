@@ -192,45 +192,4 @@ def check(*, response: str = "", **_):
             suggested_fix=tr("check.chinese_plain.jargon.fix", term=m.group()),
         )
 
-    # === Check 3: 同前缀重复防御性自证（v0.4.40 治理「真字狂魔」副作用）===
-    # 触发：sticky #4「证据」+ sticky #1「最根本」叠加效应让 LLM 防御性堆
-    # 「真X / 真X / 真X」前缀证明「不糊弄」（如「原因 / 生效 / 完成
-    # / 真效果 / 证据」）— Agent 表达扭曲，HANDOFF 第 7 类矛盾根因。
-    # 不改 sticky 文案（用户最高优先级方向），加 reactive 自审 check 提醒
-    # Agent 减弱前缀堆叠习惯（治症状不治根因，但能减弱视觉别扭程度）。
-    repeated_hit = _check_repeated_prefix(natural)
-    if repeated_hit:
-        return repeated_hit
-
-    return None
-
-
-# v0.4.40 同前缀重复检测实际施
-_PREFIX_REPEAT_THRESHOLD = 5  # 同前缀字 ≥ N 次/response 触发自审
-
-
-def _check_repeated_prefix(text: str):
-    """扫 response 找单字前缀重复（如「真X 真X 真X」≥ 5 次）。
-
-    实施：扫所有「单字 + 中文/英文 token」组合，按前缀字统计 count。
-    某前缀 count ≥ _PREFIX_REPEAT_THRESHOLD → 触发自审。
-    """
-    # 找模式：单中文字 + 跟着 1-4 个中英文字符（如「原因 / 生效 / 完成」）
-    matches = re.findall(r"([一-鿿])(?=[一-鿿a-zA-Z])", text)
-    if not matches:
-        return None
-    from collections import Counter
-    prefix_counts = Counter(matches)
-    for prefix, count in prefix_counts.most_common(3):
-        if count >= _PREFIX_REPEAT_THRESHOLD:
-            # 排除合理高频前缀（不算防御性堆叠）
-            if prefix in ("一", "不", "是", "有", "没", "我", "你", "他", "这", "那", "在"):
-                continue
-            return CheckHit(
-                rule_id=_STICKY_ID,
-                trigger=tr("check.chinese_plain.repeated_prefix.trigger", prefix=prefix, count=count),
-                trigger_key="check.chinese_plain.repeated_prefix.trigger",
-                snippet=f"「{prefix}」字在本 response 出现 {count} 次开头位置",
-                suggested_fix=tr("check.chinese_plain.repeated_prefix.fix", prefix=prefix),
-            )
     return None

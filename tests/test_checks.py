@@ -562,30 +562,6 @@ def test_v0440_path_literal_not_counted():
     assert hit is None, f"路径字面不该拉低中文比: {hit}"
 
 
-def test_v0440_repeated_prefix_check_catches_zhen_zi_kuangmo():
-    """v0.4.40 Check 3: 同前缀「真X」≥ 5 次/response 触发自审（治理「真字
-    狂魔」副作用 — sticky #4 + sticky #1 叠加效应根因）。"""
-    fn = REGISTRY["chinese_plain_no_jargon"]
-    response = (
-        "经过真分析找到原因，复现脚本生效，闭环架构真完整，"
-        "真效果对比真清晰，证据真齐。"
-    )
-    hit = fn(response=response)
-    assert hit is not None, "5+ 次「真X」前缀堆叠违反"
-    assert "真" in hit.trigger, f"trigger 应识别「真」前缀: {hit.trigger}"
-
-
-def test_v0440_repeated_common_word_not_triggered():
-    """v0.4.40 Check 3 对偶：高频汉字「不/我/你/在」等不算防御性堆叠。"""
-    fn = REGISTRY["chinese_plain_no_jargon"]
-    response = (
-        "我去测试，我看代码，我跑命令，我改文件，我又验证一次，我再 commit 一下，全过了。"
-    )
-    hit = fn(response=response)
-    # 「我」是合理高频前缀字（白名单豁免）— 不该当防御性堆叠
-    assert hit is None, f"高频汉字不该当防御性堆叠: {hit}"
-
-
 def test_chinese_plain_jargon_in_parenthesis_list_exempted():
     """jargon 在括号列表里（描述 jargon 不是用 jargon）→ 豁免。
     例：「扩通用编程词（mutex / orchestrator / dispatcher / observer）」
