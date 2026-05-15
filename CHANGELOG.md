@@ -10,6 +10,44 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.5.2] — 2026-05-15 (feat — i18n infrastructure + all hook injection texts switchable en/zh)
+
+### feat — Engineering-layer i18n MVP
+
+- **`karma/i18n.py` module** — `tr(key, **fmt)` translation lookup with `{placeholder}` interpolation; fail-open (missing key returns key itself, never crashes hook)
+- **Locale resolution** — `KARMA_LOCALE` env var > `config.yaml` `locale` field > `karma.locale_detect.is_chinese_user()` auto-detect > fallback `en`
+- **`config.yaml` `locale` field** — `"auto"` (default) / `"en"` / `"zh"`
+- **`data/locales/en.yaml` + `data/locales/zh.yaml`** — Translation dicts covering all user-visible hook-injection strings (header / drift marker / mid-injection / strong reminder / Stop reason / SessionStart variants / SubagentStart)
+
+### feat — 5 hooks injection texts now locale-aware
+
+All hook injection texts switched from hard-coded Chinese to `tr()` lookup:
+
+- `karma/rule.py format_for_injection` — header title + 2 description lines + drift marker
+- `karma/hooks/post_tool_use.py` — mid-injection "anchoring refresh" 3 lines
+- `karma/hooks/stop.py` — Stop hook `decision=block` reason (with `{count}/{max}` interpolation)
+- `karma/hooks/user_prompt_submit.py` — strong reminder header + footer
+- `karma/hooks/subagent_start.py` — SubAgent baseline title + tail
+- `karma/hooks/session_start.py` — 3 source branches (compact/resume/startup) + compact prior-drift header + tail
+
+### Manual verification
+
+- `KARMA_LOCALE=en` → `[karma — Your long-term agreement with the user]` / `[karma — Last response didn't show a next-step push signal]` ...
+- `KARMA_LOCALE=zh` → `[karma — 你跟用户的长期默契]` / `[karma — 上一回应没看到下一步推进信号]` ...
+
+### Pending in v0.5.3 (Phase D — English content completion)
+
+8 built-in check functions still have hard-coded Chinese `suggested_fix` text (~14 entries):
+- chinese_plain (3 / non_blocking (4) / evidence (3) / keep_pushing (2) / long_term (7) / testset (7) / read_first (1) / bypass_karma (1)
+
+Phase D will abstract these behind `tr()` keys + provide English translations. Hook injection texts are user-visible critical path (covered in v0.5.2); `suggested_fix` only shown when violations trigger (less critical) — phased separately.
+
+### Verification
+
+- Tests: 392/392 all green
+- 4-check: ruff / mypy / vulture / pytest all green
+- Manual run: EN/ZH locale switching truly produces different injection text
+
 ## [0.5.1] — 2026-05-15 (feat — `karma rule add` natural-language rule input + i18n English-default docs)
 
 ### feat
