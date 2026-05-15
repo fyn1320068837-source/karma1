@@ -167,6 +167,205 @@ def cmd_sticky_edit() -> int:
     return 0
 
 
+def cmd_rule_add(yaml_path: str | None = None, stdin_yaml: bool = False) -> int:
+    """添加新 rule 到 rules.yaml — 测试通过才写入.
+
+    用法:
+    - karma rule add --from-yaml <file>  # 从 yaml 文件读
+    - karma rule add --from-stdin        # 从 stdin 读 yaml (Claude Code skill 用)
+
+    流程:
+    1. 读 yaml 输入 (一条新 rule 的 dict, 跟 rules.yaml 内单条格式一致)
+    2. Schema validate (用 karma.rule.load 一致的校验逻辑)
+    3. 检测 id 是否跟现有 rule 重复
+    4. 检测软上限 (10 条) / 硬上限 (12 条) 不超
+    5. 如果含 violation_checks, 验证 check 函数在 REGISTRY 注册
+    6. 追加到 rules.yaml + 写回
+    7. 反馈: 优化成什么 / 通过测试 / 当前规则库总数 / 是否有冲突建议删改
+    """
+    import yaml
+    from karma.rule import HARD_MAX, MAX_RULES, RuleConfigError, load as load_rules
+    from karma.checks import REGISTRY as CHECK_REGISTRY
+
+    # Step 1: 读 input
+    if stdin_yaml:
+        raw = sys.stdin.read()
+    elif yaml_path:
+        p = Path(yaml_path)
+        if not p.exists():
+            print(f"❌ yaml 文件不存在: {yaml_path}", file=sys.stderr)
+            return 1
+        raw = p.read_text(encoding="utf-8")
+    else:
+        print(
+            "用法: karma rule add --from-yaml <file>  或  --from-stdin\n"
+            "建议: 在 Claude Code 里发 '/karma rule <自然语言描述>' 让 Agent 用 karma "
+            "skill 优化结构后调本命令",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        new_rule = yaml.safe_load(raw)
+    except yaml.YAMLError as e:
+        print(f"❌ YAML 解析失败: {e}", file=sys.stderr)
+        return 1
+
+    # 支持 dict (单条) 或 list (多条, 取第一条)
+    if isinstance(new_rule, list):
+        if not new_rule:
+            print("❌ yaml 是空 list", file=sys.stderr)
+            return 1
+        new_rule = new_rule[0]
+
+    if not isinstance(new_rule, dict):
+        print(f"❌ 期望 yaml 是 dict (一条 rule), 实际 {type(new_rule).__name__}", file=sys.stderr)
+        return 1
+
+    # Step 2: Schema validate (拼一个临时 list 复用 karma.rule.load 校验逻辑)
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as tmp:
+        yaml.safe_dump([new_rule], tmp, allow_unicode=True, sort_keys=False)
+        tmp_path = Path(tmp.name)
+    try:
+        try:
+            validated = load_rules(tmp_path)
+        except RuleConfigError as e:
+            print(f"❌ Schema 校验失败: {e}", file=sys.stderr)
+            return 1
+        if not validated:
+            print("❌ Schema 校验后无 rule (空)", file=sys.stderr)
+            return 1
+        validated_rule = validated[0]
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+    # Step 3: 加载现有 rules + 检测冲突
+    try:
+        existing = load_rules()
+    except RuleConfigError as e:
+        print(f"❌ 现有 rules.yaml 配置错误: {e}", file=sys.stderr)
+        return 1
+
+    existing_ids = {r.id for r in existing}
+    if validated_rule.id in existing_ids:
+        print(f"❌ 规则 id={validated_rule.id!r} 已存在 — 用 karma rule edit 修改或 karma rule remove 后再 add", file=sys.stderr)
+        return 1
+
+    # Step 4: 上限检查
+    new_total = len(existing) + 1
+    if new_total > HARD_MAX:
+        print(f"❌ 超硬上限 {HARD_MAX} 条 (现有 {len(existing)} + 新 1 = {new_total})", file=sys.stderr)
+        return 1
+    over_soft = new_total > MAX_RULES
+
+    # Step 5: 验证 violation_checks 函数存在 (如有)
+    unknown_checks = [c for c in validated_rule.violation_checks if c not in CHECK_REGISTRY]
+    if unknown_checks:
+        print(
+            f"❌ 未知 violation_checks 函数: {unknown_checks}\n"
+            f"可用 check 函数: {sorted(CHECK_REGISTRY.keys())}",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Step 6: 追加写回 rules.yaml
+    try:
+        raw_existing = yaml.safe_load(STICKY_PATH.read_text(encoding="utf-8")) if STICKY_PATH.exists() else []
+    except yaml.YAMLError as e:
+        print(f"❌ 读 rules.yaml 失败: {e}", file=sys.stderr)
+        return 1
+    if not isinstance(raw_existing, list):
+        raw_existing = []
+    raw_existing.append(new_rule)
+    STICKY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    STICKY_PATH.write_text(
+        yaml.safe_dump(raw_existing, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    # Step 7: 反馈 (按用户要求: 优化后内容 / 已通过测试 / 当前总数 / 是否需删改)
+    print(f"✓ 新规则已通过 karma schema 测试 + 写入 {STICKY_PATH}")
+    print()
+    print(f"--- 新增规则 [{validated_rule.id}] ---")
+    print(f"preference: {validated_rule.preference.strip()[:200]}")
+    if validated_rule.violation_keywords:
+        print(f"violation_keywords: {list(validated_rule.violation_keywords)}")
+    if validated_rule.violation_checks:
+        print(f"violation_checks: {list(validated_rule.violation_checks)} (engine-layer hook 判断已启用)")
+    else:
+        print("violation_checks: (无 — 仅头部注入提醒, 不开 engine-layer 实时拦截)")
+    if validated_rule.force_block_exempt:
+        print("force_block_exempt: true (豁免累积处罚)")
+    print()
+    print(f"📊 当前规则库: {new_total} 条 (软上限 {MAX_RULES} / 硬上限 {HARD_MAX})")
+    if over_soft:
+        print(f"⚠ 已超软上限 {MAX_RULES} 条 — Claude 注意力可能下降, 建议精简")
+    print()
+    print("📋 现有规则一览:")
+    for r in existing + [validated_rule]:
+        check_mark = "✓ engine" if r.violation_checks else "  preference-only"
+        print(f"  - [{r.id}] {check_mark}")
+    print()
+    print("💡 建议: 看现有规则是否有重复 / 可合并 / 应该删除的, 用 karma rule remove <id> 调整")
+    return 0
+
+
+def cmd_rule_preview(yaml_path: str | None = None, stdin_yaml: bool = False) -> int:
+    """预览新 rule 注入到头部的样子 — schema 校验 + 不写入.
+
+    用 Claude Code skill 在让用户确认前调这个看效果.
+    """
+    import yaml
+    from karma.rule import RuleConfigError, format_for_injection, load as load_rules
+
+    if stdin_yaml:
+        raw = sys.stdin.read()
+    elif yaml_path:
+        p = Path(yaml_path)
+        if not p.exists():
+            print(f"❌ yaml 文件不存在: {yaml_path}", file=sys.stderr)
+            return 1
+        raw = p.read_text(encoding="utf-8")
+    else:
+        print("用法: karma rule preview --from-yaml <file>  或  --from-stdin", file=sys.stderr)
+        return 1
+
+    try:
+        new_rule = yaml.safe_load(raw)
+    except yaml.YAMLError as e:
+        print(f"❌ YAML 解析失败: {e}", file=sys.stderr)
+        return 1
+
+    if isinstance(new_rule, list):
+        if not new_rule:
+            print("❌ yaml 是空 list", file=sys.stderr)
+            return 1
+        new_rule = new_rule[0]
+
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as tmp:
+        yaml.safe_dump([new_rule], tmp, allow_unicode=True, sort_keys=False)
+        tmp_path = Path(tmp.name)
+    try:
+        try:
+            validated = load_rules(tmp_path)
+        except RuleConfigError as e:
+            print(f"❌ Schema 校验失败: {e}", file=sys.stderr)
+            return 1
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+    print("✓ Schema 校验通过")
+    print()
+    print("--- 注入到 prompt 头部的样子 ---")
+    print(format_for_injection(validated))
+    print("--- end ---")
+    print()
+    print("用 `karma rule add --from-yaml <file>` 真写入 rules.yaml")
+    return 0
+
+
 def cmd_sticky_remove(rule_id: str) -> int:
     """简单删除 — 读 yaml，过滤，写回。"""
     import yaml
@@ -861,7 +1060,7 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
         if not args:
-            print(f"Usage: karma {cmd} <list|edit|remove>", file=sys.stderr)
+            print(f"Usage: karma {cmd} <list|edit|remove|add|preview>", file=sys.stderr)
             return 1
         if args[0] == "list":
             return cmd_sticky_list()
@@ -872,6 +1071,29 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"Usage: karma {cmd} remove <id>", file=sys.stderr)
                 return 1
             return cmd_sticky_remove(args[1])
+        if args[0] == "add":
+            # karma rule add --from-yaml <file>  或  --from-stdin
+            yaml_path = None
+            stdin_yaml = False
+            sub = args[1:]
+            if "--from-stdin" in sub:
+                stdin_yaml = True
+            elif "--from-yaml" in sub:
+                idx = sub.index("--from-yaml")
+                if idx + 1 < len(sub):
+                    yaml_path = sub[idx + 1]
+            return cmd_rule_add(yaml_path=yaml_path, stdin_yaml=stdin_yaml)
+        if args[0] == "preview":
+            yaml_path = None
+            stdin_yaml = False
+            sub = args[1:]
+            if "--from-stdin" in sub:
+                stdin_yaml = True
+            elif "--from-yaml" in sub:
+                idx = sub.index("--from-yaml")
+                if idx + 1 < len(sub):
+                    yaml_path = sub[idx + 1]
+            return cmd_rule_preview(yaml_path=yaml_path, stdin_yaml=stdin_yaml)
         print(f"未知 {cmd} 子命令: {args[0]}", file=sys.stderr)
         return 1
     if cmd == "violations":
