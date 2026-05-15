@@ -18,7 +18,7 @@ def _patch_paths(monkeypatch, tmp_path: Path, sticky_items: list[dict] | None = 
     violations_path = tmp_path / "violations.jsonl"
     if sticky_items is not None:
         sticky_path.write_text(yaml.safe_dump(sticky_items, allow_unicode=True), encoding="utf-8")
-    monkeypatch.setattr("karma.sticky.DEFAULT_PATH", sticky_path)
+    monkeypatch.setattr("karma.rule.DEFAULT_PATH", sticky_path)
     monkeypatch.setattr("karma.violations.DEFAULT_PATH", violations_path)
     return sticky_path, violations_path
 
@@ -56,7 +56,7 @@ def test_user_prompt_submit_handles_bad_yaml(monkeypatch, tmp_path, capsys):
     """sticky.yaml 配置错 → stderr 报错，输出 passthrough（空 JSON）。"""
     sticky_path = tmp_path / "sticky.yaml"
     sticky_path.write_text("- {{ this is not valid yaml", encoding="utf-8")
-    monkeypatch.setattr("karma.sticky.DEFAULT_PATH", sticky_path)
+    monkeypatch.setattr("karma.rule.DEFAULT_PATH", sticky_path)
     monkeypatch.setattr("karma.violations.DEFAULT_PATH", tmp_path / "violations.jsonl")
     payload = json.dumps({"prompt": "你好", "session_id": "s"})
     monkeypatch.setattr("sys.stdin", io.StringIO(payload))

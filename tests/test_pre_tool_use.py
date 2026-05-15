@@ -15,7 +15,7 @@ def _patch(monkeypatch, tmp_path: Path, sticky_items: list[dict]) -> tuple[Path,
     sticky_path = tmp_path / "sticky.yaml"
     sticky_path.write_text(yaml.safe_dump(sticky_items, allow_unicode=True), encoding="utf-8")
     violations_path = tmp_path / "violations.jsonl"
-    monkeypatch.setattr("karma.sticky.DEFAULT_PATH", sticky_path)
+    monkeypatch.setattr("karma.rule.DEFAULT_PATH", sticky_path)
     monkeypatch.setattr("karma.violations.DEFAULT_PATH", violations_path)
     return sticky_path, violations_path
 
@@ -31,7 +31,7 @@ def _run_hook(monkeypatch, payload: dict) -> dict:
 
 
 def test_allow_when_no_sticky(monkeypatch, tmp_path):
-    monkeypatch.setattr("karma.sticky.DEFAULT_PATH", tmp_path / "sticky.yaml")
+    monkeypatch.setattr("karma.rule.DEFAULT_PATH", tmp_path / "sticky.yaml")
     monkeypatch.setattr("karma.violations.DEFAULT_PATH", tmp_path / "v.jsonl")
     out = _run_hook(monkeypatch, {
         "tool_name": "Bash",
@@ -193,7 +193,7 @@ def test_fail_open_on_bad_yaml(monkeypatch, tmp_path):
     """sticky.yaml 配置错 → 不阻塞 tool（fail open）。"""
     sticky_path = tmp_path / "sticky.yaml"
     sticky_path.write_text("- {{ bad yaml")
-    monkeypatch.setattr("karma.sticky.DEFAULT_PATH", sticky_path)
+    monkeypatch.setattr("karma.rule.DEFAULT_PATH", sticky_path)
     monkeypatch.setattr("karma.violations.DEFAULT_PATH", tmp_path / "v.jsonl")
     out = _run_hook(monkeypatch, {
         "tool_name": "Bash",
@@ -205,7 +205,7 @@ def test_fail_open_on_bad_yaml(monkeypatch, tmp_path):
 
 def test_fail_open_on_bad_payload(monkeypatch, tmp_path):
     """payload JSON 解析失败 → fail open。"""
-    monkeypatch.setattr("karma.sticky.DEFAULT_PATH", tmp_path / "sticky.yaml")
+    monkeypatch.setattr("karma.rule.DEFAULT_PATH", tmp_path / "sticky.yaml")
     monkeypatch.setattr("karma.violations.DEFAULT_PATH", tmp_path / "v.jsonl")
     import io
     monkeypatch.setattr("sys.stdin", io.StringIO("not json"))
