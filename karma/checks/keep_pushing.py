@@ -115,6 +115,28 @@ _USER_STOP_HINT_RE = __import__("re").compile(
     __import__("re").IGNORECASE,
 )
 
+# v0.5.19 Agent 自己饱和声明字眼检测 — sticky #8 例外条件 ②「任务真饱和明说卡在哪」
+# 跟 v0.4.41 用户叫停豁免对偶: Agent 真饱和时该明说不是默默停, 老实饱和声明
+# 不该被反思 hook 拦, 不然激发不诚实假装继续推.
+#
+# 关键设计: 只识别**强饱和信号**字眼 (饱和 + 卡点 + 未来接力规划),
+# 不跟 v0.4.22 柔性停顿字眼 (今天到此为止 / 就这样吧 / 改不动了) 重叠 —
+# 那些场景 v0.4.22 故意拦 (Agent 没真做完想偷懒收工). 区分:
+#   ✓ 饱和声明 (豁免): 「任务真饱和」「我卡在 X 这一步」「明天接力做 Y」
+#   ✗ 柔性偷懒 (拦): 「今天到此为止」「就这样吧」「搞不定了」(无强饱和信号)
+_AGENT_SATURATION_RE = __import__("re").compile(
+    r"(?:"
+    # 强饱和声明
+    r"真饱和|任务(?:真)?饱和|我饱和(?:了)?|工作饱和|今天饱和|"
+    r"本 session 饱和|这一波(?:真)?饱和|session 饱和|"
+    # 明确卡点声明
+    r"卡在(?:这|此|这一步|这个|哪|「)|卡住了|真卡住|卡点(?:在|是|:)|"
+    # 未来接力规划 (带「明天 / 下次」+ 推进动词)
+    r"明天接力|明天(?:再)?(?:继续|推|做)|下次接力|下次(?:再)?(?:继续|推)"
+    r")",
+    __import__("re").IGNORECASE,
+)
+
 
 def check(*, response: str = "", user_prompt: str = "", **_):
     """检测 Agent response 是不是「无下一步陈述完结」型停下。
@@ -137,6 +159,13 @@ def check(*, response: str = "", user_prompt: str = "", **_):
 
     text = response.strip()
     tail = text[-_TAIL_WINDOW:]
+
+    # v0.5.19 真根因 fix：Agent 自己声明饱和（sticky #8 例外条件 ②「任务真饱和
+    # 明说卡在哪」）→ 整 turn 豁免. 跟 v0.4.41 用户叫停豁免对偶, 不然 Agent
+    # 老实说「今天饱和了」反而被反思 hook 拦, 激发不诚实假装继续推. dogfood
+    # 真触发: 上 turn 末尾「今天就这样收」+ 上 3 turn「真饱和」明确声明被错拦.
+    if _AGENT_SATURATION_RE.search(text):
+        return None
 
     # 豁免 1：明确推进信号 — tail 直接命中
     if _PUSH_SIGNAL_RE.search(tail):

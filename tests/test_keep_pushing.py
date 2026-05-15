@@ -314,3 +314,40 @@ def test_v056_partial_stop_still_blocked():
     fake_push = "做完了。下一次再说吧。"
     result = fn(response=fake_push)
     assert result is not None, "推卸语气不该被错算推进规划豁免"
+
+
+def test_v0519_agent_saturation_declaration_exempted():
+    """v0.5.19: Agent 自己声明真饱和 → 豁免反思 hook.
+
+    sticky #8 例外条件 ②「任务真饱和明说卡在哪」— 跟 v0.4.41 用户叫停豁免对偶.
+    关键: 强饱和信号字眼 (饱和/卡点/明天接力) 才豁免, 不跟 v0.4.22 柔性停顿
+    (今天到此为止/就这样吧) 重叠.
+    """
+    fn = REGISTRY["keep_pushing_no_stop"]
+    saturation_phrases = [
+        "今天 16 个 release 一波完了 真饱和, 明天接力。",
+        "卡在 v0.6.0 真实施这步 — 大变更不该一天 ship 完，明天再继续做 fix。",
+        "本 session 饱和。等下次。",
+        "审计跑完, 任务真饱和, 卡在「需要用户拍方向」让你知道。",
+        "我饱和了, 下次接力。",
+    ]
+    for phrase in saturation_phrases:
+        result = fn(response=phrase)
+        assert result is None, f"Agent 强饱和声明 {phrase!r} 应豁免, 实际拦: {result}"
+
+
+def test_v0519_agent_soft_stop_without_saturation_still_blocked():
+    """v0.5.19 对偶: 无强饱和信号的柔性停顿仍拦 (跟 v0.4.22 设计一致).
+
+    确认 v0.5.19 没破 v0.4.22 — 「今天到此为止」「就这样吧」类偷懒收工仍拦.
+    """
+    fn = REGISTRY["keep_pushing_no_stop"]
+    soft_stops = [
+        "做了 A B C。OK 就这样了。",
+        "改不动了。今天到此为止。",
+        "改完。就这样吧。",
+        "做完了，下次再说吧。",
+    ]
+    for phrase in soft_stops:
+        result = fn(response=phrase)
+        assert result is not None, f"无饱和信号的柔性停顿仍应拦: {phrase!r}"
