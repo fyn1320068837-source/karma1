@@ -252,7 +252,7 @@ def recent(
     now: int | None = None,
     tail_lines: int = 500,
 ) -> dict[str, int]:
-    """返回最近违反过的 sticky_id → 最近 ts dict（按人类时钟）。"""
+    """返回最近违反过的 rule_id → 最近 ts dict（按人类时钟）。"""
     if path is None:
         path = DEFAULT_PATH
     now = now or int(time.time())
@@ -275,7 +275,7 @@ def count_recent(
     now: int | None = None,
     tail_lines: int = 500,
 ) -> dict[str, int]:
-    """返回 window_sec 内每条 sticky_id 的违反**次数**（按人类时钟）。"""
+    """返回 window_sec 内每条 rule_id 的违反**次数**（按人类时钟）。"""
     if path is None:
         path = DEFAULT_PATH
     now = now or int(time.time())
@@ -299,7 +299,7 @@ def recent_turns(
     path: Path | None = None,
     tail_lines: int = 500,
 ) -> dict[str, int]:
-    """返回**本 session** 最近 window_turns 内违反过的 sticky_id → 最近 turn dict。
+    """返回**本 session** 最近 window_turns 内违反过的 rule_id → 最近 turn dict。
 
     跟 recent() 区别：按 turn 距离而不是 ts。这是「Agent 漂移」的对应视角 —
     漂移按 turn 累积，不按人类时钟（用户去开会 30 分钟回来 Agent 状态没变）。
@@ -329,9 +329,9 @@ def count_recent_turns(
     path: Path | None = None,
     tail_lines: int = 500,
 ) -> dict[str, int]:
-    """返回本 session 最近 window_turns 内每条 sticky_id 的违反**次数**。
+    """返回本 session 最近 window_turns 内每条 rule_id 的违反**次数**。
 
-    用于累积警报按 turn 判定（如 3 turn 内同 sticky ≥ 3 次升级严重度）。
+    用于累积警报按 turn 判定（如 3 turn 内同一规则 ≥ 3 次升级严重度）。
     """
     if path is None:
         path = DEFAULT_PATH

@@ -6,6 +6,60 @@
 
 ## [Unreleased]
 
+## [0.9.7] — 2026-05-15（fix — KARMA_HOME 隔离 mode 下 bypass 检测失效 + v0.6.0 user-facing sticky 残留 + 加 regression 锁机制）
+
+### 为什么发这版
+
+v0.9.6 sticky→rules 改名 audit 时让子 Agent 扫了一遍，他报「合法保留」3 处。用户问「合法保留的硬编码本地路径不应该硬编码吧」— 实际去读代码确认子 Agent 对 CLI migration shim 的判定是对的（那处不是硬编码字符串，是 `rules_path.parent / "sticky.yaml"` 从主路径变量推出来），但**顺手 grep 完整仓发现 2 个真 bug 子 Agent 漏报**，比之前 5 个 CI 根因更接近「真正的设计 bug」—— cross-user / 多 profile / CI 隔离正确性，不是 gate 对齐。
+
+### Fix 1 — `bypass_karma` 检测在 `KARMA_HOME` 隔离 mode 下失效
+
+`karma/paths.py:karma_home()` 一直支持 `KARMA_HOME` env override（跨用户 / dry-run / CI / 多 profile）。但 `karma/checks/bypass_karma.py:_KARMA_STATE_PATH_RE` 硬编码 `\.claude/karma/...` 字面正则。后果：用户跑 `KARMA_HOME=/tmp/foo karma ...` 然后 `rm /tmp/foo/session-state/*.json`（绕开尝试）— bypass-karma 检测**完全打不到**，正则只 match 默认 `~/.claude/karma/` 路径。
+
+这跟 v0.9.6 CI verify step 是同一类 bug — 该用工厂函数的地方用了硬编码字面。单一来源原则在仓库一个角落破了。
+
+**fix**：`_build_state_path_re()` 工厂函数按 `karma_home()` 动态构造正则 — 覆盖默认 mode / `KARMA_HOME` override mode / home 子目录 mode（用户可能敲 `~/<rel>` 字面）。同时把文件名集合从 `(session-state|violations|sticky.yaml)` 扩成 `(session-state|violations|rules.yaml|sticky.yaml)` — v0.6.0+ 主名跟旧用户迁移期路径都拦。
+
+### Fix 2 — `karma/cli.py:257` 硬编码提示骗 `KARMA_HOME` 用户
+
+`print("编辑用: ... vim ~/.claude/karma/config.yaml")` — 但实际创建在 `KARMA_DIR / "config.yaml"`。`KARMA_HOME=/tmp/foo` 时用户被指向一个不存在的文件。fix：`print(f"... vim {config_path}")` — 变量本来就在作用域里。
+
+### Fix 3 — `pyproject.toml` keywords 还列 `"sticky"`
+
+v0.6.0 BREAKING 已经 `sticky.*` → `rules.*` 但 PyPI keywords 还列 `"sticky"`。改 `"rules"`。
+
+### Fix 4 — User-facing 文件还有 `sticky` 残留
+
+5 个用户真能看到、看到会困惑（文件不存在 / 名字错）的位置：
+- `data/locales/zh.yaml:28` — force_block 拦截原因 i18n 文本
+- `data/config.example.yaml:13,16` — config 模板注释（`karma init` 复制到 `~/.claude/karma/config.yaml` 用户会读）
+- `data/rules.dev.example.zh.yaml:57,120` — 规则模板 preference 文本（用户安装时就是他规则库的初始内容）
+- `data/rules.dev.minimal.example.zh.yaml:71` — minimal 模板平行残留
+
+### Fix 5 — `karma/violations.py` API contract docstring 还说 `sticky_id`
+
+4 个函数（`recent` / `count_recent` / `recent_session` / `count_recent_turns`）docstring 声明返回 `sticky_id` key 字典，但实际代码返回 `rule_id`（走 `extract_rule_id()` helper）。API contract 误导。全部修正 + 1 处 inline 注释（「3 turn 内同 sticky」→「3 turn 内同一规则」）。
+
+### Regression 锁机制 — `tests/test_no_sticky_in_user_facing.py`
+
+更深的结构性问题：v0.8.2 / v0.9.7 每次 sticky → rules 扫除都找到上次扫漏的残留。**没有机制锁 user-facing 表面**。新加 regression 测试白名单方式锁 7 个 user-facing 文件 — 下次有人改这些文件不小心引入旧名 CI 直接 fail。白名单是「行字面精确匹配」而非「文件级豁免」— 细粒度可审计。
+
+dev-facing 残留（cli / hook / notify module docstring / tests 变量名 ~10 处）按打补丁式追加 vs 整体方向乱的取舍，留 v0.10.x 单独大扫，不进 v0.9.7。
+
+### 新加测试 — `tests/test_bypass_karma.py` KARMA_HOME 隔离覆盖
+
+4 个新 case：
+- 默认 mode：`~/.claude/karma/*` / 绝对 home 路径 / 相对 fragment 都 match
+- `KARMA_HOME` override mode：override 路径下 bypass 写也 match
+- `KARMA_HOME` 在 home 子目录：用户敲 `~/<rel>` 字面也 match
+- `rules.yaml` 跟 `sticky.yaml`（旧用户兼容路径）都拦
+
+### 验证
+
+- **466/466 通过**，`LANG=zh_CN.UTF-8` 跟 `LANG=en_US.UTF-8` 双 locale 都过
+- 6 道本机门禁全过（pytest 双 locale / ruff / mypy / vulture / wheel verify）
+- wheel 产物检查：6 个 expected 模板全在
+
 ## [0.9.6] — 2026-05-15（fix — 第 5 个独立 CI fail：v0.6.0 BREAKING 重命名在 verify wheel step 留的残留）
 
 ### v0.9.5 的「最终」预言又错了

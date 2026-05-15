@@ -19,11 +19,13 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from karma.checks._types import CheckHit
 from karma.checks.common import is_python_c_command, strip_shell_quoted_literals
 from karma.checks.description_context import _BASH_REDIR_TARGET_RE
 from karma.i18n import tr
+from karma.paths import karma_home
 
 _STICKY_ID = "deep-fix-not-bypass"
 
@@ -36,11 +38,43 @@ _KARMA_INTERNAL_RE = re.compile(
     re.IGNORECASE,
 )
 
-# karma 状态文件路径
-_KARMA_STATE_PATH_RE = re.compile(
-    r"\.claude/karma/(?:session-state|violations\.jsonl|sticky\.yaml)",
-    re.IGNORECASE,
-)
+
+def _build_state_path_re() -> re.Pattern[str]:
+    """构造 karma state 文件路径正则。
+
+    覆盖用户敲的 Bash 命令里可能出现的所有路径写法：
+    - 默认 `~/.claude/karma/...` mode：相对 fragment `.claude/karma/...`
+      同时匹配 `~/...` / `/Users/x/...` / 相对 `.claude/karma/...` 3 种字面
+    - `KARMA_HOME` env 隔离 mode（跨用户 / CI / 多 profile）：加 KARMA_HOME 实际
+      绝对路径 + 如果在 home 下还加 `~/<rel>` 字面兼容
+
+    文件名集合涵盖 `rules.yaml`（v0.6.0+ 主名）+ `sticky.yaml`（旧用户兼容路径）
+    + `session-state` + `violations.jsonl`。
+
+    `karma_home()` 在 import 时 freeze（paths.py docstring 已明确这点 — `KARMA_HOME`
+    必须在 hook 子进程启动前 set），所以 module-level 编译一次即可。
+    """
+    karma_dir = karma_home()
+    default_dir = Path.home() / ".claude" / "karma"
+
+    paths = [r"\.claude/karma"]  # 默认 mode 任意写法都 match 这段相对 fragment
+
+    if karma_dir != default_dir:
+        # KARMA_HOME 改了路径 — 加 override 路径绝对字面
+        paths.append(re.escape(str(karma_dir)))
+        # KARMA_HOME 在 home 下时还加 `~/<rel>` 字面（用户敲 ~ 不展开）
+        try:
+            rel = karma_dir.relative_to(Path.home())
+            paths.append(rf"~/{re.escape(str(rel))}")
+        except ValueError:
+            pass
+
+    files = r"(?:session-state|violations\.jsonl|rules\.yaml|sticky\.yaml)"
+    return re.compile(rf"(?:{'|'.join(paths)})/{files}", re.IGNORECASE)
+
+
+# karma 状态文件路径 — 工厂动态构造，KARMA_HOME 隔离 mode 下检测仍生效
+_KARMA_STATE_PATH_RE = _build_state_path_re()
 
 # 写文件操作信号 — 不含 cp/mv/rm 这种「合法备份 / 清老 rotation」操作。
 # 用户 `cp ~/.claude/karma/sticky.yaml ~/backup/` / `rm ~/karma/violations.jsonl.3`

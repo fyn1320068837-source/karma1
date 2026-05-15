@@ -10,10 +10,10 @@ notify_enabled: true
 # Agent 漂移按 turn 累积（不是人类时钟）— 用户去开会 30 分钟跟连续 30 个 turn
 # Agent 状态完全不同，按人类时钟错维度。下面三个字段都是 turn 维度。
 
-# ⚠️ 标记窗口 — 最近 N turn 内违反过的 sticky 下次 user_prompt_submit 注入时标红
+# ⚠️ 标记窗口 — 最近 N turn 内违反过的规则下次 user_prompt_submit 注入时标红
 recent_violation_turns: 5
 
-# 累积告警 — N turn 内同 sticky 违反 ≥ M 次 → 升级 🚨 严重通知
+# 累积告警 — N turn 内同一规则违反 ≥ M 次 → 升级 🚨 严重通知
 escalate_window_turns: 3
 escalate_threshold: 3
 

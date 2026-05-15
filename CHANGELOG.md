@@ -10,6 +10,60 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.9.7] — 2026-05-15 (fix — KARMA_HOME isolation broken in bypass detection + v0.6.0 user-facing sticky residue + regression mechanism)
+
+### Why this release
+
+While auditing what the sub-agent classified as "legitimately preserved" in the v0.9.6 sticky→rules rename audit, found 2 actual bugs the rename sweep had been missing — not in code paths the sub-agent had flagged. These are deeper than v0.9.2 → v0.9.6 CI fixes because they're cross-user / multi-profile / CI-isolation correctness, not just gate alignment.
+
+### Fix 1 — `bypass_karma` check broken under `KARMA_HOME` isolation
+
+`karma/paths.py:karma_home()` has supported `KARMA_HOME` env override since the env was introduced (for cross-user / dry-run / CI / multi-profile). But `karma/checks/bypass_karma.py:_KARMA_STATE_PATH_RE` had a hardcoded `\.claude/karma/...` literal regex. Effect: user running `KARMA_HOME=/tmp/foo karma ...` then `rm /tmp/foo/session-state/*.json` (bypass attempt) — the bypass-karma check **completely missed it**, because the regex only matched the default `~/.claude/karma/` path.
+
+This is the same class of bug as the CI verify step: a hardcoded literal where a factory call was required. Single-source-of-truth principle was broken in one corner of the codebase.
+
+**Fix**: `_build_state_path_re()` factory function dynamically constructs the regex from `karma_home()` — covers default mode, `KARMA_HOME` override mode, and home-subdir mode (where users may type `~/<rel>` literal). Also expanded the filename set from `(session-state|violations|sticky.yaml)` to `(session-state|violations|rules.yaml|sticky.yaml)` — both v0.6.0+ main name and the legacy migration path now get caught.
+
+### Fix 2 — `karma/cli.py:257` hardcoded hint string misleads `KARMA_HOME` users
+
+`print("编辑用: ... vim ~/.claude/karma/config.yaml")` — but file actually created at `KARMA_DIR / "config.yaml"`. Under `KARMA_HOME=/tmp/foo`, user gets pointed at a non-existent file. Fix: `print(f"... vim {config_path}")` — same variable already in scope.
+
+### Fix 3 — `pyproject.toml` keywords still listed `"sticky"`
+
+v0.6.0 BREAKING renamed `sticky.*` → `rules.*` but the PyPI keywords still listed `"sticky"`. Updated to `"rules"`.
+
+### Fix 4 — User-facing files still contained `sticky` strings
+
+5 user-facing places where the user actually sees the string and would get confused (file doesn't exist / wrong filename):
+- `data/locales/zh.yaml:28` — force_block reason i18n message
+- `data/config.example.yaml:13,16` — comments in the config template that gets copied to `~/.claude/karma/config.yaml` by `karma init`
+- `data/rules.dev.example.zh.yaml:57,120` — rule template preference text users install via `karma init`
+- `data/rules.dev.minimal.example.zh.yaml:71` — minimal template parallel residue
+
+### Fix 5 — `karma/violations.py` API contract docstrings said `sticky_id`
+
+4 functions (`recent`/`count_recent`/`recent_session`/`count_recent_turns`) had docstrings claiming they return `sticky_id` keys, but the actual code returns `rule_id` (per `extract_rule_id()` helper). API contract was misleading. Fixed all 4 + 1 inline comment ("3 turn 内同 sticky" → "3 turn 内同一规则").
+
+### Regression mechanism — `tests/test_no_sticky_in_user_facing.py`
+
+The deeper structural issue: every `sticky` → `rules` sweep so far (v0.8.2, v0.9.7) found new residue the previous sweep missed. No mechanism was locking the user-facing surface. New regression test locks 7 user-facing files with whitelist-style exceptions — next time someone modifies these files and accidentally introduces an old name, CI fails. White­list is "exact line literal" not "file-level exemption" — granular and audit­able.
+
+Dev-facing residue (cli/hook/notify module docstrings, tests/ variable names — ~10 more places) deferred to v0.10.x for a single mass sweep rather than piece­meal patches.
+
+### New tests — `tests/test_bypass_karma.py` KARMA_HOME isolation coverage
+
+4 new cases:
+- Default mode: matches `~/.claude/karma/*` / absolute home path / relative fragment
+- `KARMA_HOME` override mode: matches custom path bypass writes
+- `KARMA_HOME` in home subdir: matches `~/<rel>` literal users may type
+- Both `rules.yaml` and `sticky.yaml` (legacy compat) get caught
+
+### Verification
+
+- **466/466 passing** under both `LANG=zh_CN.UTF-8` and `LANG=en_US.UTF-8`
+- All 6 local gates pass (pytest both locales / ruff / mypy / vulture / wheel verify)
+- Wheel inspection: all 6 expected templates present
+
 ## [0.9.6] — 2026-05-15 (fix — 5th independent CI failure: v0.6.0 BREAKING rename leftover in `verify wheel` step)
 
 ### My v0.9.5 prediction was wrong

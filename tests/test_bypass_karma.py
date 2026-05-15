@@ -326,3 +326,61 @@ def test_v0518_internal_field_name_write_to_karma_still_blocked():
     """v0.5.18 原因对偶: 内部 field name + 写到 karma 路径 → 违反 仍拦."""
     cmd = "echo 'last_test_pass_ts=999999' > ~/.claude/karma/session-state/x"
     assert _check(cmd) is not None, "写到 karma 路径是绕过"
+
+
+# === v0.9.7: KARMA_HOME 隔离 mode 下 bypass 检测仍生效 ===
+# v0.9.6 前 _KARMA_STATE_PATH_RE 硬编码 `\.claude/karma/...` 字面，
+# 用户跑 `KARMA_HOME=/tmp/foo` 时 `rm /tmp/foo/session-state/x.json`
+# 该拦但完全打不到。v0.9.7 用 karma_home() 工厂动态构造正则修这个洞。
+
+def test_build_state_path_re_default_mode_matches_home_writes():
+    """默认 mode：~/.claude/karma/* / 绝对 home 路径 / 相对 fragment 都该匹配。"""
+    from karma.checks.bypass_karma import _build_state_path_re
+    pat = _build_state_path_re()
+    assert pat.search("rm ~/.claude/karma/session-state/x.json")
+    assert pat.search("rm /Users/anyone/.claude/karma/violations.jsonl")
+    assert pat.search("rm .claude/karma/rules.yaml")
+    # 不该匹配无关路径
+    assert not pat.search("rm /tmp/random/session-state/x.json")
+
+
+def test_build_state_path_re_KARMA_HOME_mode_matches_isolated_writes(monkeypatch, tmp_path):
+    """KARMA_HOME 隔离 mode：override 路径下的 bypass 也该 match（不是 home 子目录）。"""
+    from karma.checks.bypass_karma import _build_state_path_re
+    custom = tmp_path / "karma-isolated"
+    custom.mkdir()
+    monkeypatch.setenv("KARMA_HOME", str(custom))
+    # 动态调工厂拿新 env 值（实际 hook 子进程启动时 env 已 set 不需 reimport）
+    pat = _build_state_path_re()
+    # 绝对路径写法
+    assert pat.search(f"rm {custom}/session-state/x.json")
+    assert pat.search(f"echo '{{}}' > {custom}/violations.jsonl")
+    # 默认路径在 KARMA_HOME mode 下也仍匹配（兼容老装机器迁移期）
+    assert pat.search("rm ~/.claude/karma/session-state/x.json")
+
+
+def test_build_state_path_re_KARMA_HOME_in_home_dir_matches_tilde_literal(monkeypatch, tmp_path, request):
+    """KARMA_HOME 设到 home 下子目录时：用户用 `~/<rel>` 字面也该 match。"""
+    from pathlib import Path
+
+    from karma.checks.bypass_karma import _build_state_path_re
+
+    # 用一个 home 下的临时子目录（tmp_path 在 /var 不在 home，要构造 home 下的）
+    home_subdir = Path.home() / ".karma-test-isolated"
+    home_subdir.mkdir(exist_ok=True)
+    request.addfinalizer(lambda: home_subdir.rmdir() if home_subdir.exists() else None)
+
+    monkeypatch.setenv("KARMA_HOME", str(home_subdir))
+    pat = _build_state_path_re()
+    # 字面 ~/<rel> 应该 match
+    assert pat.search("rm ~/.karma-test-isolated/session-state/x.json")
+    # 绝对路径也 match
+    assert pat.search(f"rm {home_subdir}/session-state/x.json")
+
+
+def test_rules_yaml_now_in_state_path_set():
+    """v0.6.0 BREAKING 把 sticky.yaml 改名 rules.yaml — bypass 检测要拦两者。"""
+    from karma.checks.bypass_karma import _build_state_path_re
+    pat = _build_state_path_re()
+    assert pat.search("echo '...' > ~/.claude/karma/rules.yaml")
+    assert pat.search("echo '...' > ~/.claude/karma/sticky.yaml"), "兼容老用户路径"

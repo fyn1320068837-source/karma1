@@ -254,7 +254,7 @@ def cmd_init(minimal: bool | None = None) -> int:
     elif EXAMPLE_CONFIG.exists():
         shutil.copyfile(EXAMPLE_CONFIG, config_path)
         print(f"创建 config.yaml: {config_path}")
-    print("编辑用: karma rule edit  /  vim ~/.claude/karma/config.yaml")
+    print(f"编辑用: karma rule edit  /  vim {config_path}")
     if auto_chose:
         override_flag = "--no-minimal" if minimal else "--minimal"
         print(f"自动选不对？强制覆盖：karma init {override_flag}")

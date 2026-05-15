@@ -68,7 +68,7 @@
 - id: deep-fix-not-bypass
   preference: |
     karma 拦截发生时，先停下深挖**为什么拦** — 是违反还是 karma 自身 bug。
-    禁止通过手动改 ~/.claude/karma/session-state/ / 临时改 sticky.yaml /
+    禁止通过手动改 ~/.claude/karma/session-state/ / 临时改 rules.yaml /
     hack 字面 等方式绕开检测。
     经典 anti-pattern：被拦 → 手动改内部状态让 commit 通过。
     正确做法：被拦 → 看 trigger → 深挖 pattern 或系统 bug → 修原因。
