@@ -50,8 +50,8 @@ from datetime import datetime
 from pathlib import Path
 
 from karma import __version__
-from karma.sticky import DEFAULT_PATH as STICKY_PATH
-from karma.sticky import HARD_MAX, MAX_STICKY, StickyConfigError, load
+from karma.rule import DEFAULT_PATH as STICKY_PATH
+from karma.rule import HARD_MAX, MAX_STICKY, StickyConfigError, load
 from karma.violations import DEFAULT_PATH as VIOLATIONS_PATH
 from karma.violations import load_all
 
@@ -586,7 +586,7 @@ def cmd_audit(with_fix_timeline: bool = False, output_format: str = "text") -> i
     # fix 时间线 — 仅 with_fix_timeline=True 时算
     fix_ts_by_sticky: dict[str, int | None] = {}
     if with_fix_timeline:
-        from karma.sticky import load as load_sticky
+        from karma.rule import load as load_sticky
         sticky_list = load_sticky()
         for sid in by_sticky:
             fix_ts_by_sticky[sid] = _check_file_last_commit_ts(sid, sticky_list)
@@ -758,7 +758,7 @@ def cmd_stats() -> int:
         )
     # 未触发的 sticky 显示 ✓ 让作者看到正面证据（哪些规则没违反）
     try:
-        from karma.sticky import load as _load_sticky
+        from karma.rule import load as _load_sticky
         all_sticky_ids = {s.id for s in _load_sticky()}
         untriggered = sorted(all_sticky_ids - set(total))
         if untriggered:

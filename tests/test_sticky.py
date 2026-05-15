@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from karma.sticky import (
+from karma.rule import (
     HARD_MAX,
     Sticky,
     StickyConfigError,

@@ -28,7 +28,7 @@ from karma.checks.common import (
     strip_shell_quoted_literals,
 )
 from karma.checks.description_context import is_description_context
-from karma.sticky import StickyConfigError, load
+from karma.rule import StickyConfigError, load
 from karma.violations import Violation, append, detect
 
 

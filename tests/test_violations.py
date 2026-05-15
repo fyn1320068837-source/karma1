@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from karma.sticky import Sticky
+from karma.rule import Sticky
 from karma.violations import Violation, append, detect, load_all, recent
 
 

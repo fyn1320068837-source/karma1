@@ -15,7 +15,7 @@ import sys
 
 from karma import session_state
 from karma.session_state import purge_old_states
-from karma.sticky import StickyConfigError, format_for_injection, load
+from karma.rule import StickyConfigError, format_for_injection, load
 from karma.violations import recent, recent_turns
 
 

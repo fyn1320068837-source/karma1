@@ -168,7 +168,7 @@ def _build_smart_reinject(session_id: str, state) -> str:
     返回空字符串 → PostToolUse 不注入 additionalContext。
     """
     try:
-        from karma.sticky import load as _load_sticky
+        from karma.rule import load as _load_sticky
         from karma.violations import recent_turns
         from karma.config import load as _load_config
     except ImportError:

@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 import sys
 
-from karma.sticky import load as load_sticky
+from karma.rule import load as load_sticky
 
 
 def _passthrough() -> None:

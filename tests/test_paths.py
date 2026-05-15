@@ -48,7 +48,7 @@ def test_karma_home_propagates_to_all_modules():
     out = _spawn_karma_check(
         {"KARMA_HOME": "/tmp/karma-multi-mod"},
         """
-from karma.sticky import DEFAULT_PATH as STICKY
+from karma.rule import DEFAULT_PATH as STICKY
 from karma.violations import DEFAULT_PATH as VIOL
 from karma.session_state import DEFAULT_DIR as SS
 from karma.config import DEFAULT_PATH as CFG

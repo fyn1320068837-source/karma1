@@ -6,6 +6,46 @@
 
 ## [Unreleased]
 
+## [0.5.15] — 2026-05-15（chore — v0.6.0 准备：起草计划稿 + 内部 `karma.sticky` → `karma.rule` import 迁移）
+
+### 这版动机
+
+v0.5.13 audit 号称「清完所有 `.sticky_id` callsite」但只清了属性级。起草 v0.6.0 计划时 follow-up audit 发现更深一层 miss：karma 自己源码里**还有 11 处 `from karma.sticky import ...`**（cli.py 4 处 + hooks/*.py 6 处 + 自指）— 加上 4 个测试文件里的平行 import。v0.6.0 删 `karma/sticky.py` 前，karma 自己得先不 import 它。本版修这个。
+
+### 本版两件事
+
+**1. v0.6.0 计划稿草稿**（[`docs/V0_6_0_PLAN.md`](./docs/V0_6_0_PLAN.md) + [`.zh.md`](./docs/V0_6_0_PLAN.zh.md)）
+
+把废弃契约说在悬崖之前。三类：
+
+- **Group A** — 内部脚手架（只 karma 自己引用的 alias）。零外部影响。
+- **Group B** — public API 破坏性改动（`karma.sticky` 模块 / `.sticky_id` @property / `karma sticky` CLI alias）。v0.5.0 起一直 deprecated；v0.6.0 是悬崖。
+- **Group C** — 盘上数据 migration（`sticky.yaml` → `rules.yaml`、老 `violations.jsonl` 的 `sticky_id` 字段兜底）。**永远保留** — 这些处理真实用户数据不是 API 表面。
+
+含执行顺序、测试覆盖期待、风险评估、2 个开放问题（`karma sticky` CLI alias 要不要多活一个 release 周期；非中文用户的 `chinese_plain_no_jargon` 默认行为是否在 v0.6.0 范围 — 都暂定「不」延后再定）。
+
+**2. v0.6.0 前置 import 迁移**（本版执行）
+
+把 `from karma.sticky import X` → `from karma.rule import X`，覆盖：
+
+- `karma/cli.py`（4 处）
+- `karma/hooks/post_tool_use.py`、`hooks/stop.py`、`hooks/pre_tool_use.py`、`hooks/subagent_start.py`、`hooks/user_prompt_submit.py`、`hooks/pre_compact.py`、`hooks/session_start.py`（7 个 hook 文件共 7 处）
+- `tests/test_violations.py`、`test_sticky.py`、`test_paths.py`、`test_cli.py`、`test_post_tool_use_reinject.py`（5 个测试文件）
+- `test_post_tool_use_reinject.py` 里 `mock.patch("karma.sticky.load", ...)` → `mock.patch("karma.rule.load", ...)`（4 处 patch）— Python module aliasing 意味着 patch alias namespace 不会传递到真实 module，如果消费者直接 import 真实 module 的话
+
+### 验证
+
+- `pytest`：410/410 通过
+- `pytest -W error::DeprecationWarning`：410/410 通过 — **karma 自己代码和测试里 0 处 `karma.sticky` deprecation warning** 触发
+- `ruff`：0 issues
+- `grep -rn "from karma.sticky" karma/ tests/` 只剩 `karma/sticky.py` shim 自己 docstring 里写的（shim 存在目的就是被 import，本身不 import 自己）
+
+### v0.6.0 就绪状态
+
+本版后，v0.6.0 删 `karma/sticky.py` 不会破任何内部 callsite。4 个 class/property alias（`MAX_STICKY` / `Sticky` / `StickyConfigError` / `EXAMPLE_STICKY*`）也是 — 0 内部使用者。`CheckHit` + `Violation` 上 `.sticky_id` @property 自 v0.5.13 起就 0 内部使用者。`karma sticky <subcommand>` CLI alias 在 `cli.py:1183` 是个 entry-point 分支，0 内部使用者。
+
+简单说：v0.6.0 可以是纯删除 commit，不需要 refactor。
+
 ## [0.5.14] — 2026-05-15（docs — `karma-rule` skill 教会 Agent 用现有命令组合做 modify，不加新 CLI）
 
 ### 这版动机

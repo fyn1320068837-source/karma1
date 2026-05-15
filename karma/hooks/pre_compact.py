@@ -23,7 +23,7 @@ import time
 from pathlib import Path
 
 from karma.paths import karma_home
-from karma.sticky import load as load_sticky
+from karma.rule import load as load_sticky
 from karma.violations import recent_turns
 
 
