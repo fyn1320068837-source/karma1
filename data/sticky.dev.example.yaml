@@ -53,9 +53,8 @@
     sleep / wait / 等长任务跑完期间，用户等你的输出。盯着进度条不是协作 — 是「卡了」。
     起完 background 任务立刻推进下一件能做的（读相关文件 / 起另一个子 Agent /
     设计下一步）— 任务完成你会被通知到。多个独立任务优先并发起，不要串行排队。
-  # 2026-05-15 收紧 — 用「我先 X / 现在 X」一人称行动声明字面，区分
-  # 「等 X 完成后做 Y」描述顺序依赖 vs 「我先等 X」真阻塞声明。
-  # 前者是合理任务依赖说明，后者才是 sticky 真要拦的行为。
+  # 设计原则：用「我先 X / 现在 X」一人称行动声明字面，区分「等 X 完成后做 Y」
+  # 描述顺序依赖 vs 「我先等 X」真阻塞声明 — 后者才是 sticky 真要拦的行为。
   violation_keywords:
     - 我先等测试
     - 我现在等测试
@@ -78,9 +77,10 @@
     supervisor / dispatcher / mutex」换成「精度 / 调度器 / 分发器 / 互斥锁」
     让他读起来不卡。真技术专名（项目名 / 论文术语 / 业界缩写）保留，
     但首次出现配中文短解释。用类比解释复杂概念，比堆 jargon 更显你懂。
-  # 默认工程监督层撤掉 — 容易执行 + 犯错代价小，靠 user_prompt_submit 头部注入提醒
-  # 频率够用。要恢复工程检查就加回 violation_checks: [chinese_plain_no_jargon]
-  # check 代码 karma/checks/chinese_plain.py + REGISTRY 注册保留供恢复
+  # 设计：默认只用头部注入提醒，不开工程层实时拦截 — 中文用词是表达层规则，
+  # 容易执行、犯错代价小，头部提醒频率够用，实时拦截反而干扰。
+  # 想开工程层拦截：加回 violation_checks: [chinese_plain_no_jargon]
+  # check 函数 karma/checks/chinese_plain.py 一直保留可用
   violation_keywords: []
   violation_checks: []
 
