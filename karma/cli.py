@@ -50,7 +50,8 @@ from pathlib import Path
 
 from karma import __version__
 from karma.rule import DEFAULT_PATH as RULES_PATH
-from karma.rule import HARD_MAX, MAX_RULES, RuleConfigError, load
+from karma.rule import HARD_MAX, MAX_RULES, RuleConfigError, format_for_injection
+from karma.rule import load as load_rules
 from karma.violations import DEFAULT_PATH as VIOLATIONS_PATH
 from karma.violations import load_all
 
@@ -281,7 +282,7 @@ def cmd_init(minimal: bool | None = None) -> int:
 
 def cmd_rule_list() -> int:
     try:
-        rules = load()
+        rules = load_rules()
     except RuleConfigError as e:
         print(f"配置错误: {e}", file=sys.stderr)
         return 1
@@ -306,7 +307,7 @@ def cmd_rule_edit() -> int:
     subprocess.run([editor, str(RULES_PATH)])
     # 编辑后验证
     try:
-        rules = load()
+        rules = load_rules()
         print(f"编辑成功，当前 {len(rules)} 条规则。")
     except RuleConfigError as e:
         print(f"⚠️ 编辑后配置错误: {e}", file=sys.stderr)
@@ -331,7 +332,6 @@ def cmd_rule_add(yaml_path: str | None = None, stdin_yaml: bool = False) -> int:
     7. 反馈: 优化成什么 / 通过测试 / 当前规则库总数 / 是否有冲突建议删改
     """
     import yaml
-    from karma.rule import HARD_MAX, MAX_RULES, RuleConfigError, load as load_rules
     from karma.checks import REGISTRY as CHECK_REGISTRY
 
     # Step 1: 读 input
@@ -464,7 +464,6 @@ def cmd_rule_preview(yaml_path: str | None = None, stdin_yaml: bool = False) -> 
     用 Claude Code skill 在让用户确认前调这个看效果.
     """
     import yaml
-    from karma.rule import RuleConfigError, format_for_injection, load as load_rules
 
     if stdin_yaml:
         raw = sys.stdin.read()
@@ -802,8 +801,7 @@ def cmd_stats() -> int:
         )
     # 未触发的规则显示 ✓ 让作者看到正面证据（哪些规则没违反）
     try:
-        from karma.rule import load as _load_rules
-        all_rule_ids = {r.id for r in _load_rules()}
+        all_rule_ids = {r.id for r in load_rules()}
         untriggered = sorted(all_rule_ids - set(total))
         if untriggered:
             print("\n=== 未触发的规则（✓ 没违反过）===")
@@ -919,7 +917,7 @@ def cmd_doctor() -> int:
                 label = "✓ 最新" if same else "⚠ 跟当前版本不一致 (跑 `karma install-skill --force` 升级)"
                 print(f"    [{backend_name}] {dest}: {label}")
     try:
-        rules = load()
+        rules = load_rules()
         print(f"  规则加载: ✓ {len(rules)} 条")
         if len(rules) > MAX_RULES:
             print(f"    ⚠️ 超过软上限 {MAX_RULES} (但未达硬上限 {HARD_MAX})")
@@ -942,8 +940,7 @@ def cmd_doctor() -> int:
     # 权威 source = session-state 目录最新 mtime 文件，不依赖 violations[-1]
     # （当前 session 可能没产生违反但仍是活跃 session）
     from karma import session_state as _ss
-    from karma.violations import load_all as _load_v
-    all_v = _load_v()
+    all_v = load_all()
     active_session = _ss.get_current_session_id() or (all_v[-1].session_id if all_v else None)
     if active_session:
         try:

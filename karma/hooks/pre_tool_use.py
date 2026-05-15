@@ -136,37 +136,50 @@ def main() -> int:
         _allow()
         return 0
 
-    # 优先工程层
+    # 优先工程层：含 suggested_fix 比关键词层信息密度高
     if check_hits:
-        top = check_hits[0]
-        append([Violation(
-            ts=int(time.time()),
-            session_id=session_id,
-            rule_id=top.rule_id,
-            trigger=top.trigger,
-            snippet=top.snippet,
-            turn=state.turn_count,
-            agent_id=agent_id,
-            trigger_key=top.trigger_key,  # v0.5.7: locale-agnostic 分组 key
-        )])
-        sticky_pref = next((s.preference for s in sticky_list if s.id == top.rule_id), "")
-        reason = (
-            f"karma 拦截：违反 {top.rule_id!r}。\n"
-            f"检测到：{top.trigger}\n"
-            f"方向：{sticky_pref.strip()}\n"
-            f"建议：{top.suggested_fix}"
-        )
-        _deny(reason)
-        # 🛑 = pre_tool_use 拦截阻止 Agent 做事；stop hook 用 ⚠️ 表事后告警
-        # （语义差异化刻意保留：🛑 阻止动作 / ⚠️ 已发生需关注）
-        print(
-            f"🛑 karma: {top.rule_id} (tool={tool_name}) — {top.trigger}",
-            file=sys.stderr,
-        )
-        return 0
+        _emit_engine_denial(check_hits[0], sticky_list, tool_name, session_id, state, agent_id)
+    else:
+        _emit_keyword_denial(keyword_violations[0], sticky_list, tool_name)
+    return 0
 
-    # 仅关键词命中
-    top_kw = keyword_violations[0]
+
+def _emit_engine_denial(
+    top, sticky_list, tool_name: str, session_id: str, state, agent_id,
+) -> None:
+    """工程层 (CheckHit) 命中 → 写 violation + _deny + stderr 🛑。
+
+    🛑 = pre_tool_use 拦截阻止 Agent 做事；stop hook 用 ⚠️ 表事后告警
+    （语义差异化刻意保留：🛑 阻止动作 / ⚠️ 已发生需关注）
+    """
+    append([Violation(
+        ts=int(time.time()),
+        session_id=session_id,
+        rule_id=top.rule_id,
+        trigger=top.trigger,
+        snippet=top.snippet,
+        turn=state.turn_count,
+        agent_id=agent_id,
+        trigger_key=top.trigger_key,  # v0.5.7: locale-agnostic 分组 key
+    )])
+    sticky_pref = next((s.preference for s in sticky_list if s.id == top.rule_id), "")
+    reason = (
+        f"karma 拦截：违反 {top.rule_id!r}。\n"
+        f"检测到：{top.trigger}\n"
+        f"方向：{sticky_pref.strip()}\n"
+        f"建议：{top.suggested_fix}"
+    )
+    _deny(reason)
+    print(
+        f"🛑 karma: {top.rule_id} (tool={tool_name}) — {top.trigger}",
+        file=sys.stderr,
+    )
+
+
+def _emit_keyword_denial(
+    top_kw: Violation, sticky_list, tool_name: str,
+) -> None:
+    """关键词层 (Violation) 命中 → append (已含完整字段) + _deny + stderr 🛑。"""
     append([top_kw])
     sticky_pref = next((s.preference for s in sticky_list if s.id == top_kw.rule_id), "")
     reason = (
@@ -179,7 +192,6 @@ def main() -> int:
         f"🛑 karma: {top_kw.rule_id} (tool={tool_name}, 关键词 {top_kw.trigger!r})",
         file=sys.stderr,
     )
-    return 0
 
 
 if __name__ == "__main__":

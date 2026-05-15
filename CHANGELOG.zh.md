@@ -6,6 +6,42 @@
 
 ## [Unreleased]
 
+## [0.8.3] — 2026-05-15（refactor — 长 hook main 函数拆 helper + cli.py 函数内重复 import 整理）
+
+### 纯内部 refactor（无用户面变化）
+
+按 rule 9 例外：纯内部 refactor 只更 CHANGELOG + HANDOFF，不动 README / PRD。
+
+### A：长 hook `main()` 函数拆 helper
+
+Hook main 函数累积变长（223 / 159 / 128 行）— 可读但难导航。抽出单职责 helper，控制流不变：
+
+| Hook | 拆前 | 拆后 | 抽出的 helper |
+|---|---|---|---|
+| `stop.py:main` | 223 | 123 | `_emit_notifications`（stderr + 桌面通知 + 累积告警升级）/ `_handle_force_block` → bool / `_handle_keep_pushing_block` → bool |
+| `user_prompt_submit.py:main` | 159 | 68 | `_advance_turn_state`（turn 推进 + model 探测）/ `_build_strong_reminder`（跑上一 assistant response check 返回回顾文本）|
+| `pre_tool_use.py:main` | 128 | 90 | `_emit_engine_denial`（CheckHit 路径）/ `_emit_keyword_denial`（Violation 路径）— 去重 parallel deny 逻辑 |
+
+其他 5 个 hook main 都在 90 行以内，已合理不拆。
+
+### B：`cli.py` 函数内重复 import
+
+`cli.py` 有 3 处函数体内重复 `from karma.rule import ... load as load_rules`（module 顶部已 import `load`）。还有 1 处 `from karma.violations import load_all as _load_v` shadow 别名。4 处全清：
+
+- module 顶部改用 `from karma.rule import load as load_rules` + `format_for_injection`
+- 函数内重复 import 删
+- 3 处裸 `load()` 调用统一改 `load_rules()` — 命名一致，少切换心智
+
+### 验证
+
+- `pytest`：455/455 通过（行为无变化）
+- `ruff`：0 issue
+- `vulture --min-confidence 70`：0 死代码
+
+### 为什么重要
+
+长 `main()` 函数 + 函数内重复 import 是「代码增长比结构跟得上更快」的经典 pattern。v0.8.2 收了用户面命名一致性的债，v0.8.3 关闭并行的内部结构债 — 让下一波 refactor 时 hook 层更好导航。
+
 ## [0.8.2] — 2026-05-15（refactor — 代码审查：死代码清理 + `sticky` → `rule` 命名一致化 + 漏的 i18n 补齐 + 1 个 bug fix）
 
 ### 为什么做代码审查

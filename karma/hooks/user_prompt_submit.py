@@ -20,8 +20,126 @@ from karma.violations import recent, recent_turns
 
 
 def _output_passthrough() -> None:
-    """没 sticky / 配置错 → 不输出 additionalContext，passthrough。"""
+    """没规则 / 配置错 → 不输出 additionalContext，passthrough。"""
     print(json.dumps({}))
+
+
+def _advance_turn_state(session_id: str, payload: dict):
+    """每 turn 推进 session state — turn_count + 1，干预计数清 0，model 探测。
+
+    v0.4.32 中段注入 token 启发式：每 turn 起手 token 累积归零 + 上次注入
+    位置归零，让 turn 内累积达阈值才中段注入第一次（每 turn 起手 sticky
+    已全量注入过 — 中段注入是「衰减后重新锚定」补丁）。
+
+    v0.4.39 用 transcript_path 路径探 model（user_prompt_submit payload
+    没 model 字段，需读 transcript jsonl 找最后一条 assistant model 字面）。
+
+    返回 (current_turn, state) — 失败时 (0, None) 让调用方 fallback。
+    """
+    try:
+        state = session_state.load(session_id)
+        state.catchup_pending_bg()
+        state.turn_count += 1
+        state.stop_block_count = 0
+        state.tool_byte_seq = 0
+        state.last_reinject_byte_seq = 0
+        transcript_path = payload.get("transcript_path")
+        if transcript_path:
+            from karma.model_threshold import extract_model_from_transcript
+            new_model = extract_model_from_transcript(transcript_path)
+            if new_model:
+                state.model = new_model
+        session_state.save(state)
+        return state.turn_count, state
+    except Exception:
+        return 0, None
+
+
+def _build_strong_reminder(
+    transcript_path: str,
+    sticky_list,
+    state,
+    session_id: str,
+    current_turn: int,
+) -> str:
+    """跑上一 assistant response 的 violation_checks → 拼合作回顾强提醒文本。
+
+    这是 Stop hook 在 user 立刻接 prompt 时不跑的协议 limitation 完整 fallback —
+    覆盖 keep-pushing / chinese-plain / evidence 等所有 response 类 check。
+
+    返回拼好的强提醒文本（含 i18n 头尾）；无命中或读 transcript 失败时返回 ""。
+    """
+    if not transcript_path:
+        return ""
+    try:
+        from pathlib import Path as _Path
+        from karma.checks import run_checks
+        tp = _Path(transcript_path)
+        if not tp.exists():
+            return ""
+        # 反向找 last assistant message
+        lines = tp.read_text(encoding="utf-8").splitlines()
+        last_text = ""
+        for ln in reversed(lines):
+            try:
+                d = json.loads(ln.strip())
+            except json.JSONDecodeError:
+                continue
+            if d.get("type") != "assistant":
+                continue
+            msg = d.get("message", {})
+            content = msg.get("content", [])
+            if isinstance(content, list):
+                parts = [c.get("text", "") for c in content
+                         if isinstance(c, dict) and c.get("type") == "text"]
+                last_text = "\n".join(parts)
+            elif isinstance(content, str):
+                last_text = content
+            break
+        if not last_text:
+            return ""
+        # 跑所有规则的 violation_checks 看上一 response
+        all_hits = []
+        for s in sticky_list:
+            if not s.violation_checks:
+                continue
+            hits = run_checks(
+                s.violation_checks,
+                response=last_text,
+                session_state=state,
+                rule_id=s.id,
+            )
+            all_hits.extend(hits)
+        if not all_hits:
+            return ""
+        # 写到 violations.jsonl 让 stats/audit 反映实战触发（fallback for
+        # Stop hook 实战不跑导致违反没记录）
+        try:
+            import time as _time
+            from karma.violations import Violation as _V, append as _v_append
+            recs = [_V(
+                ts=int(_time.time()), session_id=session_id,
+                rule_id=h.rule_id, trigger=h.trigger,
+                snippet=h.snippet, turn=current_turn,
+            ) for h in all_hits]
+            _v_append(recs)
+        except Exception:
+            pass
+        # v0.5.2 i18n: 合作回顾语气强提醒切 locale (en/zh)
+        from karma.i18n import tr
+        reminder_lines = [
+            tr("strong_reminder.header.title"),
+            tr("strong_reminder.header.line"),
+        ]
+        for h in all_hits[:5]:  # 最多 5 条避免淹没
+            reminder_lines.append(f"\n  ▸ {h.rule_id}")
+            reminder_lines.append(f"    {h.trigger}")
+            if h.suggested_fix:
+                reminder_lines.append(f"    {h.suggested_fix}")
+        reminder_lines.append(tr("strong_reminder.footer"))
+        return "\n".join(reminder_lines)
+    except Exception:
+        return ""
 
 
 def main() -> int:
@@ -63,36 +181,10 @@ def main() -> int:
     # 顺便 catchup pending background 任务（task #8：catchup 之前只在 PostToolUse
     # 跑，bg 完成后第一个触发的 hook 可能是这里 / pre_tool_use，要多 hook 都跑）
     session_id = payload.get("session_id", "") or "default"
+    current_turn, state = _advance_turn_state(session_id, payload)
 
-    try:
-        state = session_state.load(session_id)
-        state.catchup_pending_bg()
-        state.turn_count += 1
-        state.stop_block_count = 0
-        # v0.4.32 中段注入 token 启发式：每 turn 起手 token 累积归零 +
-        # 上次注入位置归零，让 turn 内累积达阈值才中段注入第一次（每 turn
-        # 起手 sticky 已全量注入过 — 中段注入是「衰减后重新锚定」补丁）
-        state.tool_byte_seq = 0
-        state.last_reinject_byte_seq = 0
-        # v0.4.39 根本本路径：user_prompt_submit payload 没 model 字段（dogfooding
-        # 验证 — 7 turn 跑下来 state.model 仍 None 证明 payload 没 model）。
-        # 改用 transcript_path 路径 — 所有 hook payload 有 transcript_path，
-        # 读 jsonl 找最后一条 assistant model 字面。这覆盖 SessionStart 后中途
-        # /model 切换场景（v0.4.38 user_prompt_submit payload model 字段路径走
-        # 不通的原因 fix）。
-        transcript_path = payload.get("transcript_path")
-        if transcript_path:
-            from karma.model_threshold import extract_model_from_transcript
-            new_model = extract_model_from_transcript(transcript_path)
-            if new_model:
-                state.model = new_model
-        session_state.save(state)
-        current_turn = state.turn_count
-    except Exception:
-        current_turn = 0
-
-    # ⚠️ 标记 — 按 turn 距离查最近违反（不是人类时钟）
-    # 默认 5 turn 内违反过的 sticky 标 ⚠️。窗口可配。
+    # 偏离回顾标记 — 按 turn 距离查最近违反（不是人类时钟）
+    # 默认 5 turn 内违反过的规则标偏离回顾。窗口可配。
     try:
         from karma.config import load as _load_config
         cfg = _load_config()
@@ -105,77 +197,12 @@ def main() -> int:
         recent_v = recent()  # 早期 fallback 用人类时钟（首次 install 没 turn 计数）
     additional_context = format_for_injection(sticky_list, recent_v)
 
-    # 额外检测：跑上一 response 通过所有 sticky 的 violation_checks，把命中的强提醒
-    # 注入到本 turn。这是 Stop hook 在 user 立刻接 prompt 时不跑的协议 limitation
-    # 的完整 fallback — 覆盖 keep-pushing / chinese-plain / evidence 等所有 response 类 check
+    # 强提醒 fallback：跑上一 response 通过所有规则的 violation_checks (拆 helper: v0.8.3)
     transcript_path = payload.get("transcript_path", "")
-    if transcript_path:
-        try:
-            from pathlib import Path as _Path
-            from karma.checks import run_checks
-            tp = _Path(transcript_path)
-            if tp.exists():
-                # 反向找 last assistant message
-                lines = tp.read_text(encoding="utf-8").splitlines()
-                last_text = ""
-                for ln in reversed(lines):
-                    try:
-                        d = json.loads(ln.strip())
-                    except json.JSONDecodeError:
-                        continue
-                    if d.get("type") != "assistant":
-                        continue
-                    msg = d.get("message", {})
-                    content = msg.get("content", [])
-                    if isinstance(content, list):
-                        parts = [c.get("text", "") for c in content
-                                 if isinstance(c, dict) and c.get("type") == "text"]
-                        last_text = "\n".join(parts)
-                    elif isinstance(content, str):
-                        last_text = content
-                    break
-                if last_text:
-                    # 跑所有 sticky 的 violation_checks 看上一 response
-                    all_hits = []
-                    for s in sticky_list:
-                        if not s.violation_checks:
-                            continue
-                        hits = run_checks(
-                            s.violation_checks,
-                            response=last_text,
-                            session_state=state,
-                            rule_id=s.id,
-                        )
-                        all_hits.extend(hits)
-                    if all_hits:
-                        # 写到 violations.jsonl 让 stats/audit 反映实战触发（fallback for
-                        # Stop hook 实战不跑导致违反没记录）
-                        try:
-                            import time as _time
-                            from karma.violations import Violation as _V, append as _v_append
-                            recs = [_V(
-                                ts=int(_time.time()), session_id=session_id,
-                                rule_id=h.rule_id, trigger=h.trigger,
-                                snippet=h.snippet, turn=current_turn,
-                            ) for h in all_hits]
-                            _v_append(recs)
-                        except Exception:
-                            pass
-                        # v0.5.2 i18n: 合作回顾语气强提醒切 locale (en/zh)
-                        from karma.i18n import tr
-                        reminder_lines = [
-                            tr("strong_reminder.header.title"),
-                            tr("strong_reminder.header.line"),
-                        ]
-                        for h in all_hits[:5]:  # 最多 5 条避免淹没
-                            reminder_lines.append(f"\n  ▸ {h.rule_id}")
-                            reminder_lines.append(f"    {h.trigger}")
-                            if h.suggested_fix:
-                                reminder_lines.append(f"    {h.suggested_fix}")
-                        reminder_lines.append(tr("strong_reminder.footer"))
-                        additional_context += "\n".join(reminder_lines)
-        except Exception:
-            pass
+    if state is not None:
+        additional_context += _build_strong_reminder(
+            transcript_path, sticky_list, state, session_id, current_turn,
+        )
 
     print(json.dumps({
         "hookSpecificOutput": {

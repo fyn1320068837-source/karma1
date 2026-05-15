@@ -77,6 +77,150 @@ def _read_last_message_text(transcript_path: str, msg_type: str) -> str:
     return ""
 
 
+def _emit_notifications(
+    check_hits: list,
+    keyword_violations: list,
+    seen_ids: set,
+    hit_sticky_ids: set,
+    state,
+    session_id: str,
+) -> None:
+    """stderr + 桌面通知 + 累积告警升级。
+
+    - stderr 每条违反详情（含 suggested_fix）
+    - 桌面通知合并多条避免轰炸 (fail open)
+    - 命中 + 窗口内已累积超阈值 → 升级 🚨 严重通知
+    """
+    notify_msgs: list[str] = []
+    for h in check_hits:
+        line = f"⚠️ karma: Agent 违反 {h.rule_id!r} — {h.trigger}"
+        print(line, file=sys.stderr)
+        notify_msgs.append(f"{h.rule_id} — {h.trigger}")
+        if h.suggested_fix:
+            print(f"   建议：{h.suggested_fix}", file=sys.stderr)
+    for v in keyword_violations:
+        if v.rule_id in seen_ids:
+            continue
+        line = f"⚠️ karma: Agent 触发关键词 {v.rule_id!r} (词 {v.trigger!r})"
+        print(line, file=sys.stderr)
+        notify_msgs.append(f"{v.rule_id} — {v.trigger}")
+
+    if not notify_msgs:
+        return
+
+    try:
+        from karma.config import load as _load_config
+        cfg = _load_config()
+        window_turns = int(cfg.get("escalate_window_turns", _ESCALATE_WINDOW_TURNS))
+        threshold = cfg["escalate_threshold"]
+    except Exception:
+        window_turns = _ESCALATE_WINDOW_TURNS
+        threshold = _ESCALATE_THRESHOLD
+    # 按 turn 距离统计（不是人类时钟）— Agent 漂移按 turn 累积
+    if state.turn_count > 0:
+        counts = count_recent_turns(session_id, state.turn_count, window_turns=window_turns)
+    else:
+        counts = count_recent(window_sec=1800)  # 早期 fallback
+    escalated_ids = [sid for sid in hit_sticky_ids if counts.get(sid, 0) >= threshold]
+    if escalated_ids:
+        notify(
+            f"🚨 karma 严重 — 累积违反 {len(escalated_ids)} 条",
+            " / ".join(f"{sid} (×{counts[sid]})" for sid in escalated_ids[:3]),
+        )
+    else:
+        notify("karma 检测违反", " / ".join(notify_msgs[:3]))
+
+
+def _handle_force_block(
+    state,
+    sticky_list,
+    hit_sticky_ids: set,
+    session_id: str,
+) -> bool:
+    """累积强制 block — 同规则累积违反超阈值 → 输出 decision=block 强制查根因。
+
+    返回 True 表示已 print decision=block，调用方应 return 0。
+
+    v0.4.16 原因 fix：只惩罚「当前 turn 触发 + 历史累积超阈值」的规则，
+    不惩罚「已修原因不再触发但历史在窗口内」的规则（否则 fix 后仍卡死循环）。
+    `force_block_exempt: true` 的规则（如 keep-pushing-no-stop）整条豁免。
+    """
+    try:
+        from karma.config import load as _load_config
+        _cfg = _load_config()
+        force_threshold = int(_cfg.get("force_block_threshold", 5))
+        force_window = int(_cfg.get("escalate_window_turns", 3))
+        block_max = int(_cfg.get("stop_block_max_per_turn", 2))
+    except Exception:
+        force_threshold = 5
+        force_window = 3
+        block_max = 2
+
+    if force_threshold <= 0 or state.turn_count <= 0:
+        return False
+
+    counts_force = count_recent_turns(session_id, state.turn_count, window_turns=force_window)
+    exempt_ids = {s.id for s in sticky_list if s.force_block_exempt}
+    over_threshold = [
+        sid for sid, n in counts_force.items()
+        if n >= force_threshold and sid not in exempt_ids
+        and sid in hit_sticky_ids  # 当前 turn 触发该规则才 force_block
+    ]
+    if not over_threshold or state.stop_block_count >= block_max:
+        return False
+
+    state.stop_block_count += 1
+    try:
+        session_state.save(state)
+    except OSError:
+        pass
+    reason = (
+        f"karma 强制干预：累积违反 {over_threshold} 共 {sum(counts_force[s] for s in over_threshold)} 次。"
+        f"必须 fix 原因（深挖 pattern / 工程 bug / 协议）或显式让用户介入。"
+        f"禁止继续绕（手动改 karma 状态 / 临时改 sticky）。"
+    )
+    print(json.dumps({"decision": "block", "reason": reason}, ensure_ascii=False))
+    return True
+
+
+def _handle_keep_pushing_block(
+    check_hits: list,
+    keyword_violations: list,
+    state,
+) -> bool:
+    """keep-pushing 干预 — Agent 沉默式停下时让继续生成。
+
+    返回 True 表示已 print decision=block，调用方应 return 0。
+    """
+    keep_pushing_hit = any(h.rule_id == "keep-pushing-no-stop" for h in check_hits) or \
+        any(v.rule_id == "keep-pushing-no-stop" for v in keyword_violations)
+    if not keep_pushing_hit:
+        return False
+
+    try:
+        from karma.config import load as _load_config
+        block_max = int(_load_config().get("stop_block_max_per_turn", 2))
+    except Exception:
+        block_max = 2
+
+    if block_max <= 0 or state.stop_block_count >= block_max:
+        return False
+
+    state.stop_block_count += 1
+    try:
+        session_state.save(state)
+    except OSError:
+        pass
+    from karma.i18n import tr
+    reason = tr(
+        "stop.reason",
+        count=state.stop_block_count,
+        max=block_max,
+    )
+    print(json.dumps({"decision": "block", "reason": reason}, ensure_ascii=False))
+    return True
+
+
 def main() -> int:
     try:
         payload = json.load(sys.stdin)
@@ -171,125 +315,25 @@ def main() -> int:
     if all_records:
         append(all_records)
 
-    # stderr 通知 + 桌面通知（用户离开 stderr 视野时的补充提示）
-    summary_lines = []
-    notify_msgs = []
-    for h in check_hits:
-        line = f"⚠️ karma: Agent 违反 {h.rule_id!r} — {h.trigger}"
-        print(line, file=sys.stderr)
-        summary_lines.append(line)
-        notify_msgs.append(f"{h.rule_id} — {h.trigger}")
-        if h.suggested_fix:
-            print(f"   建议：{h.suggested_fix}", file=sys.stderr)
-    for v in keyword_violations:
-        if v.rule_id in seen_ids:
-            continue
-        line = f"⚠️ karma: Agent 触发关键词 {v.rule_id!r} (词 {v.trigger!r})"
-        print(line, file=sys.stderr)
-        summary_lines.append(line)
-        notify_msgs.append(f"{v.rule_id} — {v.trigger}")
-
-    # 当前 turn 触发的 sticky_id 集合 — 提到两个 if 块前共享
-    # 用于 force_block 原因 fix：只惩罚「当前 turn 触发 + 历史累积超阈值」
-    # 的 sticky；如果 Agent 修了原因当前 turn 不再触发，不重复 force_block
-    # 历史违反（否则 fix 后仍卡 force_block 形成死循环）
+    # 当前 turn 触发的 rule_id 集合 — 用于 force_block 原因 fix:
+    # 只惩罚「当前 turn 触发 + 历史累积超阈值」的规则；fix 原因后不再触发
+    # 不该被历史累积反复 force_block (否则 Agent 没法靠「修根因」解除卡死)
     hit_sticky_ids = {h.rule_id for h in check_hits} | {
         v.rule_id for v in keyword_violations if v.rule_id not in seen_ids
     }
 
-    # 桌面通知（合并多条违反到一条 notification 避免轰炸；fail open）
-    # 累积告警：本次违反含窗口内已累积超阈值 → 升级严重度（阈值从 config 读）
-    if notify_msgs:
-        try:
-            from karma.config import load as _load_config
-            cfg = _load_config()
-            window_turns = int(cfg.get("escalate_window_turns", _ESCALATE_WINDOW_TURNS))
-            threshold = cfg["escalate_threshold"]
-        except Exception:
-            window_turns = _ESCALATE_WINDOW_TURNS
-            threshold = _ESCALATE_THRESHOLD
-        # 按 turn 距离统计（不是人类时钟）— Agent 漂移按 turn 累积
-        if state.turn_count > 0:
-            counts = count_recent_turns(session_id, state.turn_count, window_turns=window_turns)
-        else:
-            counts = count_recent(window_sec=1800)  # 早期 fallback
-        escalated_ids = [sid for sid in hit_sticky_ids if counts.get(sid, 0) >= threshold]
-        if escalated_ids:
-            notify(
-                f"🚨 karma 严重 — 累积违反 {len(escalated_ids)} 条",
-                " / ".join(f"{sid} (×{counts[sid]})" for sid in escalated_ids[:3]),
-            )
-        else:
-            notify("karma 检测违反", " / ".join(notify_msgs[:3]))
+    # stderr ⚠️ 通知 + 桌面通知 + 累积告警升级 (拆 helper: v0.8.3)
+    _emit_notifications(
+        check_hits, keyword_violations, seen_ids, hit_sticky_ids, state, session_id,
+    )
 
-    # 机制 2：累积强制 block — 同一 sticky 累积违反次数超阈值 → Stop hook 输出
-    # decision=block，要求 Agent 修原因或显式让用户介入，不允许继续绕
-    if notify_msgs:
-        try:
-            from karma.config import load as _load_config
-            _cfg = _load_config()
-            force_threshold = int(_cfg.get("force_block_threshold", 5))
-            force_window = int(_cfg.get("escalate_window_turns", 3))
-            block_max = int(_cfg.get("stop_block_max_per_turn", 2))
-        except Exception:
-            force_threshold = 5
-            force_window = 3
-            block_max = 2
-        if force_threshold > 0 and state.turn_count > 0:
-            counts_force = count_recent_turns(session_id, state.turn_count, window_turns=force_window)
-            # force_block 豁免从 sticky.yaml 的 force_block_exempt 字段读
-            # 「应该继续推进」类规则不该被「累积太多必须停下让用户介入」处罚
-            # （否则语义自我矛盾 — 用户实战发现 keep-pushing-no-stop 触发该 bug）
-            exempt_ids = {s.id for s in sticky_list if s.force_block_exempt}
-            # v0.4.16 原因 fix：force_block 只惩罚「当前 turn 触发 + 历史累积
-            # 超阈值」的 sticky，不惩罚「已修了不再触发但历史在窗口内」的 sticky。
-            # dogfooding 触发：v0.4.15 修了 chinese-plain 原因，但 force_block
-            # 仍按最近 3 turn 累积 8 次重复 force_block，Agent 没法靠「修原因」
-            # 解除卡死。
-            over_threshold = [
-                sid for sid, n in counts_force.items()
-                if n >= force_threshold and sid not in exempt_ids
-                and sid in hit_sticky_ids  # 当前 turn 触发了该 sticky 才 force_block
-            ]
-            if over_threshold and state.stop_block_count < block_max:
-                state.stop_block_count += 1
-                try:
-                    session_state.save(state)
-                except OSError:
-                    pass
-                reason = (
-                    f"karma 强制干预：累积违反 {over_threshold} 共 {sum(counts_force[s] for s in over_threshold)} 次。"
-                    f"必须 fix 原因（深挖 pattern / 工程 bug / 协议）或显式让用户介入。"
-                    f"禁止继续绕（手动改 karma 状态 / 临时改 sticky）。"
-                )
-                print(json.dumps({"decision": "block", "reason": reason}, ensure_ascii=False))
-                return 0
+    # 机制 1: 累积强制 block — 累积违反超阈值 → decision=block 强制查根因
+    if _handle_force_block(state, sticky_list, hit_sticky_ids, session_id):
+        return 0
 
-    # 机制：keep-pushing 干预 — Agent 沉默式停下时让继续生成
-    keep_pushing_hit = any(h.rule_id == "keep-pushing-no-stop" for h in check_hits) or \
-        any(v.rule_id == "keep-pushing-no-stop" for v in keyword_violations)
-    if keep_pushing_hit:
-        try:
-            from karma.config import load as _load_config
-            block_max = int(_load_config().get("stop_block_max_per_turn", 2))
-        except Exception:
-            block_max = 2
-        if block_max > 0 and state.stop_block_count < block_max:
-            # 干预 — 让 Agent 继续推进
-            state.stop_block_count += 1
-            try:
-                session_state.save(state)
-            except OSError:
-                pass
-            # v0.5.2 i18n: 合作回顾语气 reason 切 locale (en/zh)
-            from karma.i18n import tr
-            reason = tr(
-                "stop.reason",
-                count=state.stop_block_count,
-                max=block_max,
-            )
-            print(json.dumps({"decision": "block", "reason": reason}, ensure_ascii=False))
-            return 0
+    # 机制 2: keep-pushing 干预 — Agent 沉默式停下时让继续生成
+    if _handle_keep_pushing_block(check_hits, keyword_violations, state):
+        return 0
 
     # 2026-05-15 原因 fix：Stop hook 协议**不支持 hookSpecificOutput**
     # （schema 仅 PreToolUse / UserPromptSubmit / PostToolUse / PostToolBatch 支持）

@@ -10,6 +10,42 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.8.3] — 2026-05-15 (refactor — long hook main functions split + cli.py import dedup)
+
+### Internal refactor only (no user-visible change)
+
+Per rule 9 exception: pure internal refactor, no CHANGELOG / HANDOFF only — README / PRD untouched.
+
+### A: long hook `main()` functions split
+
+Hook main functions had grown long (223 / 159 / 128 lines) — readable but hard to navigate. Extracted clear single-purpose helpers without changing control flow:
+
+| Hook | Before | After | Helpers extracted |
+|---|---|---|---|
+| `stop.py:main` | 223 | 123 | `_emit_notifications` (stderr + desktop notify + escalation) / `_handle_force_block` → bool / `_handle_keep_pushing_block` → bool |
+| `user_prompt_submit.py:main` | 159 | 68 | `_advance_turn_state` (turn count + model detect) / `_build_strong_reminder` (run checks on prior assistant response, return reminder text) |
+| `pre_tool_use.py:main` | 128 | 90 | `_emit_engine_denial` (CheckHit path) / `_emit_keyword_denial` (Violation path) — deduplicating the parallel deny logic |
+
+The other 5 hook mains were already under 90 lines and didn't warrant splitting.
+
+### B: `cli.py` function-level duplicate imports
+
+`cli.py` had 3 places re-importing `from karma.rule import ... load as load_rules` inside function bodies while the module had already imported `load` at the top. Plus 1 instance of `from karma.violations import load_all as _load_v` shadow-aliasing the module-top import. All 4 cleaned up:
+
+- Module top now imports `from karma.rule import load as load_rules` and `format_for_injection`
+- Function-internal duplicate imports removed
+- 3 places using bare `load()` standardized to `load_rules()` — consistent naming, less mental switching
+
+### Verification
+
+- `pytest`: 455/455 passing (no behavior change)
+- `ruff`: 0 issues
+- `vulture --min-confidence 70`: 0 dead code
+
+### Why this matters
+
+Long `main()` functions and inline duplicate imports are classic "the codebase grew faster than its structure caught up" patterns. After v0.8.2's user-facing naming cleanup, v0.8.3 closes the parallel internal-structure debt — making the hook layer easier to navigate for the next refactor cycle.
+
 ## [0.8.2] — 2026-05-15 (refactor — code audit: dead code purge + `sticky` → `rule` naming consistency + missing i18n consistency + 1 bug fix)
 
 ### Why a code audit pass
