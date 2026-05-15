@@ -6,6 +6,52 @@
 
 ## [Unreleased]
 
+## [0.9.5] — 2026-05-15（fix — 第 4 个独立 CI fail：测试假设 zh locale，CI 跑 en）
+
+### Pattern 继续
+
+v0.9.4 push: `mypy` 绿、`vulture` 绿、`ruff` 绿 — 但 **`pytest` 16 个测试红**。根因：测试 fixture assert 中文字面（`"默契"` / `"偏离"` / `"纯陈述"`）。我本机 `LANG=zh_CN.UTF-8` 让 `karma.locale_detect.is_chinese_user()` 返回 True → i18n 选 zh → fixture 通过。CI runner 默认 `en_US.UTF-8` → is_chinese_user 返回 False → i18n 选 en → 16 个 fixture fail。
+
+这是 4 个 patch release 里**第 4 个独立 CI fail 根因**（v0.9.2 → v0.9.5）。每个 fix 揭露下一层。
+
+### Fix — `tests/conftest.py` 加 `pytest_configure` hook
+
+```python
+def pytest_configure(config):
+    """Force zh locale before any karma module is imported."""
+    os.environ.setdefault("KARMA_LOCALE", "zh")
+```
+
+测试现在总在 zh locale 下跑（匹配 fixture 字面），不管 host OS locale。`setdefault` 让用户能 env override。
+
+### 为什么连续 4 次没看见
+
+复合疏漏：
+1. Mac 本机 `LANG=zh_CN.UTF-8` → locale 耦合 bug 本机看不到
+2. 本机 checklist 没 mypy
+3. vulture `--min-confidence` 阈值不匹配
+4. tag 前从来没看过 CI 状态
+
+这一版给本机 checklist 加**第 5 个**门禁匹配 CI：`LANG=en_US.UTF-8 pytest` 抓 locale 耦合 bug。
+
+### 更新 checklist（v0.9.5+）
+
+```bash
+pytest -q                                            # 460/460
+LANG=en_US.UTF-8 pytest -q                          # 也 460/460（抓 locale 耦合）
+ruff check karma/ tests/                            # clean
+mypy karma/ && mypy tests/                          # no issues
+vulture karma/ whitelist.py --min-confidence 60     # exit 0
+# push 后:
+gh run watch $(gh run list -L 1 --json databaseId -q '.[0].databaseId') --exit-status
+```
+
+### 验证
+
+- `LANG=zh_CN.UTF-8` 跟 `LANG=en_US.UTF-8` 下都 460/460
+- 其他门禁全绿
+- 这次 push 的 CI 应该终于绿了（第 4 次尝试）
+
 ## [0.9.4] — 2026-05-15（fix — 第 3 个独立 CI fail 根因：signals.py 的 mypy type error）
 
 ### 模式：我从来没本机跑 mypy

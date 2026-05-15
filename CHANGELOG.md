@@ -10,6 +10,52 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.9.5] — 2026-05-15 (fix — 4th independent CI failure: tests assume zh locale, CI runs en)
+
+### Pattern continues
+
+v0.9.4 push: `mypy` green, `vulture` green, `ruff` green — but **`pytest` red on 16 tests**. Root cause: test fixtures assert Chinese strings (`"默契"` / `"偏离"` / `"纯陈述"`) for `format_for_injection` output. My local machine's `LANG=zh_CN.UTF-8` makes `karma.locale_detect.is_chinese_user()` return True → i18n picks zh → fixtures pass. CI runners default `en_US.UTF-8` → is_chinese_user returns False → i18n picks en → 16 fixtures fail.
+
+This is **the 4th independent CI failure root cause** in 4 patch releases (v0.9.2 → v0.9.5). Each fix revealed the next layer.
+
+### Fix — `tests/conftest.py` with `pytest_configure` hook
+
+```python
+def pytest_configure(config):
+    """Force zh locale before any karma module is imported."""
+    os.environ.setdefault("KARMA_LOCALE", "zh")
+```
+
+Tests now always run in zh locale (matching fixture strings) regardless of host OS locale. `setdefault` lets users override via env if needed.
+
+### Why I missed it 4 times in a row
+
+Compound oversights:
+1. `LANG=zh_CN.UTF-8` on my Mac → tests pass locally even though they're locale-coupled
+2. No mypy in local checklist
+3. vulture `--min-confidence` mismatch
+4. CI green status never verified before tag
+
+This release adds the **5th** local gate matching CI: setting `LANG=en_US.UTF-8` when running pytest reveals this class of bug before push.
+
+### Updated checklist (v0.9.5+)
+
+```bash
+pytest -q                                            # 460/460
+LANG=en_US.UTF-8 pytest -q                          # also 460/460 (catches locale coupling)
+ruff check karma/ tests/                            # clean
+mypy karma/ && mypy tests/                          # no issues
+vulture karma/ whitelist.py --min-confidence 60     # exit 0
+# Push, then:
+gh run watch $(gh run list -L 1 --json databaseId -q '.[0].databaseId') --exit-status
+```
+
+### Verification
+
+- 460/460 passing under both `LANG=zh_CN.UTF-8` and `LANG=en_US.UTF-8`
+- All other gates clean
+- This push's CI run should finally be green (4th attempt)
+
 ## [0.9.4] — 2026-05-15 (fix — third independent CI failure: mypy type error in signals.py)
 
 ### Pattern: I never ran mypy locally
