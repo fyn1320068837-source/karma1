@@ -1,15 +1,15 @@
-# karma sticky 模板 — 软件开发场景专用（7 条精选）
+# karma 规则模板 — 软件开发场景专用（7 条精选）
 #
 # karma = 通用 hook 框架 + 场景规则集
 # 本文件是「软件开发」场景预设。其他场景（写作 / 研究 / 产品 / 设计等）
 # 需要不同的规则集 — 欢迎社区贡献。
 #
-# 安装：karma init 会复制本文件到 ~/.claude/karma/sticky.yaml
-# 上限：10 条（超过 12 hook 拒绝加载）
+# 安装：karma init 会复制本文件到 ~/.claude/karma/rules.yaml
+# 上限：软上限 10 / 硬上限 12（超过 12 hook 拒绝加载）
 #
 # ⚠️ 不是每条都对每个用户合适，按场景取舍：
 #   - 第 3 条 chinese-plain-no-jargon：**中文用户**生效。英文母语用户应
-#     `karma sticky remove chinese-plain-no-jargon` 删掉，避免持续假阳。
+#     `karma rule remove chinese-plain-no-jargon` 删掉，避免持续假阳。
 #   - 第 5 条 no-testset-no-future-leakage：**ML / 数据 / 评测**场景生效。
 #     普通后端 / 前端 / 工具开发用不上，可删。
 #   - 其他 5 条（long-term / non-blocking / loud-failure / deep-fix /

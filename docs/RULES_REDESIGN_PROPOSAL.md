@@ -106,7 +106,7 @@ Just respond naturally this turn; no need to over-compensate for this one.
 ## Empirical results (post-v0.4.42 implementation)
 
 - Defensive "真字" prefix stacking side effect reduced from 30+ occurrences/response to 0
-- Long-running task violation rate dropped to ≈ 0%
+- Long-running task violation rate dropped noticeably in author self-use
 - Agent first-reaction shifted from "defensive self-justification" to "adjust and align"
 
 ## Mental model

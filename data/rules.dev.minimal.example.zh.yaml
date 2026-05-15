@@ -1,17 +1,17 @@
-# karma sticky 模板 — 软件开发场景「跨用户中性」5 条精选
+# karma 规则模板 — 软件开发场景「跨用户中性」5 条精选
 #
-# 这是 sticky.dev.example.yaml 的精简版，砍掉了语言 / 场景特化的两条：
+# 这是 rules.dev.example.yaml 的精简版，砍掉了语言 / 场景特化的两条：
 #   - chinese-plain-no-jargon（中文用户偏好）
 #   - no-testset-no-future-leakage（ML / 数据 / 评测场景）
 #
 # 适合：英文母语用户 / 普通后端 / 前端 / 工具开发，不需要场景化规则。
 #
 # 用法：
-#   1. karma init  （会装默认 7 条到 ~/.claude/karma/sticky.yaml）
+#   1. karma init  （会装默认 7 条到 ~/.claude/karma/rules.yaml）
 #   2. 想换成这个 5 条核心：
-#      cp data/sticky.dev.minimal.example.yaml ~/.claude/karma/sticky.yaml
+#      cp data/rules.dev.minimal.example.yaml ~/.claude/karma/rules.yaml
 #
-# 上限：10 条（超过 12 hook 拒绝加载）
+# 上限：软上限 10 / 硬上限 12（超过 12 hook 拒绝加载）
 
 - id: long-term-fundamental
   preference: |
