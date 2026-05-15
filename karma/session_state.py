@@ -77,7 +77,7 @@ _FAIL_RE = re.compile(
 )
 
 _TEST_CMD_RE = re.compile(
-    r"\b(pytest|jest|cargo test|go test|npm test|tox|mocha|vitest|rspec|phpunit)\b",
+    r"(docker\s+(?:exec|run)\s+\S.*?\s+)?\b(pytest|jest|cargo test|go test|npm test|tox|mocha|vitest|rspec|phpunit)\b",
     re.IGNORECASE,
 )
 
