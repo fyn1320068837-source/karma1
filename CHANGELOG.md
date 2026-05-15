@@ -10,6 +10,25 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.9.1] — 2026-05-15 (docs — v0.9.0 doc sync: PRD F2 / HOOK_CONFIGURATION_GUIDE / session_start docstring)
+
+### Why this patch
+
+v0.9.0 shipped the injection architecture change but left a few internal docs describing the pre-v0.9.0 behavior. User asked for doc-sync follow-up after dogfooding v0.9.0 in a fresh session showed the new compact-anchor format working.
+
+### Updated
+
+- **`docs/PRD.md` / `docs/PRD.zh.md`**: F2 (user_prompt_submit hook) description now reflects the compact anchor (~490 tok) vs full preference text. Added new F2.5 "Injection architecture (v0.9.0)" section with the 5-hook lifecycle table
+- **`docs/HOOK_CONFIGURATION_GUIDE.md`**: UserPromptSubmit row updated to describe compact anchor format; SessionStart row clarifies "full baseline" (only one full injection per session); PostToolUse row shows session-global threshold trigger
+- **`karma/hooks/session_start.py`**: docstring had reversed description ("UserPromptSubmit every turn full, SessionStart per-session compact") — exactly opposite of v0.9.0 reality. Rewrote to match v0.9.0 architecture
+
+### Verification
+
+- 460/460 passing
+- `ruff`: 0 issues
+
+Pure documentation patch — no behavior change.
+
 ## [0.9.0] — 2026-05-15 (feat — injection architecture redesign: SessionStart full baseline + per-turn anchor + cumulative full reinject, **73% token saving per turn**)
 
 ### User insight that drove this

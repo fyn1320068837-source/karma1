@@ -1,14 +1,20 @@
-"""SessionStart hook — session 起手注入 sticky baseline（karma v3 第四步）。
+"""SessionStart hook — session 起手注入规则 baseline（karma v9 注入架构核心）。
 
 Claude Code 协议:
 - stdin payload: {source: "startup"|"resume"|"clear"|"compact", session_id, ...}
 - stdout: {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "..."}}
 
-设计（v0.4.28 升级 — 之前 stub 只输出摘要文字现在实际注入 sticky baseline）：
-- 跟 UserPromptSubmit 注入互补 — 后者每 turn 注入完整 sticky + ⚠️ 标记，
-  前者 session 级一次注入精简 baseline（id + 第一行 preference）
-- compact 场景特别重要 — sticky 在 compact 时被压缩淡化，SessionStart 重起时
-  强注入是根本本路径（PostCompact 不支持 additionalContext 走不通）
+v0.9.0 设计（架构重设计）:
+- SessionStart 是 session 唯一一次**全量** baseline 注入（format_for_injection
+  完整 preference）— 进 conversation history 持续可见
+- UserPromptSubmit 每 turn 只注入**精简 anchor**（id + 第一行 + 偏离标记，
+  format_anchor_only ~490 token）— 跟 SessionStart 互补
+- PostToolUse 累积达模型衰减拐点（Opus 60K / Sonnet 40K / Haiku 30K）后
+  全量 reinject 抗稀释
+- compact 场景特别重要 — 规则在 compact 时被压缩淡化，SessionStart compact
+  source 重起时读 pre_compact_snapshot.md 强注入
+
+历史: v0.4.28 设计每 turn 全量, v0.9.0 改成 session 一次全量 + 每 turn 精简。
 
 性能预算：< 30ms（不该卡客户端启动）
 Fail open：配置坏 / 异常 → 不注入静默 passthrough。

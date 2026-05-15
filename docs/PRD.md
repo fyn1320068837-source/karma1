@@ -79,10 +79,25 @@ karma does only **"core direction persistence + violation detection"** — one t
 
 ### F2. user_prompt_submit hook ✅
 
-- Every user_prompt_submit, hook reads rules.yaml
-- Uses `additionalContext` injection into Claude context (doesn't modify user_text itself)
-- Format: `[karma — Your long-term agreement with the user]` plus 1-10 numbered rules
-- Rules triggered within 24h marked with `〔Last response showed drift — let's realign〕`
+- Every user_prompt_submit, hook reads `rules.yaml`
+- Uses `additionalContext` injection into Claude Code context (doesn't modify user_text itself)
+- **v0.9.0**: per-turn injection is compact anchor (`format_anchor_only`: id + first-line preference + drift marker, ~490 tokens), NOT the full preference text
+- Full baseline (with every preference's complete multi-line body, ~1817 tokens) is injected once at SessionStart and persists in conversation history — see F2.5 below
+- Rules triggered within recent N turns get `〔Last response showed drift — let's realign〕` marker on the anchor
+
+### F2.5. Injection architecture (v0.9.0)
+
+5-hook coordinated injection lifecycle:
+
+| Hook | Format | Frequency |
+|---|---|---|
+| SessionStart | full baseline (~1817 tok) | once per session, covers startup/resume/clear/compact sources |
+| UserPromptSubmit | compact anchor (~490 tok) + drift markers + violation fallback | every turn |
+| PostToolUse | full reinject (~1817 tok) | session-global byte_seq accumulation hits model decay threshold (Opus 60K / Sonnet 40K / Haiku 30K) |
+| Stop strong reminder | violation hits + suggested_fix | when violations detected |
+| SubagentStart | compact rule list | per subagent spawn |
+
+Per-turn token cost reduced by 73% vs v0.8.x (1817 → 490). 1M Opus session cumulative: ~18% → ~8% of context.
 - Performance: < 60ms
 
 ### F3. Violation detection / feedback loop ✅

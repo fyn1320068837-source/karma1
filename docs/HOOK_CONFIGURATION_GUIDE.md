@@ -18,12 +18,12 @@ karma doctor         # 验证装机
 
 | Hook | 何时触发 | 作用 | 用户感知 |
 |---|---|---|---|
-| **UserPromptSubmit** | 你提交 prompt 前 | 把核心方向注入 prompt 头部 + 标偏离回顾 | 后台工作，无通知 |
+| **UserPromptSubmit** | 你提交 prompt 前 | 注入精简 anchor（id + 第一行 + 偏离标记，~490 tok）— v0.9.0 新设计 | 后台工作，无通知 |
 | **PreToolUse** | Agent 调 tool 前 | 拦截违反核心方向的工具调用 | 命中时 ❌ 权限被拒（附理由） |
-| **PostToolUse** | tool 调用成功后 | 跟踪 session 状态；累积到当前模型衰减拐点中段补一次提醒 | 后台跟踪，无通知 |
+| **PostToolUse** | tool 调用成功后 | 跟踪 session 状态；session 累积到模型衰减拐点（Opus 60K / Sonnet 40K / Haiku 30K）全量 reinject 完整规则抗稀释 | 后台跟踪，无通知 |
 | **Stop** | Agent 想停下前 | 检测违反 + 静默停止时启发继续推进 | ⚠️ stderr 提醒 + 桌面通知 |
 | **PreCompact** | 客户端自动 compact 前 | 完整规则状态落盘 snapshot | 后台落盘，无通知 |
-| **SessionStart** | session 起手 / compact 后重起 | 规则 baseline 注入；compact 重起时读 snapshot 强注入 | 后台注入，无通知 |
+| **SessionStart** | session 起手 / compact 后重起 | **全量** baseline 注入完整规则（v0.9.0 唯一一次 ~1817 tok 注入进 history）；compact 重起时读 snapshot 强注入 | 后台注入，无通知 |
 | **SubagentStart** | 启动子 Agent 时 | 子 Agent 自动继承完整规则 + 维护独立监控状态 | 子 Agent 头部看到规则注入 |
 | **SubagentStop** | 子 Agent 结束时 | 子 Agent 临时状态自动销毁，不污染主 session | 后台清理，无通知 |
 

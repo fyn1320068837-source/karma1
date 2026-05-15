@@ -6,6 +6,25 @@
 
 ## [Unreleased]
 
+## [0.9.1] — 2026-05-15（docs — v0.9.0 doc sync：PRD F2 / HOOK_CONFIGURATION_GUIDE / session_start docstring）
+
+### 为什么做这个 patch
+
+v0.9.0 ship 了注入架构改动但几处内部文档还停在 v0.9.0 之前的描述。用户在新 session dogfood v0.9.0 看到精简 anchor 格式生效后要求做 doc-sync follow-up。
+
+### 更新内容
+
+- **`docs/PRD.md` / `docs/PRD.zh.md`**：F2（user_prompt_submit hook）描述改成精简 anchor（~490 tok）而不是完整 preference 文本。加新 F2.5「注入架构（v0.9.0）」段，含 5-hook 生命周期表
+- **`docs/HOOK_CONFIGURATION_GUIDE.md`**：UserPromptSubmit 行改成精简 anchor 格式；SessionStart 行明示「全量 baseline」（每 session 唯一一次全量注入）；PostToolUse 行说 session 全局阈值触发
+- **`karma/hooks/session_start.py`**：docstring 描述方向反了（说「UserPromptSubmit 每 turn 全量, SessionStart 一次精简」）— 跟 v0.9.0 实际相反。重写匹配 v0.9.0 架构
+
+### 验证
+
+- 460/460 通过
+- `ruff`：0 issue
+
+纯文档 patch — 0 行为变化。
+
 ## [0.9.0] — 2026-05-15（feat — 注入架构重设计：SessionStart 全量 baseline + 每 turn 精简 anchor + 累积全量 reinject，**每 turn 节省 73% token**）
 
 ### 触发的用户洞察

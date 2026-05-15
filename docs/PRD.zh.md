@@ -86,9 +86,24 @@ karma 只做**「核心方向永驻 + 违反检测」**这一件事。
 
 - 每次 user_prompt_submit，hook 读 `rules.yaml`
 - 用 `additionalContext` 注入到客户端上下文（不修改 user_text 本身）
-- 格式：`[karma — 你跟用户的长期默契]` 加 1-10 编号规则
-- 上一回应偏离过的规则后标 `〔上一回应这条有偏离，本 turn 看看能否更对齐〕`
+- **v0.9.0**：每 turn 注入是**精简 anchor**（`format_anchor_only`：id + 第一行 preference + 偏离标记，~490 token），不是完整 preference 文本
+- 完整 baseline（含每条 preference 多行全文，~1817 token）由 SessionStart 一次注入持久在 conversation history — 见下方 F2.5
+- 最近 N turn 偏离过的规则在 anchor 上带 `〔上一回应这条有偏离，本 turn 看看能否更对齐〕` 标记
 - 性能：< 60ms
+
+### F2.5. 注入架构（v0.9.0）
+
+5-hook 协同注入生命周期：
+
+| Hook | 格式 | 频率 |
+|---|---|---|
+| SessionStart | 全量 baseline（~1817 tok）| 每 session 一次，覆盖 startup/resume/clear/compact 4 source |
+| UserPromptSubmit | 精简 anchor（~490 tok）+ 偏离标记 + 违反 fallback | 每 turn |
+| PostToolUse | 全量 reinject（~1817 tok）| session 全局 byte_seq 累积达模型衰减拐点（Opus 60K / Sonnet 40K / Haiku 30K）|
+| Stop 强提醒 | 违反命中 + suggested_fix | 检测到违反时 |
+| SubagentStart | 子 Agent 精简规则 | 起子 Agent 时 |
+
+每 turn token 成本相比 v0.8.x 降 73%（1817 → 490）。1M Opus session 累积：~18% → ~8%。
 
 ### F3. 违反检测 / 反馈闭环 ✅
 
