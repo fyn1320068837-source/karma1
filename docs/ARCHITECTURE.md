@@ -350,6 +350,7 @@ Performance hasn't been a bottleneck — measured far below budget.
 | v0.5.15 v0.6.0 preparation — plan doc `docs/V0_6_0_PLAN.md` + internal 11+4 `from karma.sticky` import migration to `from karma.rule` so v0.6.0 can ship as pure deletion commit | ✅ |
 | v0.5.16 `/karma <natural language>` skill actually works — first release; multi-backend install (Claude Code / Codex / Gemini) with Markdown → TOML format adaptation for Gemini commands path; v0.5.1-15 honest disclosure (wrong install path → skill never triggered before) | ✅ |
 | v0.5.17 README narrative rewrite — `/karma <NL>` skill promoted to top-level section instead of patch-style mention; PRD F5 rewritten; ARCHITECTURE + HANDOFF synced to v0.5.16 reality | ✅ |
+| v0.5.18 `bypass_karma` false-positive fix (dogfood-found) — redirect target must actually be a karma path to count as bypass, not just "command mentions karma path + any write op"; symmetric tightening for `has_internal` field-name dimension | ✅ |
 
 Details in [CHANGELOG.md](../CHANGELOG.md) for per-release rationale; [HANDOFF.md](./HANDOFF.md) for internal context.
 

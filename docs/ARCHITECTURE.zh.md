@@ -368,6 +368,7 @@ violations / session_state / config / cli）都用它读 env。
 | v0.5.15 v0.6.0 准备 — 计划稿 `docs/V0_6_0_PLAN.md` + 内部 11+4 处 `from karma.sticky` import 迁到 `from karma.rule` 让 v0.6.0 可以纯删除 commit | ✅ |
 | v0.5.16 `/karma <自然语言>` skill 第一次真工作 — 多 backend 装机（Claude Code / Codex / Gemini）含 Markdown → TOML 格式适配给 Gemini commands 路径；v0.5.1-15 诚实披露（装机路径错 → skill 从未真触发）| ✅ |
 | v0.5.17 README narrative 重写 — `/karma <NL>` skill 提升为顶级 section 而不是 patch 式提及；PRD F5 重写；ARCHITECTURE + HANDOFF 同步到 v0.5.16 现实 | ✅ |
+| v0.5.18 `bypass_karma` false positive fix（dogfood 真触发驱动）— redirect target 必须真是 karma 路径才算绕过，不是「命令含 karma 路径 + 任何 write op」一刀切；`has_internal` field-name 维度对称收紧 | ✅ |
 
 详见 [CHANGELOG.md](../CHANGELOG.md) 每版本的设计动机；[HANDOFF.md](./HANDOFF.md) 内部接力 context。
 

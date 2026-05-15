@@ -286,3 +286,43 @@ def test_shell_redir_real_bypass_still_caught():
     """shell `>` 重定向真写 karma 文件 — 命令头不是宿主语言时仍扫。"""
     cmd = "echo '{}' > ~/.claude/karma/session-state.json"
     assert _check(cmd) is not None, "shell 真 `>` 重定向写 karma 状态应命中"
+
+
+def test_v0518_read_karma_state_write_tmp_exempted():
+    """v0.5.18 真根因 fix (dogfooding 真触发驱动):
+    grep karma state 写 tmp 临时文件是合法 audit, 不该拦.
+
+    场景: Agent 想分析 violations.jsonl 数据, 用 grep 过滤行写到 /tmp/audit 跑解析.
+    redirect target 是 /tmp 不是 karma 路径 → 应豁免.
+    之前 bypass_karma 判定「karma 路径出现 + 任何 write」就拦, 错算这是绕检测.
+    """
+    cmd = "grep deep-fix ~/.claude/karma/violations.jsonl > /tmp/df_audit.jsonl"
+    assert _check(cmd) is None, "读 karma 写 tmp 是合法 audit, 不该拦"
+
+
+def test_v0518_cat_karma_pipe_to_python_exempted():
+    """v0.5.18: cat karma state 输出到 python 分析也合法 (无 redirect 到 karma 路径)."""
+    cmd = "cat ~/.claude/karma/violations.jsonl | python3 -m json.tool > /tmp/pretty.json"
+    assert _check(cmd) is None
+
+
+def test_v0518_redirect_target_is_karma_path_still_blocked():
+    """v0.5.18 对偶: redirect target 真是 karma 路径仍拦 (真写 karma state)."""
+    cmd = "echo '{}' >> ~/.claude/karma/violations.jsonl"
+    assert _check(cmd) is not None
+
+
+def test_v0518_internal_field_name_write_to_tmp_now_exempted():
+    """v0.5.18: 内部 field name + 写到 /tmp (非 karma 路径) 豁免.
+
+    写 /tmp 不影响 karma 实际状态, 即使字符串里含 field 名也不是真绕过.
+    跟 redirect-target 维度判定一致: target 真是 karma path 才算真写 karma.
+    """
+    cmd = "echo 'last_test_pass_ts=999999' > /tmp/inject.txt"
+    assert _check(cmd) is None, "写 /tmp 不影响 karma 实际状态, 应豁免"
+
+
+def test_v0518_internal_field_name_write_to_karma_still_blocked():
+    """v0.5.18 真根因对偶: 内部 field name + 写到 karma 路径 → 真违反 仍拦."""
+    cmd = "echo 'last_test_pass_ts=999999' > ~/.claude/karma/session-state/x"
+    assert _check(cmd) is not None, "写到 karma 路径是真绕过"

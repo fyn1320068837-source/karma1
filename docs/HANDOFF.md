@@ -31,6 +31,7 @@ All v0.5.x phases delivered as of 2026-05-15 (12 releases v0.5.3 → v0.5.14 shi
 - ✅ v0.5.15 — v0.6.0 preparation; `docs/V0_6_0_PLAN.md` draft + internal 11+4 `from karma.sticky` import migration to `from karma.rule` so v0.6.0 can ship as pure deletion commit
 - ✅ v0.5.16 — **`/karma <natural language>` skill actually triggers for the first time**; multi-backend install (Claude Code / Codex / Gemini with Markdown → TOML adaptation); honest disclosure that v0.5.1–v0.5.15 shipped skill at wrong path (`<name>.md` flat instead of required `<name>/SKILL.md` directory) so it never triggered
 - ✅ v0.5.17 — README narrative rewrite (skill promoted to top-level section, not patch-style mention); PRD F5 rewritten; ARCHITECTURE + HANDOFF synced to v0.5.16 reality
+- ✅ v0.5.18 — `bypass_karma` discriminator refinement (dogfood-found false positive): redirect target must actually be a karma path to count as bypass; symmetric tightening for `has_internal` field-name dimension. Caught while grep'ing `violations.jsonl > /tmp/x` for audit — per rule #7, didn't bypass; root-caused and fixed the regex instead
 
 🔜 v0.6.0 — remove the `.sticky_id` backward-compat alias on `CheckHit` + `Violation` (all internal callsites migrated in v0.5.13; external user code had one release cycle to update)
 

@@ -6,6 +6,39 @@
 
 ## [Unreleased]
 
+## [0.5.18] — 2026-05-15（fix — `bypass_karma` 区分「读 karma 写别处」vs「写到 karma 路径」）
+
+### dogfooding 真假阳触发的根因 fix
+
+正在看 `karma audit` 今天累积的违反数据时，跑 `grep deep-fix ~/.claude/karma/violations.jsonl > /tmp/df_audit.jsonl` 想提取几行分析 — 被 bypass_karma 拦「绕开检测 — 手动写 karma 内部状态」。按规则 7 没绕，深挖根因。
+
+**之前的问题**：`bypass_karma` 老判定是 `(has_internal OR has_state_path) AND has_write` — 命令含 karma 路径 + 任何 redirect/write op 就拦，不管 redirect target 是不是 `/tmp/`。读 karma 状态到 tmp 分析是合法 audit 用途，但 rule 把「karma 路径出现在命令里」跟「写到 karma 路径」混为一谈。
+
+**修法**：通过 `_BASH_REDIR_TARGET_RE`（v0.5.9 起放在 `description_context.py` 共享）提取 redirect target，看任一 target 是否匹配 `_KARMA_STATE_PATH_RE`。新规则: `(has_internal OR has_state_path) AND write_to_karma_state`，其中 `write_to_karma_state = has_python_write OR (任一 redirect target 真是 karma 路径)`。
+
+**行为对比**（4 个新回归测试验证）：
+
+| 命令 | v0.5.17 | v0.5.18 |
+|---|---|---|
+| `grep ~/.claude/karma/violations.jsonl > /tmp/x` | ❌ 拦 (假阳) | ✓ 豁免 |
+| `cat ~/.claude/karma/violations.jsonl \| python3 -m json.tool > /tmp/pretty.json` | ❌ 拦 | ✓ 豁免 |
+| `echo '{}' >> ~/.claude/karma/violations.jsonl` | ✓ 拦 | ✓ 拦（真写 karma）|
+| `python -c "open('.claude/karma/x', 'w').write(...)"` | ✓ 拦 | ✓ 拦（python 写接口）|
+| `echo 'last_test_pass_ts=999' > /tmp/inject.txt` | ✓ 拦 | ✓ 豁免（target 是 /tmp 不是 karma 路径 — 跟 state_path 维度对称）|
+
+`has_internal`（字段名引用）维度也对称收紧：写 `last_test_pass_ts=...` 到 `/tmp/` 不影响 karma 状态，现在豁免。同样字符串写到 `~/.claude/karma/...` 仍拦因为 redirect target 是 karma 路径。
+
+### 为啥这事重要
+
+这是 karma 自己 false-positive 拦真合法的 audit 工作 — 正是规则 7 写来防的「karma 过度纠正 → 用户被迫绕」失败模式。Catch trigger 没绕，深挖 regex，修判定器。两个新 case lock 住新豁免和保留拦截（`test_v0518_read_karma_state_write_tmp_exempted` + `test_v0518_redirect_target_is_karma_path_still_blocked`）。
+
+### 验证
+
+- `tests/test_bypass_karma.py` 加 5 个回归测试覆盖: read-karma-写-tmp 豁免、pipe-to-python 豁免、write-to-karma 仍拦、internal-field-name + write-tmp 豁免（跟 state_path fix 对称）、internal-field-name + write-karma 仍拦
+- `pytest`：416/416 通过（411 + 新 5）
+- `ruff`：0 issues
+- 4 个之前 `test_*_real_bypass_*` 仍绿 — fix 没松开真写检测
+
 ## [0.5.17] — 2026-05-15（docs — README narrative 重写：`/karma <NL>` skill 提升为顶级 section，不再是 patch 式提及）
 
 ### 这版动机

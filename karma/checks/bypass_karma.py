@@ -22,6 +22,7 @@ import re
 
 from karma.checks._types import CheckHit
 from karma.checks.common import is_python_c_command, strip_shell_quoted_literals
+from karma.checks.description_context import _BASH_REDIR_TARGET_RE
 from karma.i18n import tr
 
 _STICKY_ID = "deep-fix-not-bypass"
@@ -108,10 +109,28 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
     # 宿主语言 + -c 跳 shell 重定向（python 代码里 `>` 是比较运算符不是写）
     has_python_write = bool(_PYTHON_OR_SHELL_WRITE_RE.search(cmd_stripped))
     is_lang_c = is_python_c_command(cmd_raw)
-    has_shell_redir = (not is_lang_c) and bool(_SHELL_REDIR_WRITE_RE.search(cmd_stripped))
-    has_write = has_python_write or has_shell_redir
 
-    if (has_internal or has_state_path) and has_write:
+    # v0.5.18 真根因 fix（dogfooding session 真触发假阳驱动）：state_path 维度
+    # 要求 redirect target 真是 karma 路径才拦, 不能「karma 路径出现 + 任何
+    # write op」一刀切. 真触发: `grep ~/.claude/karma/violations.jsonl > /tmp/x`
+    # 读 karma state 写 tmp 是合法 audit 用途, 之前被错算「写 karma 内部状态」拦.
+    # 区分:
+    #   ✗ 真违反: `echo "..." > ~/.claude/karma/foo` (redirect target = karma 路径)
+    #   ✗ 真违反: `python -c "open('.claude/karma/x', 'w')..."` (python 写接口)
+    #   ✓ 合法: `cat ~/.claude/karma/foo > /tmp/x` (redirect target = 非 karma 路径)
+    redir_targets = _BASH_REDIR_TARGET_RE.findall(cmd_stripped) if not is_lang_c else []
+    state_path_in_redir_target = any(
+        _KARMA_STATE_PATH_RE.search(t) for t in redir_targets
+    )
+    write_to_karma_state = has_python_write or state_path_in_redir_target
+
+    # 一致判定: 不论 karma 引用是 field name 还是 path, 都要求 write target
+    # 真是 karma state (path) 才算绕过. 写到 /tmp/foo 不影响 karma 实际状态 —
+    # 即使命令含 `last_test_pass_ts` 类内部 schema 字段名也不是真绕过.
+    karma_referenced = has_internal or has_state_path
+    is_bypass = karma_referenced and write_to_karma_state
+
+    if is_bypass:
         m1 = _KARMA_INTERNAL_RE.search(cmd_stripped)
         m2 = _KARMA_STATE_PATH_RE.search(cmd_stripped)
         trigger_text = m1.group() if m1 else (m2.group() if m2 else "karma 内部状态")
