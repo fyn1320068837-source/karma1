@@ -10,6 +10,47 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.5.13] — 2026-05-15 (refactor — audit-driven dedup: shared `is_python_c_command` + sticky_id alias cleanup + doctor skill check)
+
+### What this release closes
+
+An end-of-day code audit surfaced 3 real debts. v0.5.13 pays them off in one clean release.
+
+### F1 — `_LANG_C_HEAD_RE` was copy-pasted across 3 check files
+
+`testset.py` / `bypass_karma.py` / `non_blocking.py` each defined the same regex `r"\b(?:python\d?|node|ruby|perl)\s+-[ce]\b"` independently. v0.5.9 lifted the parallel `_BASH_REDIR_TARGET_RE` into `description_context.py` but missed this one.
+
+**Fix**: Added `is_python_c_command(cmd: str) -> bool` helper in `karma/checks/common.py` (correct home — sits alongside `_SHELL_INTERPRETER_RE`, `_HEREDOC_RE`, and other Bash-parsing utilities). All 3 checks now import and call `is_python_c_command(cmd_raw)` instead of holding their own pattern.
+
+### F2 — `karma doctor` didn't report skill installation status
+
+v0.5.12 added `karma install-skill`, but `cmd_doctor` only reported hook installation, not skill. A user running `karma doctor` after a clean install couldn't see whether `/karma rule <NL>` was actually wired up.
+
+**Fix**: `cmd_doctor` now reports `karma-rule skill` status in three states:
+- "存在 ✓ 最新" — installed and content matches the shipped version
+- "存在 ⚠ 跟当前 karma 版本不一致" — installed but out of date (suggests `karma install-skill` to upgrade)
+- "未装" — missing (suggests `karma install-skill`)
+
+### F3 — 34 `.sticky_id` callsites would have broken at v0.6.0
+
+v0.5.0 announced "sticky → rule renamed across entire codebase" but in practice 34 `.sticky_id` attribute accesses survived in `cli.py` (13), hooks (`pre_tool_use.py`/`stop.py`/`user_prompt_submit.py`: 19), and tests (6). They worked silently via the `@property def sticky_id: return self.rule_id` backward-compat alias on `Violation` and `CheckHit`. When v0.6.0 removes the alias (as documented in the dataclass comments), those call sites would have hard-failed in production code paths far from the test surface.
+
+**Fix**: Batch `s/\b(\w+)\.sticky_id\b/$1.rule_id/g` across the 5 internal files. The `@property` alias stays in `violations.py` and `_types.py` so external user code keeps working until v0.6.0. Pure rename, no behavior change.
+
+### Verification
+
+- 1 new regression test in `tests/test_cli.py` (`test_v0513_doctor_reports_skill_status`) — covers all 3 doctor-skill states
+- All 3 fixes coexist with existing tests: 409 → 410 (added one for F2)
+- `pytest`: 410/410 passing
+- `ruff`: 0 issues
+
+### What the audit verified passed
+
+- Zero TODO/FIXME/HACK residuals in tonight's diff (sticky #1 long-term-fundamental held)
+- Zero weak claims ("应该可以"/"大概率") outside `evidence.py`'s detection patterns
+- All 5 Bash-aware checks use unified `tool_name == "Bash"` guard
+- v0.5.9 refactor cleanup was clean (no stale `_bash_writes_to_description_context` or `_DESC_CTX_PATH_RE` residuals)
+
 ## [0.5.12] — 2026-05-15 (feat — `karma init` auto-installs `karma-rule` skill + new `karma install-skill` command)
 
 ### feat — `/karma rule <NL>` flow now works out-of-box for new users

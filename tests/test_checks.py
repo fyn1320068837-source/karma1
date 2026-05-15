@@ -15,7 +15,7 @@ def test_long_term_detects_hash_if_branch():
         tool_input={"new_string": 'if turn_id == "abc-def-12345":\n    return special'},
     )
     assert hit is not None
-    assert hit.sticky_id == "long-term-fundamental"
+    assert hit.rule_id == "long-term-fundamental"
     assert "长 ID" in hit.trigger
 
 
@@ -994,7 +994,7 @@ def test_run_checks_multiple_hits():
         tool_input={"command": 'git commit --no-verify -m "quick fix"'},
     )
     assert len(hits) >= 1
-    assert any(h.sticky_id == "long-term-fundamental" for h in hits)
+    assert any(h.rule_id == "long-term-fundamental" for h in hits)
 
 
 def test_run_checks_check_exception_silently_swallowed_by_default(monkeypatch, capsys):
@@ -1140,7 +1140,7 @@ def test_v057_audit_groups_by_trigger_key_across_locales():
     by_sticky: dict[str, Counter] = {}
     for v in violations:
         group_key = v.trigger_key or v.trigger
-        by_sticky.setdefault(v.sticky_id, Counter())[group_key] += 1
+        by_sticky.setdefault(v.rule_id, Counter())[group_key] += 1
 
     ctr = by_sticky["loud-failure-with-evidence"]
     assert len(ctr) == 1, f"同 trigger_key 应合并: {dict(ctr)}"
@@ -1159,7 +1159,7 @@ def test_v057_audit_legacy_no_key_fallback_to_trigger():
     by_sticky: dict[str, Counter] = {}
     for v in violations:
         group_key = v.trigger_key or v.trigger
-        by_sticky.setdefault(v.sticky_id, Counter())[group_key] += 1
+        by_sticky.setdefault(v.rule_id, Counter())[group_key] += 1
     ctr = by_sticky["r"]
     assert ctr["legacy A"] == 2
     assert ctr["legacy B"] == 1

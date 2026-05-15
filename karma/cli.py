@@ -576,8 +576,8 @@ def cmd_audit(with_fix_timeline: bool = False, output_format: str = "text") -> i
     display_trigger_by_key: dict[tuple[str, str], str] = {}
     for v in violations:
         group_key = v.trigger_key or v.trigger  # i18n key 或老格式字面
-        by_sticky.setdefault(v.sticky_id, Counter())[group_key] += 1
-        display_trigger_by_key.setdefault((v.sticky_id, group_key), v.trigger)
+        by_sticky.setdefault(v.rule_id, Counter())[group_key] += 1
+        display_trigger_by_key.setdefault((v.rule_id, group_key), v.trigger)
     is_md = output_format == "md"
     if is_md:
         print(f"# karma 违反审计 (总 {len(violations)} 条)\n")
@@ -598,7 +598,7 @@ def cmd_audit(with_fix_timeline: bool = False, output_format: str = "text") -> i
         if with_fix_timeline:
             fix_ts = fix_ts_by_sticky.get(sid)
             if fix_ts:
-                pre_fix = sum(1 for v in violations if v.sticky_id == sid and v.ts < fix_ts)
+                pre_fix = sum(1 for v in violations if v.rule_id == sid and v.ts < fix_ts)
                 post_fix = total - pre_fix
                 import time as _t
                 fix_date = _t.strftime("%m-%d %H:%M", _t.localtime(fix_ts))
@@ -610,7 +610,7 @@ def cmd_audit(with_fix_timeline: bool = False, output_format: str = "text") -> i
         diversity_suffix = ""
         if total >= 5:
             snippets_tail = {
-                v.snippet[-40:] for v in violations if v.sticky_id == sid
+                v.snippet[-40:] for v in violations if v.rule_id == sid
             }
             diversity = len(snippets_tail) / total
             if diversity >= 0.7:
@@ -651,7 +651,7 @@ def cmd_audit(with_fix_timeline: bool = False, output_format: str = "text") -> i
         turns_window = 10
         cutoff = current_turn - turns_window
         recent = Counter(
-            v.sticky_id for v in violations
+            v.rule_id for v in violations
             if v.session_id == current_session and v.turn >= cutoff and v.turn > 0
         )
         sid_prefix = current_session[:8] if current_session else "?"
@@ -700,12 +700,12 @@ def cmd_stats() -> int:
         return 0
     now = int(time.time())
     week_ago = now - 7 * 24 * 3600
-    total = Counter(v.sticky_id for v in violations)
-    week = Counter(v.sticky_id for v in violations if v.ts >= week_ago)
+    total = Counter(v.rule_id for v in violations)
+    week = Counter(v.rule_id for v in violations if v.ts >= week_ago)
     last_ts: dict[str, int] = {}
     for v in violations:
-        if v.ts > last_ts.get(v.sticky_id, 0):
-            last_ts[v.sticky_id] = v.ts
+        if v.ts > last_ts.get(v.rule_id, 0):
+            last_ts[v.rule_id] = v.ts
 
     # 本 session 维度 — 权威 source 是 session-state 目录最新 mtime 文件
     # （不再用 violations[-1].session_id 推，避免本 session 没产生违反时拉上 session 数据）
@@ -717,14 +717,14 @@ def cmd_stats() -> int:
     turns_window = 5
     cutoff_turn = current_turn - turns_window
     current_session_count = Counter(
-        v.sticky_id for v in violations if v.session_id == current_session
+        v.rule_id for v in violations if v.session_id == current_session
     )
     recent_turns_count = Counter(
-        v.sticky_id for v in violations
+        v.rule_id for v in violations
         if v.session_id == current_session and v.turn >= cutoff_turn and v.turn > 0
     )
     historical_count = Counter(
-        v.sticky_id for v in violations if v.session_id != current_session
+        v.rule_id for v in violations if v.session_id != current_session
     )
 
     print(f"karma 违反统计 (总 {len(violations)} 条):")
@@ -778,7 +778,7 @@ def cmd_violations_recent(n: int = 20) -> int:
     print(f"最近 {min(n, len(violations))} 条违反:\n")
     for v in violations[-n:]:
         ts_str = datetime.fromtimestamp(v.ts).strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{ts_str}] {v.sticky_id} (触发: {v.trigger!r})")
+        print(f"[{ts_str}] {v.rule_id} (触发: {v.trigger!r})")
         print(f"  ...{v.snippet}...")
         print()
     return 0
@@ -852,6 +852,20 @@ def cmd_doctor() -> int:
     print(f"  violations.jsonl: {VIOLATIONS_PATH} ({'存在' if VIOLATIONS_PATH.exists() else '不存在'})")
     config_path = KARMA_DIR / "config.yaml"
     print(f"  config.yaml: {config_path} ({'存在' if config_path.exists() else '不存在 (用默认值)'})")
+    # v0.5.13: skill 装机状态 — /karma rule <自然语言> 流程依赖此 skill
+    skill_dest = _claude_skills_dir() / "karma-rule.md"
+    if skill_dest.exists():
+        try:
+            same = (
+                KARMA_RULE_SKILL_SRC.exists()
+                and skill_dest.read_text(encoding="utf-8") == KARMA_RULE_SKILL_SRC.read_text(encoding="utf-8")
+            )
+            label = "存在 ✓ 最新" if same else "存在 ⚠ 跟当前 karma 版本不一致 (跑 `karma install-skill` 升级)"
+        except OSError:
+            label = "存在 (无法读)"
+        print(f"  karma-rule skill: {skill_dest} ({label})")
+    else:
+        print("  karma-rule skill: 未装 (跑 `karma install-skill` 让 /karma rule <NL> 流程生效)")
     try:
         sticky = load()
         print(f"  sticky 加载: ✓ {len(sticky)} 条")

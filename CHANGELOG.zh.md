@@ -6,6 +6,47 @@
 
 ## [Unreleased]
 
+## [0.5.13] — 2026-05-15（refactor — audit 驱动的 dedup：共享 `is_python_c_command` + sticky_id alias 清理 + doctor skill check）
+
+### 本版还的债
+
+今晚收尾代码审计发现 3 个真债。v0.5.13 一波结清。
+
+### F1 — `_LANG_C_HEAD_RE` 在 3 个 check 文件复制粘贴
+
+`testset.py` / `bypass_karma.py` / `non_blocking.py` 各自独立定义同款 regex `r"\b(?:python\d?|node|ruby|perl)\s+-[ce]\b"`。v0.5.9 把平行的 `_BASH_REDIR_TARGET_RE` 提到 `description_context.py` 但漏了这个。
+
+**修复**：在 `karma/checks/common.py` 加 `is_python_c_command(cmd: str) -> bool` helper（这里是对位 home — 跟 `_SHELL_INTERPRETER_RE` / `_HEREDOC_RE` 等其他 Bash 解析工具放一起）。3 个 check 全 import + 调用 `is_python_c_command(cmd_raw)` 代替本地 pattern。
+
+### F2 — `karma doctor` 没报 skill 装机状态
+
+v0.5.12 加了 `karma install-skill`，但 `cmd_doctor` 只报 hook 装机不报 skill。新装用户跑 `karma doctor` 看不到 `/karma rule <NL>` 流程是否真接通。
+
+**修复**：`cmd_doctor` 现在报 `karma-rule skill` 三态：
+- "存在 ✓ 最新" — 装好且跟仓库 source 一致
+- "存在 ⚠ 跟当前 karma 版本不一致" — 装着但过时（建议 `karma install-skill` 升级）
+- "未装" — 没装（建议 `karma install-skill`）
+
+### F3 — 34 处 `.sticky_id` 调用会在 v0.6.0 break
+
+v0.5.0 宣布「sticky → rule 全代码库改名」但实际 34 处 `.sticky_id` 属性访问留存：`cli.py` (13) / hooks (`pre_tool_use.py`/`stop.py`/`user_prompt_submit.py`: 19) / 测试 (6)。靠 `Violation` 和 `CheckHit` 上的 `@property def sticky_id: return self.rule_id` 兜底默默工作。v0.6.0 移除 alias 时（dataclass comment 已注明）这些 callsite 会在远离测试表面的生产路径硬失败。
+
+**修复**：5 个内部文件批量 `s/\b(\w+)\.sticky_id\b/$1.rule_id/g`。`@property` alias 保留在 `violations.py` 和 `_types.py` 让外部用户老代码到 v0.6.0 前仍工作。纯改名，无行为改动。
+
+### 验证
+
+- `tests/test_cli.py` 新加 1 个回归测试 `test_v0513_doctor_reports_skill_status` — 覆盖 3 种 doctor-skill 状态
+- 3 个 fix 跟现有测试共存：409 → 410（F2 加了一个）
+- `pytest`：410/410 通过
+- `ruff`：0 issues
+
+### 审计 verified 通过的维度
+
+- 今晚 diff 里 0 处 TODO/FIXME/HACK 残留（sticky #1 长期方案守住了）
+- 0 处弱声明 "应该可以" / "大概率" 在 `evidence.py` 检测 pattern 之外
+- 5 个 Bash-aware check 都用统一 `tool_name == "Bash"` 守卫
+- v0.5.9 refactor 清理干净（没残留 `_bash_writes_to_description_context` 或 `_DESC_CTX_PATH_RE`）
+
 ## [0.5.12] — 2026-05-15（feat — `karma init` 自动装 `karma-rule` skill + 新加 `karma install-skill` 命令）
 
 ### feat — `/karma rule <NL>` 流程对新用户开箱即用

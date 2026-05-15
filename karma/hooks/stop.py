@@ -159,14 +159,14 @@ def main() -> int:
     all_records: list[Violation] = []
     for h in check_hits:
         all_records.append(Violation(
-            ts=int(time.time()), session_id=session_id, rule_id=h.sticky_id,
+            ts=int(time.time()), session_id=session_id, rule_id=h.rule_id,
             trigger=h.trigger, snippet=h.snippet, turn=state.turn_count,
             agent_id=agent_id,
             trigger_key=h.trigger_key,  # v0.5.7: locale-agnostic 分组 key
         ))
-    seen_ids = {h.sticky_id for h in check_hits}
+    seen_ids = {h.rule_id for h in check_hits}
     for v in keyword_violations:
-        if v.sticky_id not in seen_ids:
+        if v.rule_id not in seen_ids:
             all_records.append(v)
     if all_records:
         append(all_records)
@@ -175,26 +175,26 @@ def main() -> int:
     summary_lines = []
     notify_msgs = []
     for h in check_hits:
-        line = f"⚠️ karma: Agent 违反 {h.sticky_id!r} — {h.trigger}"
+        line = f"⚠️ karma: Agent 违反 {h.rule_id!r} — {h.trigger}"
         print(line, file=sys.stderr)
         summary_lines.append(line)
-        notify_msgs.append(f"{h.sticky_id} — {h.trigger}")
+        notify_msgs.append(f"{h.rule_id} — {h.trigger}")
         if h.suggested_fix:
             print(f"   建议：{h.suggested_fix}", file=sys.stderr)
     for v in keyword_violations:
-        if v.sticky_id in seen_ids:
+        if v.rule_id in seen_ids:
             continue
-        line = f"⚠️ karma: Agent 触发关键词 {v.sticky_id!r} (词 {v.trigger!r})"
+        line = f"⚠️ karma: Agent 触发关键词 {v.rule_id!r} (词 {v.trigger!r})"
         print(line, file=sys.stderr)
         summary_lines.append(line)
-        notify_msgs.append(f"{v.sticky_id} — {v.trigger}")
+        notify_msgs.append(f"{v.rule_id} — {v.trigger}")
 
     # 当前 turn 真触发的 sticky_id 集合 — 提到两个 if 块前共享
     # 用于 force_block 真根因 fix：只惩罚「当前 turn 真触发 + 历史累积超阈值」
     # 的 sticky；如果 Agent 修了真根因当前 turn 不再触发，不重复 force_block
     # 历史违反（否则 fix 后仍卡 force_block 形成死循环）
-    hit_sticky_ids = {h.sticky_id for h in check_hits} | {
-        v.sticky_id for v in keyword_violations if v.sticky_id not in seen_ids
+    hit_sticky_ids = {h.rule_id for h in check_hits} | {
+        v.rule_id for v in keyword_violations if v.rule_id not in seen_ids
     }
 
     # 桌面通知（合并多条违反到一条 notification 避免轰炸；fail open）
@@ -266,8 +266,8 @@ def main() -> int:
                 return 0
 
     # 机制：keep-pushing 干预 — Agent 沉默式停下时让继续生成
-    keep_pushing_hit = any(h.sticky_id == "keep-pushing-no-stop" for h in check_hits) or \
-        any(v.sticky_id == "keep-pushing-no-stop" for v in keyword_violations)
+    keep_pushing_hit = any(h.rule_id == "keep-pushing-no-stop" for h in check_hits) or \
+        any(v.rule_id == "keep-pushing-no-stop" for v in keyword_violations)
     if keep_pushing_hit:
         try:
             from karma.config import load as _load_config

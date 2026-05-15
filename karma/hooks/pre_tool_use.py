@@ -142,16 +142,16 @@ def main() -> int:
         append([Violation(
             ts=int(time.time()),
             session_id=session_id,
-            rule_id=top.sticky_id,
+            rule_id=top.rule_id,
             trigger=top.trigger,
             snippet=top.snippet,
             turn=state.turn_count,
             agent_id=agent_id,
             trigger_key=top.trigger_key,  # v0.5.7: locale-agnostic 分组 key
         )])
-        sticky_pref = next((s.preference for s in sticky_list if s.id == top.sticky_id), "")
+        sticky_pref = next((s.preference for s in sticky_list if s.id == top.rule_id), "")
         reason = (
-            f"karma 拦截：违反 {top.sticky_id!r}。\n"
+            f"karma 拦截：违反 {top.rule_id!r}。\n"
             f"检测到：{top.trigger}\n"
             f"方向：{sticky_pref.strip()}\n"
             f"建议：{top.suggested_fix}"
@@ -160,7 +160,7 @@ def main() -> int:
         # 🛑 = pre_tool_use 拦截阻止 Agent 做事；stop hook 用 ⚠️ 表事后告警
         # （语义差异化刻意保留：🛑 阻止动作 / ⚠️ 已发生需关注）
         print(
-            f"🛑 karma: {top.sticky_id} (tool={tool_name}) — {top.trigger}",
+            f"🛑 karma: {top.rule_id} (tool={tool_name}) — {top.trigger}",
             file=sys.stderr,
         )
         return 0
@@ -168,15 +168,15 @@ def main() -> int:
     # 仅关键词命中
     top_kw = keyword_violations[0]
     append([top_kw])
-    sticky_pref = next((s.preference for s in sticky_list if s.id == top_kw.sticky_id), "")
+    sticky_pref = next((s.preference for s in sticky_list if s.id == top_kw.rule_id), "")
     reason = (
-        f"karma 拦截：违反 {top_kw.sticky_id!r}（触发词 {top_kw.trigger!r}）。\n"
+        f"karma 拦截：违反 {top_kw.rule_id!r}（触发词 {top_kw.trigger!r}）。\n"
         f"方向：{sticky_pref.strip()}\n"
         f"请改写，不要用 {top_kw.trigger!r} 这种方式。"
     )
     _deny(reason)
     print(
-        f"🛑 karma: {top_kw.sticky_id} (tool={tool_name}, 关键词 {top_kw.trigger!r})",
+        f"🛑 karma: {top_kw.rule_id} (tool={tool_name}, 关键词 {top_kw.trigger!r})",
         file=sys.stderr,
     )
     return 0

@@ -45,6 +45,24 @@ _HEREDOC_RE = re.compile(
 # 头部是 python / cat / grep / sed / awk 等 → 内容是数据传 stdin（剥）
 _SHELL_INTERPRETER_RE = re.compile(r"^(bash|sh|zsh|dash|ksh|fish)$", re.IGNORECASE)
 
+# v0.5.13: 宿主语言 -c/-e flag 命令头 — `python -c "..."` 类 inline 代码字面.
+# 多个 check (testset / bypass_karma / non_blocking) 都需要这个判定豁免 — 因为
+# python/node/ruby/perl -c 里的字面字符串是数据不是真执行 (例: python -c 里的
+# `sleep 5` 字面不是真睡 5 秒). v0.5.13 提取自 3 处复制粘贴 pattern.
+_LANG_C_HEAD_RE = re.compile(r"\b(?:python\d?|node|ruby|perl)\s+-[ce]\b", re.IGNORECASE)
+
+
+def is_python_c_command(cmd: str) -> bool:
+    """Bash 命令头是宿主语言 + -c/-e flag 吗?
+
+    `python -c "..."` / `node -e "..."` / `ruby -e "..."` / `perl -e "..."`
+    返回 True. 这种命令里的引号字符串字面是代码数据不是 shell 执行字面 —
+    check 函数应该豁免引号内的触发字面 (sleep / write 等 keyword).
+    """
+    if not cmd:
+        return False
+    return bool(_LANG_C_HEAD_RE.search(cmd))
+
 
 def _heredoc_prefix_command(prefix: str) -> str:
     """从 `<<` 之前的字串里取最近一条命令的第一个 token（命令名）。

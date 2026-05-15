@@ -155,7 +155,7 @@ def main() -> int:
                             from karma.violations import Violation as _V, append as _v_append
                             recs = [_V(
                                 ts=int(_time.time()), session_id=session_id,
-                                rule_id=h.sticky_id, trigger=h.trigger,
+                                rule_id=h.rule_id, trigger=h.trigger,
                                 snippet=h.snippet, turn=current_turn,
                             ) for h in all_hits]
                             _v_append(recs)

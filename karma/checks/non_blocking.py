@@ -12,22 +12,17 @@ from __future__ import annotations
 import re
 
 from karma.checks._types import CheckHit
-from karma.checks.common import strip_shell_quoted_literals
+from karma.checks.common import is_python_c_command, strip_shell_quoted_literals
 from karma.i18n import tr
 
 _STICKY_ID = "non-blocking-parallel"
 
 # sleep 0 是 no-op 不阻塞（也常用于 yield 调度），只拦 sleep N (N >= 1)
 _SLEEP_RE = re.compile(r"\bsleep\s+([1-9]\d*|0?\.\d+|[1-9]\d*\.\d+)", re.IGNORECASE)
-# v0.4.18：宿主语言 -c/-e flag 命令头识别 — 跟 deep-fix v0.4.13 同根因 fix。
-# python/node/ruby/perl -c 内的 `sleep` 字面是字符串数据不是 shell 真 sleep
-# 调用（python 真睡用 time.sleep / subprocess，不是裸 sleep 字面）。
-# 真触发：karma 自测 _SLEEP_RE 探针 python3 -c "for c in ['sleep 5']: ..."
-# 被错算真 sleep。dogfooding 假阳率 60% (5 次中 3 次)。
-_LANG_C_HEAD_RE = re.compile(
-    r"\b(?:python\d?|node|ruby|perl)\s+-[ce]\b",
-    re.IGNORECASE,
-)
+# v0.5.13: _LANG_C_HEAD_RE 下沉到 karma.checks.common.is_python_c_command() —
+# 历史动机：v0.4.18 加 python/node/ruby/perl -c 命令头识别豁免（python -c 内的
+# `sleep` 字面是字符串不是真 shell sleep 调用）.
+# v0.5.13 之前 testset / bypass_karma / non_blocking 各自定义同款 pattern.
 # v0.4.22：python -c 内真阻塞接口 — `time.sleep(N)` / `subprocess.run('sleep', shell=True)`
 # / `asyncio.sleep(N)` 等。v0.4.18 修过宽漏拦真 python 阻塞。
 _PYTHON_REAL_BLOCK_RE = re.compile(
@@ -106,7 +101,7 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
     # 里的 sleep 字面是字符串数据不是真 shell 调用。真 python 等待用 time.
     # sleep(N) / subprocess.run("sleep") 这种 — `sleep` 裸字面在 python 代码
     # 里只是 identifier 不会真执行。同 v0.4.13 deep-fix 拆 _WRITE_OP_RE 根因。
-    is_lang_c = bool(_LANG_C_HEAD_RE.search(cmd_raw))
+    is_lang_c = is_python_c_command(cmd_raw)
 
     # v0.4.22：python -c 内**真**阻塞接口（time.sleep / subprocess.run("sleep") /
     # os.system("sleep") / asyncio.sleep）— v0.4.18 漏拦真 python 阻塞。

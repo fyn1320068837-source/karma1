@@ -35,7 +35,7 @@ def test_detect_finds_violation() -> None:
 def test_detect_multiple_stickies() -> None:
     response = "用 F1 看，先硬编码一下"
     out = detect(response, _make_sticky(), now=1000)
-    sids = {v.sticky_id for v in out}
+    sids = {v.rule_id for v in out}
     assert sids == {"long-term", "chinese-only"}
 
 

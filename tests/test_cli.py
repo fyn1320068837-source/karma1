@@ -579,3 +579,37 @@ def test_v0512_install_skill_handles_missing_source(fake_home, monkeypatch):
     monkeypatch.setattr(cli, "KARMA_RULE_SKILL_SRC", fake_home / "nonexistent" / "skill.md")
     rc = cli.cmd_install_skill(force=False)
     assert rc == 1
+
+
+def test_v0513_doctor_reports_skill_status(fake_home, monkeypatch, capsys):
+    """v0.5.13: karma doctor 报告 karma-rule skill 装机状态."""
+    import karma.rule
+    import karma.violations
+    monkeypatch.setattr(karma.rule, "DEFAULT_PATH", fake_home / ".claude" / "karma" / "rules.yaml")
+    monkeypatch.setattr(cli, "STICKY_PATH", fake_home / ".claude" / "karma" / "rules.yaml")
+    monkeypatch.setattr(karma.violations, "DEFAULT_PATH", fake_home / "v.jsonl")
+    monkeypatch.setattr(cli, "VIOLATIONS_PATH", fake_home / "v.jsonl")
+    # 先 init 让 sticky 装好
+    cli.cmd_init(minimal=True)
+    capsys.readouterr()
+
+    # case 1: skill 已装 + 跟 source 一致 → "存在 ✓ 最新"
+    cli.cmd_doctor()
+    out = capsys.readouterr().out
+    assert "karma-rule skill" in out
+    assert "存在" in out and "最新" in out
+
+    # case 2: skill 改过 → "存在 ⚠ 跟当前 karma 版本不一致"
+    skill_dest = fake_home / ".claude" / "skills" / "karma-rule.md"
+    skill_dest.write_text("# user modified\n", encoding="utf-8")
+    cli.cmd_doctor()
+    out = capsys.readouterr().out
+    assert "karma-rule skill" in out
+    assert "不一致" in out or "install-skill" in out
+
+    # case 3: skill 不存在 → "未装"
+    skill_dest.unlink()
+    cli.cmd_doctor()
+    out = capsys.readouterr().out
+    assert "karma-rule skill" in out
+    assert "未装" in out

@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 
 from karma.checks._types import CheckHit
-from karma.checks.common import extract_tool_text
+from karma.checks.common import extract_tool_text, is_python_c_command
 from karma.checks.description_context import is_description_context
 from karma.i18n import tr
 
@@ -24,11 +24,9 @@ _STICKY_ID = "no-testset-no-future-leakage"
 # 字面是字符串数据不是真执行意图. v0.5.3 dogfooding 真触发: 探针脚本里
 # `r = testset_check(..., content='gold_cases.append(x)')` 被错拦. 同 v0.4.18
 # non_blocking sleep 探针根因.
-_LANG_C_HEAD_RE = re.compile(r"\b(?:python\d?|node|ruby|perl)\s+-[ce]\b", re.IGNORECASE)
-# v0.5.9: Bash heredoc 写描述上下文路径豁免 (tests/ / .md 等) 由 description_context
-# 统一处理 — testset.py 旧的 _bash_writes_to_description_context 已下沉到
-# description_context.is_description_context(tool_name="Bash") 让所有 Bash-aware
-# check 共享同款豁免界面.
+# v0.5.13: _LANG_C_HEAD_RE 已下沉到 karma.checks.common.is_python_c_command() —
+# 跟 bypass_karma / non_blocking 共享同款判定. v0.5.9 Bash heredoc 豁免在
+# description_context.is_description_context(tool_name="Bash") 共享.
 
 _PATTERNS = [
     (
@@ -95,7 +93,7 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
     # 跟 non_blocking sleep / bypass_karma write 同根因 fix.
     if tool_name == "Bash":
         cmd_raw = (tool_input or {}).get("command", "") or ""
-        if _LANG_C_HEAD_RE.search(cmd_raw):
+        if is_python_c_command(cmd_raw):
             return None
         # v0.5.9: Bash heredoc 写描述上下文路径豁免现由 is_description_context 上面已处理
     for pat, trigger_key, fix_key in _PATTERNS:

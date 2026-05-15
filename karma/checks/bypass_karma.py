@@ -21,7 +21,7 @@ from __future__ import annotations
 import re
 
 from karma.checks._types import CheckHit
-from karma.checks.common import strip_shell_quoted_literals
+from karma.checks.common import is_python_c_command, strip_shell_quoted_literals
 from karma.i18n import tr
 
 _STICKY_ID = "deep-fix-not-bypass"
@@ -75,12 +75,8 @@ _SHELL_REDIR_WRITE_RE = re.compile(
     r">\s*(?!/dev/(?:null|zero|stderr|stdout))[/.~\w]",
     re.IGNORECASE,
 )
-# 命令头是宿主语言 + -c/-e flag — 跳 shell 重定向检测（python `>` 是比较运算符）
-# 注意：真 python 写绕过用 `.write` 仍命中 _PYTHON_OR_SHELL_WRITE_RE
-_LANG_C_HEAD_RE = re.compile(
-    r"\b(?:python\d?|node|ruby|perl)\s+-[ce]\b",
-    re.IGNORECASE,
-)
+# v0.5.13: _LANG_C_HEAD_RE 下沉到 karma.checks.common.is_python_c_command() —
+# 跟 testset / non_blocking 共享. 这里用 is_python_c_command(cmd_raw) 调用.
 
 # karma 官方 CLI 命令头 — 豁免（用户用 karma 命令是合法操作）
 _KARMA_CLI_RE = re.compile(r"\bkarma\s+(?:init|install-hooks|uninstall-hooks|reset|reset-session|stats|audit|violations|sticky|doctor)\b")
@@ -111,7 +107,7 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
     # 写检测拆两类：跨语言通用 python 写（.write/.unlink 等）+ shell-only 重定向
     # 宿主语言 + -c 跳 shell 重定向（python 代码里 `>` 是比较运算符不是写）
     has_python_write = bool(_PYTHON_OR_SHELL_WRITE_RE.search(cmd_stripped))
-    is_lang_c = bool(_LANG_C_HEAD_RE.search(cmd_raw))
+    is_lang_c = is_python_c_command(cmd_raw)
     has_shell_redir = (not is_lang_c) and bool(_SHELL_REDIR_WRITE_RE.search(cmd_stripped))
     has_write = has_python_write or has_shell_redir
 
