@@ -842,6 +842,32 @@ def test_testset_case_id_assignment_blocked():
     assert hit is not None
 
 
+def test_testset_python_c_string_literal_exempted():
+    """v0.5.5：python -c "..." 内含 gold_cases.append 字面是字符串数据不是执行 — 豁免。
+
+    v0.5.3 dogfooding 真触发：probe 脚本里 `python -c "r = check(content='gold_cases.append(x)')"`
+    被错算执行意图. 跟 non_blocking sleep / bypass_karma write 同根因 fix.
+    """
+    fn = REGISTRY["no_testset_no_future_leakage"]
+    hit = fn(
+        tool_name="Bash",
+        tool_input={
+            "command": 'python -c "r = check(content=\'gold_cases.append(x)\')"',
+        },
+    )
+    assert hit is None, f"python -c 内字面应豁免, 实际拦: {hit}"
+
+
+def test_testset_real_bash_reverse_feed_still_blocked():
+    """v0.5.5：python -c 豁免不能漏拦真 bash 反喂（直接调用，非 -c 内）。"""
+    fn = REGISTRY["no_testset_no_future_leakage"]
+    hit = fn(
+        tool_name="Bash",
+        tool_input={"command": "cp eval/cache/x.json train/cache/"},
+    )
+    assert hit is not None
+
+
 # -------- #8 read-before-write --------
 
 def test_read_first_denies_unread_edit():

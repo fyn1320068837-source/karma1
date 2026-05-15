@@ -19,6 +19,13 @@ from karma.i18n import tr
 
 _STICKY_ID = "no-testset-no-future-leakage"
 
+# v0.5.5：宿主语言 -c/-e flag 命令头识别 — 跟 non_blocking / bypass_karma 同根因.
+# python/node/ruby/perl -c "..." 内 `gold_cases.append` / `if turn_idx >= 400` 等
+# 字面是字符串数据不是真执行意图. v0.5.3 dogfooding 真触发: 探针脚本里
+# `r = testset_check(..., content='gold_cases.append(x)')` 被错拦. 同 v0.4.18
+# non_blocking sleep 探针根因.
+_LANG_C_HEAD_RE = re.compile(r"\b(?:python\d?|node|ruby|perl)\s+-[ce]\b", re.IGNORECASE)
+
 _PATTERNS = [
     (
         re.compile(r"""\b(gold_cases|gold_data|eval_cases|test_cases)[\w.]*\.(append|extend|update|write\w*)""", re.IGNORECASE),
@@ -79,6 +86,13 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
     text = extract_tool_text(tool_name, tool_input or {})
     if not text:
         return None
+    # v0.5.5：Bash 命令头是宿主语言 + -c/-e 豁免 — python/node 等代码里
+    # 含 `gold_cases.append` / `if turn_idx >= N` 字面是字符串数据不是真执行.
+    # 跟 non_blocking sleep / bypass_karma write 同根因 fix.
+    if tool_name == "Bash":
+        cmd_raw = (tool_input or {}).get("command", "") or ""
+        if _LANG_C_HEAD_RE.search(cmd_raw):
+            return None
     for pat, trigger_key, fix_key in _PATTERNS:
         m = pat.search(text)
         if m:

@@ -6,6 +6,22 @@
 
 ## [Unreleased]
 
+## [0.5.5] — 2026-05-15（fix — testset check 补 python -c 豁免，跟 non_blocking / bypass_karma 对齐）
+
+### fix — testset.py 漏 python -c 字符串字面豁免（dogfooding 真触发）
+
+v0.5.3 自测时真触发：probe 脚本 `python -c "r = check(content='gold_cases.append(x)')"` 被 testset check 错拦 — 把引号内的 `gold_cases.append(x)` 字面当成真反喂调用。根因：受 `python -c` 影响的 3 个 check 里，只有 `testset.py` 漏了 `_LANG_C_HEAD_RE` 豁免（`non_blocking.py` 在 v0.4.18 加了、`bypass_karma.py` 在 v0.4.13 加了）。
+
+本版给 `testset.py` `check()` 加同款豁免：`tool_name == "Bash"` 且命令头匹配 `\b(?:python\d?|node|ruby|perl)\s+-[ce]\b` 时直接 return None。真 bash 反喂命令（`cp eval/* train/`、`cat detail.json >> pool.jsonl`）不带 `-c` 包装仍正常拦。
+
+### 验证
+
+- `tests/test_checks.py` 新增 2 个回归测试：
+  - `test_testset_python_c_string_literal_exempted` — 确认豁免生效
+  - `test_testset_real_bash_reverse_feed_still_blocked` — 确认直接 `cp eval/* train/` 仍拦
+- `pytest`：394/394 通过（之前 392 + 新 2）
+- `ruff`：0 issues
+
 ## [0.5.4] — 2026-05-15（feat — Phase D 第三波：28 处 CheckHit.trigger 双语切换）
 
 ### feat — 所有 CheckHit.trigger audit 标签 i18n 化
