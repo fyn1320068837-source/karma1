@@ -195,7 +195,8 @@ def test_init_auto_chinese_user_installs_7_sticky(fake_home, capsys):
     sticky_list = karma.sticky.load(monkeypatch_path)
     assert len(sticky_list) == 7
     out = capsys.readouterr().out
-    assert "zh" in out and "完整" in out  # 反馈给用户自动选了啥
+    # v0.5.0 起 label 改英文 ("full 7 dev-scenario" / "minimal 5"), zh 仍出现在 detected locale
+    assert "zh" in out and ("完整" in out or "full" in out)
 
 
 def test_init_auto_non_chinese_user_installs_5_sticky(fake_home, capsys):
@@ -213,7 +214,7 @@ def test_init_auto_non_chinese_user_installs_5_sticky(fake_home, capsys):
     sticky_list = karma.sticky.load(monkeypatch_path)
     assert len(sticky_list) == 5
     out = capsys.readouterr().out
-    assert "en" in out and "精简" in out
+    assert "en" in out and ("精简" in out or "minimal" in out)
 
 
 def test_init_auto_unknown_locale_fallback_to_minimal(fake_home, capsys):

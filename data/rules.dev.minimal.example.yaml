@@ -1,92 +1,109 @@
-# karma sticky 模板 — 软件开发场景「真跨用户中性」5 条精选
+# karma rule template — Software development scenario "cross-user neutral" 5 curated rules
 #
-# 这是 sticky.dev.example.yaml 的精简版，砍掉了语言 / 场景特化的两条：
-#   - chinese-plain-no-jargon（中文用户偏好）
-#   - no-testset-no-future-leakage（ML / 数据 / 评测场景）
+# This is the minimal version of rules.dev.example.yaml, with two language /
+# scenario-specific rules removed:
+#   - chinese-plain-no-jargon (Chinese-user preference)
+#   - no-testset-no-future-leakage (ML / data / evaluation scenario)
 #
-# 适合：英文母语用户 / 普通后端 / 前端 / 工具开发，不需要场景化规则。
-#
-# 用法：
-#   1. karma init  （会装默认 7 条到 ~/.claude/karma/sticky.yaml）
-#   2. 想换成这个 5 条核心：
-#      cp data/sticky.dev.minimal.example.yaml ~/.claude/karma/sticky.yaml
-#
-# 上限：10 条（超过 12 hook 拒绝加载）
+# Suitable for: English-native users / general backend / frontend / tooling.
+# `karma init --minimal` installs this version; auto-detection installs this
+# for non-Chinese system locale.
 
 - id: long-term-fundamental
   preference: |
-    用最根本、最长期、最普适、最优雅的方案。
-    不打补丁、不硬编码、不为追短期 KPI 牺牲长期质量。
-    深挖到真根因再动手；遇到难题先想「最干净的解法是什么」而非「最快糊过去」。
+    The user trusts you to dig into root causes. When facing hard problems
+    they want you to pause and think "what's the cleanest solution?"
+    rather than "what's the fastest patch?" Short-term patches /
+    hardcoding / skip-verification flags are all "technical debt for later" —
+    they're willing to wait a few more minutes for long-term quality.
+    If the approach has significant disagreement, raise it for alignment;
+    don't silently pick the short-term path.
   violation_keywords:
-    - 我先打个补丁
-    - 先打个补丁应付
-    - 我先硬编码
-    - 先硬编码一下
-    - 先快速绕过
-    - 临时方案
-    - 先用 workaround
-    - 先这样
-    - 暂时这样
-    - 先 hack
+    - "I'll patch this quickly"
+    - "let me patch and apply"
+    - "I'll hardcode"
+    - "let me hardcode this"
+    - "I'll workaround"
+    - "let me use workaround"
+    - "let's just do this for now"
+    - "temporary solution"
+    - "let me hack"
   violation_checks:
     - long_term_fundamental
 
 - id: non-blocking-parallel
   preference: |
-    不阻塞前端 — 测试 / 子 Agent / 长任务跑步时，立刻并行推进其他能做的事。
-    优先多 Agent 并发，不串行等。
-    跑 background 任务后必须继续推进 — 起完任务就「等」也算阻塞。
+    During sleep / wait / long-task execution, the user is waiting for your
+    output. Staring at a progress bar isn't collaboration — it's "stuck."
+    After kicking off a background task, immediately push the next thing
+    that can be done (read related files / spawn another sub-agent / design
+    next step) — you'll be notified when the task completes. Multiple
+    independent tasks prefer parallel kick-off, don't serialize.
   violation_keywords:
-    - 等测试完
-    - 等测试跑完
-    - 等子 Agent
-    - 等 X 完成后再 Y
-    - 串行执行
-    - 我先等
-    - 等一下
-    - 等会儿
-    - 等结果出来
-    - 我盯着
-    - 我先看着
+    - "I'll wait for the tests"
+    - "I'll now wait for tests"
+    - "I'll wait for the subagent"
+    - "I'll now wait for subagent"
+    - "serial execution"
+    - "I'll wait"
+    - "let me wait"
+    - "I'm watching"
+    - "I'm staring at it"
   violation_checks:
     - non_blocking_parallel
   force_block_exempt: true
 
 - id: loud-failure-with-evidence
   preference: |
-    失败要响亮，完成要有证据。不确定就明说，不要用「应该」「可能」掩盖。
-    完成代码任务时必须附证据（test pass / build OK / 数据 / 截图）。
-    「完成」但 skip / mock / 假数据不算完成。
+    The user trusts you, but "should / probably" leaves them uncertain
+    whether you've actually checked or are guessing.
+    When completing code tasks, attach test-pass / build-OK / data /
+    screenshot evidence so they can directly see the result.
+    Skipped some step / used mocks / fake data — honestly state it
+    rather than fake completion; this builds more trust than pretending.
+    Loud failure beats quiet covering-up — they need to know the real
+    state to collaborate with you.
   violation_keywords:
-    - skip 了
-    - 暂时假数据
-    - 临时 mock
+    - "skipped"
+    - "temporary fake data"
+    - "temporary mock"
   violation_checks:
     - loud_failure_with_evidence
 
-- id: deep-fix-not-bypass
-  preference: |
-    karma 拦截发生时，先停下深挖**为什么拦** — 是真违反还是 karma 自身 bug。
-    禁止通过手动改 ~/.claude/karma/session-state/ / 临时改 sticky.yaml /
-    hack 字面 等方式绕开检测。
-    经典 anti-pattern：被拦 → 手动改内部状态让 commit 通过。
-    正确做法：被拦 → 看 trigger → 深挖 pattern 或系统 bug → 修真根因。
-    例外：用户明确说「绕一下先 commit」→ 才能绕。
-  violation_keywords:
-    - 强制接证据
-    - 手动接入
-    - hack 让 commit
-  violation_checks:
-    - bypass_karma_detection
-
 - id: read-before-write
   preference: |
-    加代码前先读：上游调用、相关 exports、共享 utils、已有约定。
-    「看起来不相关」是最危险的话 — 通常意味着没读够上下文。
-    改任何模块前看清这个模块怎么被用、跟谁耦合、改了影响谁。
+    Before changing code, see how this block is used — upstream callers /
+    exports / shared utils / existing conventions.
+    "Looks unrelated" is the easiest mistake — usually means you haven't
+    read enough context.
+    The user wants you to spend 2 minutes reading related code to avoid
+    breaking a 30-minute-discovered cascading bug.
+    Before changing any module, ask yourself: what's it coupled with,
+    who's affected by changes, is there an upstream location to fix
+    it once and for all?
   violation_keywords:
-    - 看起来不相关
-    - 应该不影响其他
+    - "looks unrelated"
+    - "shouldn't affect other"
   violation_checks:
     - read_before_write
+
+- id: deep-fix-not-bypass
+  preference: |
+    When karma blocks you, first reaction shouldn't be "bypass" — pause
+    and read the trigger text, think whether it's a real violation or
+    karma's own bug. Manually modifying session-state to make commit pass
+    / temporarily changing rules.yaml to disable the rule / hacking
+    literals to bypass detection — these are all "performing for the user,"
+    short-term passing but they'll find out.
+    The correct flow when blocked: see trigger → dig into pattern or
+    system bug → fix root cause (tighten pattern if too wide, fix system
+    bug if karma's own issue). This way the next person hitting the same
+    scenario won't be blocked the same way.
+    Exception: user explicitly says "bypass once for this commit" → only
+    then bypass.
+  violation_keywords:
+    - "force evidence"
+    - "manually inject"
+    - "hack to make commit"
+  violation_checks:
+    - bypass_karma_detection

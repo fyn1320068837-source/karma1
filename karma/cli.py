@@ -46,12 +46,25 @@ from karma.violations import load_all
 from karma.paths import karma_home
 
 KARMA_DIR = karma_home()
-EXAMPLE_RULES = Path(__file__).parent.parent / "data" / "rules.dev.example.yaml"
-EXAMPLE_RULES_MINIMAL = Path(__file__).parent.parent / "data" / "rules.dev.minimal.example.yaml"
-# v0.5.x deprecated alias (v0.6.0 移除)
+_DATA_DIR = Path(__file__).parent.parent / "data"
+EXAMPLE_RULES_EN = _DATA_DIR / "rules.dev.example.yaml"        # English default
+EXAMPLE_RULES_ZH = _DATA_DIR / "rules.dev.example.zh.yaml"     # 中文
+EXAMPLE_RULES_MINIMAL_EN = _DATA_DIR / "rules.dev.minimal.example.yaml"
+EXAMPLE_RULES_MINIMAL_ZH = _DATA_DIR / "rules.dev.minimal.example.zh.yaml"
+# v0.5.x deprecated alias (v0.6.0 移除) — default to English templates
+EXAMPLE_RULES = EXAMPLE_RULES_EN
+EXAMPLE_RULES_MINIMAL = EXAMPLE_RULES_MINIMAL_EN
 EXAMPLE_STICKY = EXAMPLE_RULES
 EXAMPLE_STICKY_MINIMAL = EXAMPLE_RULES_MINIMAL
-EXAMPLE_CONFIG = Path(__file__).parent.parent / "data" / "config.example.yaml"
+EXAMPLE_CONFIG = _DATA_DIR / "config.example.yaml"
+
+
+def _select_rule_template(minimal: bool) -> Path:
+    """按系统语言 detect 选模板（中文用户 .zh.yaml / 其他英文 default）。"""
+    from karma.locale_detect import is_chinese_user
+    if is_chinese_user():
+        return EXAMPLE_RULES_MINIMAL_ZH if minimal else EXAMPLE_RULES_ZH
+    return EXAMPLE_RULES_MINIMAL_EN if minimal else EXAMPLE_RULES_EN
 
 def cmd_init(minimal: bool | None = None) -> int:
     """创建 ~/.claude/karma/ + 复制 sticky 模板 + config 模板。
@@ -67,20 +80,21 @@ def cmd_init(minimal: bool | None = None) -> int:
 
     auto_chose = ""
     if minimal is None:
-        # 自动按系统语言偏好选（跨平台：macOS defaults / Linux $LANG /
-        # Windows GetUserDefaultUILanguage / fallback POSIX 环境变量）
+        # Auto-select by system locale (cross-platform: macOS defaults /
+        # Linux $LANG / Windows GetUserDefaultUILanguage / POSIX fallback)
         from karma.locale_detect import detect_user_language, is_chinese_user
         lang = detect_user_language()
         if is_chinese_user():
             minimal = False
-            auto_chose = f"（检测到系统语言 {lang!r} → 装完整 7 条含 chinese_plain）"
+            auto_chose = f"(detected locale {lang!r} → installing full 7 rules with chinese_plain)"
         else:
             minimal = True
-            lang_label = lang or "无法检测"
-            auto_chose = f"（检测到系统语言 {lang_label!r} → 装精简 5 条砍 chinese_plain）"
+            lang_label = lang or "unknown"
+            auto_chose = f"(detected locale {lang_label!r} → installing minimal 5 rules)"
 
-    template = EXAMPLE_RULES_MINIMAL if minimal else EXAMPLE_RULES
-    label = "5 条中性核心" if minimal else "7 条完整开发场景"
+    # v0.5.0 i18n: select template by system locale (zh / en)
+    template = _select_rule_template(minimal)
+    label = "minimal 5 cross-user-neutral" if minimal else "full 7 dev-scenario"
 
     # v0.5.0 migration: 检测旧 sticky.yaml 自动迁移到 rules.yaml
     # STICKY_PATH 来自 karma.rule.DEFAULT_PATH (fallback 优先 rules.yaml)
