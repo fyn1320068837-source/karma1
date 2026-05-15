@@ -10,6 +10,35 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.7.4] — 2026-05-15 (fix — `keep_pushing` user-stop hint covers "satisfied / confirmation" phrases, not only "tired / dismissive")
+
+### Real-user dogfood trigger
+
+After shipping v0.7.3, user said: **"感觉已经挺稳定了，不错不错。"** (Feels stable now, nice nice.) — clearly a stop signal expressing satisfaction. The keep_pushing reflection hook still fired (reminder 1/2), because the existing `_USER_STOP_HINT_RE` only covered the "tired / dismissive" category (`休息吧 / 算了 / 够了 / 明天再说`), not the "satisfied / confirmation" category that users naturally use when a sustained push wave reaches a good stopping point.
+
+Per rule #7 (treat root cause when karma fires false-positive): the trigger fired correctly *given the regex*, but the regex was missing a whole semantic class of user-stop signals.
+
+### Fix — extend `_USER_STOP_HINT_RE` with satisfied-confirmation phrases
+
+Added second category of stop hints to `karma/checks/keep_pushing.py`:
+
+| Category | Existing (v0.4.41) | Added (v0.7.4) |
+|---|---|---|
+| Tired / dismissive | `不用了 / 休息吧 / 明天再说 / 算了 / 够了 / 到此为止 / 晚安 / 走火入魔` | — |
+| Satisfied / confirmation | — | `不错不错 / 挺不错 / 挺稳定 / 稳定了 / 挺好的 / 就这样吧 / 这就行 / 可以了 / 没问题了 / 搞定了 / 看着不错 / OK 了` |
+
+Both categories now exempt the reflection hook for the whole turn — matching the intent of rule #8's "user explicit stop signal" exception.
+
+### Tests
+
+Extended `test_v0441_user_stop_hint_exempts_keep_pushing` with 7 new satisfied-confirmation fixtures (including the literal user phrase that triggered this release). All 427 tests pass.
+
+### Why this matters
+
+karma's whole reason for the user-stop exemption is to **not be in the way when the user is done**. Missing the "satisfied" case meant the hook nagged the Agent to keep pushing past a stopping point the user had already declared — exactly the kind of nag karma is supposed to *prevent*, not generate.
+
+This is also why pure-engineering regex matters: the moment the user said "挺稳定了", we caught the false-positive within one turn, identified the gap, extended the pattern, and shipped a release with tests. No LLM in the loop — just `re.compile` + a new bullet in the OR clause.
+
 ## [0.7.3] — 2026-05-15 (docs — hand-audit every GitHub-visible doc: marketing fluff → natural, stale commands → current, missing status → labeled archive)
 
 ### Why a whole-repo doc audit

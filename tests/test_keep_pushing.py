@@ -259,7 +259,8 @@ def test_v0441_user_stop_hint_exempts_keep_pushing():
     assert fn(response=bare_stop) is not None, "无 user_prompt 时纯陈述完结仍命中"
 
     # 用户上 turn 含叫停字眼 → 豁免
-    stop_hints = [
+    # 类 1: 累了 / 推卸
+    stop_hints_tired = [
         "不用啦感谢，休息吧",
         "好了好了你走火入魔了",
         "明天再说吧",
@@ -268,7 +269,17 @@ def test_v0441_user_stop_hint_exempts_keep_pushing():
         "晚安",
         "够了",
     ]
-    for hint in stop_hints:
+    # 类 2: 满意 / 确认 (v0.7.4)
+    stop_hints_satisfied = [
+        "感觉已经挺稳定了，不错不错",
+        "挺不错的，这版可以了",
+        "稳定了，没问题了",
+        "就这样吧",
+        "OK 了，搞定了",
+        "看着不错",
+        "这就行",
+    ]
+    for hint in stop_hints_tired + stop_hints_satisfied:
         result = fn(response=bare_stop, user_prompt=hint)
         assert result is None, f"用户叫停 {hint!r} 应豁免反思 hook: {result}"
 
