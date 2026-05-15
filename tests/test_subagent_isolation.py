@@ -139,12 +139,12 @@ def test_subagent_state_model_drives_threshold(tmp_path):
 def test_violation_agent_id_serialized_when_subagent():
     """Violation 含 agent_id 时 to_json 真写字段；agent_id=None 时不写省体积。"""
     import json
-    v_main = Violation(ts=1, session_id="s", sticky_id="r", trigger="t", snippet="x", turn=1)
+    v_main = Violation(ts=1, session_id="s", rule_id="r", trigger="t", snippet="x", turn=1)
     d_main = json.loads(v_main.to_json())
     assert "agent_id" not in d_main  # 主 Agent 不写 agent_id 字段省体积 + 向后兼容
 
     v_sub = Violation(
-        ts=1, session_id="s", sticky_id="r", trigger="t", snippet="x", turn=1,
+        ts=1, session_id="s", rule_id="r", trigger="t", snippet="x", turn=1,
         agent_id="sub-uuid",
     )
     d_sub = json.loads(v_sub.to_json())

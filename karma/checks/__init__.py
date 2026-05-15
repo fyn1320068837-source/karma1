@@ -45,7 +45,8 @@ def run_checks(
     response: str = "",
     user_prompt: str = "",
     session_state=None,
-    sticky_id: str = "",
+    rule_id: str = "",
+    sticky_id: str = "",  # v0.5.0 deprecated alias, 用 rule_id (v0.6.0 移除)
 ) -> list[CheckHit]:
     """跑一组 check 函数，返回所有命中。
 
@@ -72,7 +73,7 @@ def run_checks(
                 response=response,
                 user_prompt=user_prompt,
                 session_state=session_state,
-                sticky_id=sticky_id,
+                rule_id=rule_id or sticky_id,  # 向后兼容
             )
         except Exception as e:
             # check 函数自己崩了不该阻塞 hook（fail open）

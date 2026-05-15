@@ -119,7 +119,7 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
         m2 = _KARMA_STATE_PATH_RE.search(cmd_stripped)
         trigger_text = m1.group() if m1 else (m2.group() if m2 else "karma 内部状态")
         return CheckHit(
-            sticky_id=_STICKY_ID,
+            rule_id=_STICKY_ID,
             trigger=f"绕开检测 — 手动写 karma 内部状态 ({trigger_text!r})",
             snippet=cmd_raw[:200],
             suggested_fix="手动改 karma 内部状态等于给用户演戏 — 短期通过但他会发现，"

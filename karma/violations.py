@@ -1,7 +1,10 @@
 """violations.jsonl 读写 + 违反检测。
 
 violations.jsonl 是 append-only 文件，每行一条 JSON：
-{"ts": int, "session_id": str, "sticky_id": str, "trigger": str, "snippet": str}
+{"ts": int, "session_id": str, "rule_id": str, "trigger": str, "snippet": str}
+
+向后兼容：读 jsonl 时支持老 ``sticky_id`` 字段 (v0.5.0 前格式)，自动映射到
+``rule_id``。新写入只用 ``rule_id``。
 """
 
 from __future__ import annotations
@@ -12,7 +15,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from karma.sticky import Sticky
+from karma.rule import Rule
 
 from karma.paths import karma_home
 
@@ -29,7 +32,7 @@ KEEP_HISTORY = 3
 class Violation:
     ts: int
     session_id: str
-    sticky_id: str
+    rule_id: str
     trigger: str
     snippet: str
     turn: int = 0  # session 内 turn 序号（user_prompt_submit 每次 +1）。
@@ -39,11 +42,16 @@ class Violation:
     # audit / stats 默认只看 agent_id is None（主 Agent 真违反，不算子 Agent 噪音）
     agent_id: str | None = None
 
+    # 向后兼容 alias — 旧代码用 v.sticky_id 仍可读 (v0.6.0 移除)
+    @property
+    def sticky_id(self) -> str:
+        return self.rule_id
+
     def to_json(self) -> str:
         d: dict[str, object] = {
             "ts": self.ts,
             "session_id": self.session_id,
-            "sticky_id": self.sticky_id,
+            "rule_id": self.rule_id,
             "trigger": self.trigger,
             "snippet": self.snippet,
             "turn": self.turn,
@@ -72,26 +80,26 @@ def _sanitize_snippet(s: str, max_len: int = 120) -> str:
 
 def detect(
     response: str,
-    sticky_list: list[Sticky],
+    rule_list: list[Rule],
     session_id: str = "unknown",
     now: int | None = None,
     turn: int = 0,
     agent_id: str | None = None,
 ) -> list[Violation]:
-    """扫 response 看违反哪些 sticky。
+    """扫 response 看违反哪些 rule。
 
-    简单 substring 匹配（不区分大小写）。同一 sticky 多关键词命中只记第一个。
+    简单 substring 匹配（不区分大小写）。同一 rule 多关键词命中只记第一个。
     turn = session 内 turn 序号，用于按 turn 距离统计漂移（不是人类时钟）。
     agent_id = 子 Agent uuid（v0.4.34），主 Agent None；写进 Violation.agent_id
     用于 audit 区分主/子 Agent 真违反。
     """
-    if not response or not sticky_list:
+    if not response or not rule_list:
         return []
     now = now or int(time.time())
     response_lower = response.lower()
     out: list[Violation] = []
-    for s in sticky_list:
-        for kw in s.violation_keywords:
+    for r in rule_list:
+        for kw in r.violation_keywords:
             idx = response_lower.find(kw.lower())
             if idx < 0:
                 continue
@@ -100,13 +108,13 @@ def detect(
             out.append(Violation(
                 ts=now,
                 session_id=session_id,
-                sticky_id=s.id,
+                rule_id=r.id,
                 trigger=kw,
                 snippet=_sanitize_snippet(response[start:end]),
                 turn=turn,
                 agent_id=agent_id,
             ))
-            break  # 同一 sticky 多关键词命中只记第一个
+            break  # 同一 rule 多关键词命中只记第一个
     return out
 
 
@@ -208,6 +216,15 @@ def _scan_tail_jsonl(path: Path, tail_lines: int):
             continue
 
 
+def _extract_rule_id(d: dict) -> str:
+    """读 violation dict 的 rule_id 字段，向后兼容老 ``sticky_id`` 字段。
+
+    v0.5.0 改名 sticky → rule 后，新写入 jsonl 用 rule_id；老 jsonl 行仍用
+    sticky_id。读取时优先 rule_id fallback sticky_id 保证兼容。
+    """
+    return d.get("rule_id") or d.get("sticky_id", "")
+
+
 def _extract_turn(d: dict) -> int | None:
     """读 violation dict 的 turn 字段。
 
@@ -240,7 +257,7 @@ def recent(
             ts = int(d.get("ts", 0))
         except (ValueError, TypeError):
             continue
-        sid = d.get("sticky_id", "")
+        sid = _extract_rule_id(d)
         if ts >= cutoff and sid:
             out[sid] = max(out.get(sid, 0), ts)
     return out
@@ -263,7 +280,7 @@ def count_recent(
             ts = int(d.get("ts", 0))
         except (ValueError, TypeError):
             continue
-        sid = d.get("sticky_id", "")
+        sid = _extract_rule_id(d)
         if ts >= cutoff and sid:
             out[sid] = out.get(sid, 0) + 1
     return out
@@ -288,7 +305,7 @@ def recent_turns(
     for d in _scan_tail_jsonl(path, tail_lines):
         if d.get("session_id") != session_id:
             continue
-        sid = d.get("sticky_id", "")
+        sid = _extract_rule_id(d)
         if not sid:
             continue
         turn = _extract_turn(d)
@@ -317,7 +334,7 @@ def count_recent_turns(
     for d in _scan_tail_jsonl(path, tail_lines):
         if d.get("session_id") != session_id:
             continue
-        sid = d.get("sticky_id", "")
+        sid = _extract_rule_id(d)
         if not sid:
             continue
         turn = _extract_turn(d)
@@ -341,10 +358,13 @@ def load_all(path: Path | None = None) -> list[Violation]:
             continue
         try:
             d = json.loads(line)
+            rid = _extract_rule_id(d)
+            if not rid:
+                continue  # 没 rule_id / sticky_id → 跳过无效行
             out.append(Violation(
                 ts=int(d["ts"]),
                 session_id=d.get("session_id", "unknown"),
-                sticky_id=d["sticky_id"],
+                rule_id=rid,
                 trigger=d.get("trigger", ""),
                 snippet=d.get("snippet", ""),
                 turn=int(d.get("turn", 0)),

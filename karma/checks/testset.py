@@ -83,7 +83,7 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
         if m:
             snippet = text[max(0, m.start() - 30): m.end() + 30]
             return CheckHit(
-                sticky_id=_STICKY_ID,
+                rule_id=_STICKY_ID,
                 trigger=desc,
                 snippet=snippet[:200],
                 suggested_fix=fix,

@@ -142,7 +142,7 @@ def main() -> int:
             response=response,
             user_prompt=last_user_prompt,
             session_state=state,
-            sticky_id=s.id,
+            rule_id=s.id,
         )
         check_hits.extend(hits)
 
@@ -159,7 +159,7 @@ def main() -> int:
     all_records: list[Violation] = []
     for h in check_hits:
         all_records.append(Violation(
-            ts=int(time.time()), session_id=session_id, sticky_id=h.sticky_id,
+            ts=int(time.time()), session_id=session_id, rule_id=h.sticky_id,
             trigger=h.trigger, snippet=h.snippet, turn=state.turn_count,
             agent_id=agent_id,
         ))

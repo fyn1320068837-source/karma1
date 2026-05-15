@@ -66,8 +66,8 @@ def test_detect_no_violation() -> None:
 def test_append_and_load_roundtrip(tmp_path: Path) -> None:
     p = tmp_path / "violations.jsonl"
     items = [
-        Violation(ts=1000, session_id="s1", sticky_id="r1", trigger="x", snippet="..."),
-        Violation(ts=2000, session_id="s1", sticky_id="r2", trigger="y", snippet="..."),
+        Violation(ts=1000, session_id="s1", rule_id="r1", trigger="x", snippet="..."),
+        Violation(ts=2000, session_id="s1", rule_id="r2", trigger="y", snippet="..."),
     ]
     append(items, path=p)
     loaded = load_all(p)
@@ -80,8 +80,8 @@ def test_recent_filters_old(tmp_path: Path) -> None:
     p = tmp_path / "violations.jsonl"
     # 一条 25h 前，一条 1h 前
     items = [
-        Violation(ts=1000, session_id="s", sticky_id="old-rule", trigger="x", snippet="."),
-        Violation(ts=1000 + 24 * 3600, session_id="s", sticky_id="new-rule", trigger="y", snippet="."),
+        Violation(ts=1000, session_id="s", rule_id="old-rule", trigger="x", snippet="."),
+        Violation(ts=1000 + 24 * 3600, session_id="s", rule_id="new-rule", trigger="y", snippet="."),
     ]
     append(items, path=p)
     out = recent(p, window_sec=24 * 3600, now=1000 + 25 * 3600)
@@ -92,9 +92,9 @@ def test_recent_filters_old(tmp_path: Path) -> None:
 def test_recent_takes_latest_ts_per_sticky(tmp_path: Path) -> None:
     p = tmp_path / "violations.jsonl"
     items = [
-        Violation(ts=1000, session_id="s", sticky_id="r1", trigger="x", snippet="."),
-        Violation(ts=2000, session_id="s", sticky_id="r1", trigger="x", snippet="."),
-        Violation(ts=1500, session_id="s", sticky_id="r1", trigger="x", snippet="."),
+        Violation(ts=1000, session_id="s", rule_id="r1", trigger="x", snippet="."),
+        Violation(ts=2000, session_id="s", rule_id="r1", trigger="x", snippet="."),
+        Violation(ts=1500, session_id="s", rule_id="r1", trigger="x", snippet="."),
     ]
     append(items, path=p)
     out = recent(p, window_sec=10000, now=3000)
@@ -119,7 +119,7 @@ def test_rotation_triggers_when_over_max_lines(tmp_path: Path) -> None:
     p = tmp_path / "violations.jsonl"
     # 写 11 行（max_lines=10 让测试简洁）
     items = [
-        Violation(ts=i, session_id="s", sticky_id=f"r{i}", trigger="x", snippet=".")
+        Violation(ts=i, session_id="s", rule_id=f"r{i}", trigger="x", snippet=".")
         for i in range(11)
     ]
     append(items, path=p)
@@ -137,7 +137,7 @@ def test_rotation_under_threshold_no_op(tmp_path: Path) -> None:
     from karma.violations import rotate_if_needed
     p = tmp_path / "violations.jsonl"
     items = [
-        Violation(ts=i, session_id="s", sticky_id=f"r{i}", trigger="x", snippet=".")
+        Violation(ts=i, session_id="s", rule_id=f"r{i}", trigger="x", snippet=".")
         for i in range(5)
     ]
     append(items, path=p)
@@ -154,7 +154,7 @@ def test_rotation_keep_history_count(tmp_path: Path) -> None:
     # 模拟 5 次 rotate（每次行数超阈值）
     for round_idx in range(5):
         items = [
-            Violation(ts=round_idx * 100 + i, session_id="s", sticky_id=f"r{i}", trigger="x", snippet=".")
+            Violation(ts=round_idx * 100 + i, session_id="s", rule_id=f"r{i}", trigger="x", snippet=".")
             for i in range(11)
         ]
         append(items, path=p)
@@ -177,7 +177,7 @@ def test_append_triggers_rotation_automatically(tmp_path: Path, monkeypatch) -> 
     )
     p = tmp_path / "violations.jsonl"
     items = [
-        Violation(ts=i, session_id="s", sticky_id=f"r{i}", trigger="x", snippet=".")
+        Violation(ts=i, session_id="s", rule_id=f"r{i}", trigger="x", snippet=".")
         for i in range(15)
     ]
     append(items, path=p)
@@ -192,10 +192,10 @@ def test_count_recent_returns_count_per_sticky(tmp_path: Path) -> None:
     from karma.violations import count_recent
     p = tmp_path / "violations.jsonl"
     items = [
-        Violation(ts=1000, session_id="s", sticky_id="r1", trigger="x", snippet="."),
-        Violation(ts=1100, session_id="s", sticky_id="r1", trigger="x", snippet="."),
-        Violation(ts=1200, session_id="s", sticky_id="r1", trigger="x", snippet="."),
-        Violation(ts=1300, session_id="s", sticky_id="r2", trigger="x", snippet="."),
+        Violation(ts=1000, session_id="s", rule_id="r1", trigger="x", snippet="."),
+        Violation(ts=1100, session_id="s", rule_id="r1", trigger="x", snippet="."),
+        Violation(ts=1200, session_id="s", rule_id="r1", trigger="x", snippet="."),
+        Violation(ts=1300, session_id="s", rule_id="r2", trigger="x", snippet="."),
     ]
     append(items, path=p)
     out = count_recent(p, window_sec=1000, now=2000)
@@ -208,8 +208,8 @@ def test_count_recent_filters_outside_window(tmp_path: Path) -> None:
     from karma.violations import count_recent
     p = tmp_path / "violations.jsonl"
     items = [
-        Violation(ts=1000, session_id="s", sticky_id="r1", trigger="x", snippet="."),  # 25 min 前
-        Violation(ts=2000, session_id="s", sticky_id="r1", trigger="x", snippet="."),  # 当前窗口内
+        Violation(ts=1000, session_id="s", rule_id="r1", trigger="x", snippet="."),  # 25 min 前
+        Violation(ts=2000, session_id="s", rule_id="r1", trigger="x", snippet="."),  # 当前窗口内
     ]
     append(items, path=p)
     # 窗口 500 秒，now=2200 → 只数 ts >= 1700 的
@@ -232,10 +232,10 @@ def test_recent_turns_filters_by_session_and_turn_window(tmp_path: Path) -> None
     p = tmp_path / "violations.jsonl"
     # 不同 session + 不同 turn
     items = [
-        Violation(ts=1000, session_id="a", sticky_id="r1", trigger="x", snippet=".", turn=1),
-        Violation(ts=1100, session_id="a", sticky_id="r1", trigger="x", snippet=".", turn=2),
-        Violation(ts=1200, session_id="a", sticky_id="r2", trigger="x", snippet=".", turn=5),
-        Violation(ts=1300, session_id="b", sticky_id="r3", trigger="x", snippet=".", turn=3),  # 别的 session
+        Violation(ts=1000, session_id="a", rule_id="r1", trigger="x", snippet=".", turn=1),
+        Violation(ts=1100, session_id="a", rule_id="r1", trigger="x", snippet=".", turn=2),
+        Violation(ts=1200, session_id="a", rule_id="r2", trigger="x", snippet=".", turn=5),
+        Violation(ts=1300, session_id="b", rule_id="r3", trigger="x", snippet=".", turn=3),  # 别的 session
     ]
     append(items, path=p)
     # session a，当前 turn=6，窗口 3 → 只算 turn >= 3 的
@@ -251,11 +251,11 @@ def test_count_recent_turns_by_session(tmp_path: Path) -> None:
     from karma.violations import count_recent_turns
     p = tmp_path / "violations.jsonl"
     items = [
-        Violation(ts=1000, session_id="a", sticky_id="r1", trigger="x", snippet=".", turn=5),
-        Violation(ts=1100, session_id="a", sticky_id="r1", trigger="x", snippet=".", turn=6),
-        Violation(ts=1200, session_id="a", sticky_id="r1", trigger="x", snippet=".", turn=7),
-        Violation(ts=1300, session_id="a", sticky_id="r1", trigger="x", snippet=".", turn=2),  # 窗口外
-        Violation(ts=1400, session_id="b", sticky_id="r1", trigger="x", snippet=".", turn=7),  # 别 session
+        Violation(ts=1000, session_id="a", rule_id="r1", trigger="x", snippet=".", turn=5),
+        Violation(ts=1100, session_id="a", rule_id="r1", trigger="x", snippet=".", turn=6),
+        Violation(ts=1200, session_id="a", rule_id="r1", trigger="x", snippet=".", turn=7),
+        Violation(ts=1300, session_id="a", rule_id="r1", trigger="x", snippet=".", turn=2),  # 窗口外
+        Violation(ts=1400, session_id="b", rule_id="r1", trigger="x", snippet=".", turn=7),  # 别 session
     ]
     append(items, path=p)
     # session a, current_turn=7, window=3 → 算 turn >= 4 的
@@ -301,15 +301,15 @@ def test_count_recent_turns_skips_legacy_no_turn_field(tmp_path: Path) -> None:
 
 def test_violation_dataclass_has_turn_field():
     """Violation 加 turn 字段，default 0 兼容旧记录。"""
-    v = Violation(ts=1, session_id="s", sticky_id="r", trigger="x", snippet=".")
+    v = Violation(ts=1, session_id="s", rule_id="r", trigger="x", snippet=".")
     assert v.turn == 0
-    v2 = Violation(ts=1, session_id="s", sticky_id="r", trigger="x", snippet=".", turn=42)
+    v2 = Violation(ts=1, session_id="s", rule_id="r", trigger="x", snippet=".", turn=42)
     assert v2.turn == 42
 
 
 def test_violation_to_json_includes_turn():
     import json as _json
-    v = Violation(ts=1, session_id="s", sticky_id="r", trigger="x", snippet=".", turn=7)
+    v = Violation(ts=1, session_id="s", rule_id="r", trigger="x", snippet=".", turn=7)
     d = _json.loads(v.to_json())
     assert d["turn"] == 7
 

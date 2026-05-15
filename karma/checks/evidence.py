@@ -91,7 +91,7 @@ def check(
             if _CHAINED_TEST_RE.search(cmd_stripped) and not _FAKE_TEST_FLAG_RE.search(cmd_stripped):
                 return None
             return CheckHit(
-                sticky_id=_STICKY_ID,
+                rule_id=_STICKY_ID,
                 trigger="git commit 前最近 session 内无测试通过证据",
                 snippet=cmd[:200],
                 suggested_fix="commit 是给用户的信号「这个版本可信」。跑测试（pytest / "
@@ -107,7 +107,7 @@ def check(
                 continue
             if not has_recent_test:
                 return CheckHit(
-                    sticky_id=_STICKY_ID,
+                    rule_id=_STICKY_ID,
                     trigger=f"声称{m_done.group()!r} 但 session 最近无测试通过证据",
                     snippet=response[max(0, m_done.start()-30): m_done.end()+50],
                     suggested_fix="说「完成」时附测试证据 — 跑 pytest / build 看到 PASS "
@@ -119,7 +119,7 @@ def check(
                 continue
             if not has_recent_test:
                 return CheckHit(
-                    sticky_id=_STICKY_ID,
+                    rule_id=_STICKY_ID,
                     trigger=f"用『{m_weak.group()}』做硬声明且无测试证据",
                     snippet=response[max(0, m_weak.start()-30): m_weak.end()+50],
                     suggested_fix="「应该 / 可能」让用户分不清你是查过还是猜的。如果你真不确定，"

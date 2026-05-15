@@ -14,10 +14,15 @@ from typing import Protocol
 class CheckHit:
     """violation_check 函数的返回 — 一次违反命中。"""
 
-    sticky_id: str
+    rule_id: str
     trigger: str          # 描述什么触发的（"Bash sleep 30"）
     snippet: str          # 上下文片段
     suggested_fix: str    # 给 Agent 看的修复建议
+
+    # 向后兼容 alias — 旧代码用 hit.sticky_id 仍可读 (v0.6.0 移除)
+    @property
+    def sticky_id(self) -> str:
+        return self.rule_id
 
 
 class CheckFn(Protocol):

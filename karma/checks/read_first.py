@@ -37,7 +37,7 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, session_state=
         return None
 
     return CheckHit(
-        sticky_id=_STICKY_ID,
+        rule_id=_STICKY_ID,
         trigger=f"未 Read 就 {tool_name} {file_path}",
         snippet=f"{tool_name}({file_path!r})",
         suggested_fix=f"先 Read {file_path} 看现有内容 / 上游调用者 / 相关约定 — 花 2 分钟"

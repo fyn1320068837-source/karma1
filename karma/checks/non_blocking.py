@@ -117,7 +117,7 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
         m_block = _PYTHON_REAL_BLOCK_RE.search(cmd)
         if m_block:
             return CheckHit(
-                sticky_id=_STICKY_ID,
+                rule_id=_STICKY_ID,
                 trigger=f"python 真阻塞接口: {m_block.group()!r}",
                 snippet=cmd_raw[:200],
                 suggested_fix="python -c 内 time.sleep / subprocess sleep 期间用户等你输出，"
@@ -128,7 +128,7 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
     m = _SLEEP_RE.search(cmd)
     if m and not is_lang_c:
         return CheckHit(
-            sticky_id=_STICKY_ID,
+            rule_id=_STICKY_ID,
             trigger=f"Bash sleep 命令: {m.group()!r}",
             snippet=cmd_raw[:200],
             suggested_fix="sleep 期间用户等你输出，体验是「卡了」。改成 run_in_background=True "
@@ -140,7 +140,7 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
     # 等 identifier 字面命中 \bwait\b 是真假阳。同 sleep 根因。
     if _is_blocking_wait(cmd) and not is_lang_c:
         return CheckHit(
-            sticky_id=_STICKY_ID,
+            rule_id=_STICKY_ID,
             trigger="Bash wait 命令阻塞",
             snippet=cmd_raw[:200],
             suggested_fix="wait 期间用户等你输出，体验是「卡了」。改 run_in_background=True，"
@@ -152,7 +152,7 @@ def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
     m = _LONG_TASK_RE.search(cmd)
     if m and not is_bg and "&" not in cmd:
         return CheckHit(
-            sticky_id=_STICKY_ID,
+            rule_id=_STICKY_ID,
             trigger=f"长任务不带 run_in_background: {m.group()!r}",
             snippet=cmd_raw[:200],
             suggested_fix=f"{m.group()} 是长任务，跑期间用户等你的输出。加 run_in_background=True "

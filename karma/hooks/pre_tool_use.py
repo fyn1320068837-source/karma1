@@ -107,7 +107,7 @@ def main() -> int:
             tool_name=tool_name,
             tool_input=tool_input,
             session_state=state,
-            sticky_id=s.id,
+            rule_id=s.id,
         )
         check_hits.extend(hits)
 
@@ -142,7 +142,7 @@ def main() -> int:
         append([Violation(
             ts=int(time.time()),
             session_id=session_id,
-            sticky_id=top.sticky_id,
+            rule_id=top.sticky_id,
             trigger=top.trigger,
             snippet=top.snippet,
             turn=state.turn_count,

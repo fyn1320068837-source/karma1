@@ -144,7 +144,7 @@ def main() -> int:
                             s.violation_checks,
                             response=last_text,
                             session_state=state,
-                            sticky_id=s.id,
+                            rule_id=s.id,
                         )
                         all_hits.extend(hits)
                     if all_hits:
@@ -155,7 +155,7 @@ def main() -> int:
                             from karma.violations import Violation as _V, append as _v_append
                             recs = [_V(
                                 ts=int(_time.time()), session_id=session_id,
-                                sticky_id=h.sticky_id, trigger=h.trigger,
+                                rule_id=h.sticky_id, trigger=h.trigger,
                                 snippet=h.snippet, turn=current_turn,
                             ) for h in all_hits]
                             _v_append(recs)

@@ -96,7 +96,11 @@ def test_stop_reads_transcript_and_detects(monkeypatch, tmp_path, capsys):
     assert rc == 0
     assert violations_path.exists()
     lines = violations_path.read_text(encoding="utf-8").splitlines()
-    assert any(json.loads(ln)["sticky_id"] == "no-patch" for ln in lines)
+    # v0.5.0 起 jsonl 字段 sticky_id → rule_id（向后兼容读取仍支持 sticky_id）
+    assert any(
+        (json.loads(ln).get("rule_id") or json.loads(ln).get("sticky_id")) == "no-patch"
+        for ln in lines
+    )
     assert "⚠️ karma" in captured.err
 
 
@@ -130,7 +134,7 @@ def test_post_tool_use_smart_reinject_when_recent_violation(monkeypatch, tmp_pat
     # 预设 2 条最近 turn 违反
     from karma.violations import Violation, append as v_append
     v_append([Violation(
-        ts=1, session_id="anchor_test", sticky_id="long-term-fundamental",
+        ts=1, session_id="anchor_test", rule_id="long-term-fundamental",
         trigger="先打个补丁", snippet=".", turn=5,
     )], path=violations_path)
     state = session_state.SessionState(session_id="anchor_test")
@@ -382,7 +386,7 @@ def test_stop_hook_force_blocks_on_accumulated_violations(monkeypatch, tmp_path,
     # 预设 5 条同 sticky 违反 + 本 session turn=3
     from karma.violations import Violation, append as v_append
     items = [
-        Violation(ts=i, session_id="force", sticky_id="long-term-fundamental",
+        Violation(ts=i, session_id="force", rule_id="long-term-fundamental",
                   trigger="先打个补丁", snippet=".", turn=t)
         for i, t in enumerate(range(1, 6))
     ]
@@ -437,7 +441,7 @@ def test_stop_hook_force_block_releases_when_current_turn_not_triggering(monkeyp
     # 预设 5 条 long-term 历史违反（累积超阈值）
     from karma.violations import Violation, append as v_append
     items = [
-        Violation(ts=i, session_id="force2", sticky_id="long-term-fundamental",
+        Violation(ts=i, session_id="force2", rule_id="long-term-fundamental",
                   trigger="先打个补丁", snippet=".", turn=t)
         for i, t in enumerate(range(1, 6))
     ]
@@ -607,7 +611,7 @@ def test_stop_hook_force_block_exempts_keep_pushing(monkeypatch, tmp_path, capsy
     # 预设 5 条 keep-pushing 违反（force_threshold 默认 5）
     from karma.violations import Violation, append as v_append
     items = [
-        Violation(ts=i, session_id="kp_force", sticky_id="keep-pushing-no-stop",
+        Violation(ts=i, session_id="kp_force", rule_id="keep-pushing-no-stop",
                   trigger="response 纯陈述完结", snippet=".", turn=t)
         for i, t in enumerate(range(1, 6))
     ]

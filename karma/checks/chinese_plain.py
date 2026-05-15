@@ -139,7 +139,7 @@ def check(*, response: str = "", **_):
         ratio = chinese / max(total, 1)
         if ratio < _MIN_CHINESE_RATIO:
             return CheckHit(
-                sticky_id=_STICKY_ID,
+                rule_id=_STICKY_ID,
                 trigger=f"自然语言中文占比 {ratio*100:.0f}% < {_MIN_CHINESE_RATIO*100:.0f}%",
                 snippet=natural_for_ratio[:150],
                 suggested_fix="本段读起来用户可能要停下查几次「这词什么意思」。看看哪些英文是"
@@ -186,7 +186,7 @@ def check(*, response: str = "", **_):
             continue
         # 没括号解释 → 算违反
         return CheckHit(
-            sticky_id=_STICKY_ID,
+            rule_id=_STICKY_ID,
             trigger=f"术语 {m.group()!r} 后无括号内中文解释",
             snippet=jargon_scan_text[max(0, m.start() - 20): m.end() + _JARGON_CONTEXT_RADIUS],
             suggested_fix=f"「{m.group()}」用户可能要停下想「这是什么」。如果是项目名 / 论文术语 / "
@@ -230,7 +230,7 @@ def _check_repeated_prefix(text: str):
             if prefix in ("一", "不", "是", "有", "没", "我", "你", "他", "这", "那", "在"):
                 continue
             return CheckHit(
-                sticky_id=_STICKY_ID,
+                rule_id=_STICKY_ID,
                 trigger=f"前缀字 {prefix!r} 重复 {count} 次（疑似防御性堆叠）",
                 snippet=f"「{prefix}」字在本 response 出现 {count} 次开头位置",
                 suggested_fix=(
