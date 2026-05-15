@@ -20,7 +20,7 @@ from karma.sticky import Sticky
 def _make_sticky(sid: str) -> Sticky:
     return Sticky(
         id=sid, preference=f"测试 sticky {sid} 第一行\n第二行不该注入",
-        violation_keywords=[], violation_checks=[],
+        violation_keywords=(), violation_checks=(),
     )
 
 

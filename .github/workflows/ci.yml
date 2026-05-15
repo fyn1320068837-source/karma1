@@ -35,8 +35,8 @@ jobs:
 
       - name: Type check (mypy)
         run: |
-          mypy karma/ --ignore-missing-imports
-          mypy tests/ --ignore-missing-imports
+          mypy karma/
+          mypy tests/
 
       - name: Test
         run: pytest tests/ -q
