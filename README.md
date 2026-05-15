@@ -1,5 +1,7 @@
 # karma
 
+**[🇨🇳 中文（当前）](./README.md) · [🇬🇧 English](./README.en.md)**
+
 [![CI](https://github.com/jhaizhou-ops/karma/actions/workflows/ci.yml/badge.svg)](https://github.com/jhaizhou-ops/karma/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
