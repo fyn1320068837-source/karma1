@@ -1,5 +1,7 @@
 # 安全策略
 
+**[🇨🇳 中文（当前）](./SECURITY.md) · [🇬🇧 English](./SECURITY.en.md)**
+
 ## 报告漏洞
 
 发现 karma 安全问题 → **不要开公开 issue**，发邮件到项目维护者邮箱（`gh repo view jhaizhou-ops/karma` 看 contact）或私下 GitHub Security Advisory。

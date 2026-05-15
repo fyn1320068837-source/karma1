@@ -1,5 +1,7 @@
 # 行为准则
 
+**[🇨🇳 中文（当前）](./CODE_OF_CONDUCT.md) · [🇬🇧 English](./CODE_OF_CONDUCT.en.md)**
+
 karma 是为 AI 协作真痛点而生的工具，社区氛围跟项目调性一致 — **直接、诚实、互相尊重**。
 
 ## 期望的协作方式
