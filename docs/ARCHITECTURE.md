@@ -1,5 +1,7 @@
 # karma 技术架构（M3 现状）
 
+**[🇨🇳 中文（当前）](./ARCHITECTURE.md) · [🇬🇧 English](./ARCHITECTURE.en.md)**
+
 ## 总览
 
 ```
