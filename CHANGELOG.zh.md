@@ -6,6 +6,37 @@
 
 ## [Unreleased]
 
+## [0.5.14] — 2026-05-15（docs — `karma-rule` skill 教会 Agent 用现有命令组合做 modify，不加新 CLI）
+
+### 这版动机
+
+dogfooding 真发现 gap：Agent 走完 skill Step 2 决策表说「modify 现有规则」，但 skill 在这里断了 — 提到 `karma rule edit` 但那命令是启动 `$EDITOR` 给用户手编（Agent 无法自动化）。Agent 没有清晰路径用现有 CLI 完成「modify」，导致我（正在 dogfooding 的 Agent）提议加新命令 `karma rule replace`。用户立刻 pushback：不要扩大 CLI 表面，把现有命令教清楚。
+
+### 改了啥
+
+纯 skill 文档改 — **0 个新 CLI 命令，0 行新代码**。靠把指引说清楚关掉 modify gap。
+
+- **Step 2 下新加 "How to modify an existing rule (replace / merge / extend scope)" section**：
+  - 3 步 recipe（起草 yaml → preview → `remove && add` 替换）
+  - 4 行「常见 modify shape」表（Replace / Extend scope / Merge / Genuine purpose change），说明什么时候保留 `id`（几乎全保留，让 violation 历史连续）vs 什么时候用新 id
+  - 明确说「为啥不用 `karma rule edit`」— 那是用户逃生口不是 Agent 路径
+- **Step 6 拆两分支** — 新规则用 add，修改用 `remove && add` 链
+- **原子性诚实 caveat** — 明说 `remove && add` 不是真事务（如果 `add` 在 `remove` 成功后失败，规则就丢了）；preview-first 降低风险但不消除；`cp rules.yaml rules.yaml.bak` 是便宜保险. 初稿错说 `&&` 「确保」原子性 — 同一 commit 内 catch + 修正（sticky #4：caveats 要诚实）
+
+### 为啥不加新 CLI
+
+用户本 session 立场原话：「不希望给用户增加一堆不常用的 skill」。Modify = remove + add，现有命令组合够用。加 `karma rule replace` 就是表面 bloat 无真能力增量 — Agent 缺的只是 recipe 写在 skill 里.
+
+### 验证
+
+- skill：269 → 302 行（+33），7 个 `### Step N` 标题完整，10 处 "modify" / "remove + add" / "How to modify" 引用
+- `pytest`：410/410 通过（纯文档不变）
+- `ruff`：0 issues
+
+### 顺手的 user-data 改动（不在本 commit 内）
+
+用户的 `~/.claude/karma/sticky.yaml` 里 `lighthearted-vibe` 规则被改写：作用域从「加 karma 规则对话时」扩到「整体说话方式」，对偶半句从 mild「该严肃就严肃」升级为「具体问题分析要认真深刻」。这次改写是 dogfooding 真触发，暴露了本版修的 skill gap.
+
 ## [0.5.13] — 2026-05-15（refactor — audit 驱动的 dedup：共享 `is_python_c_command` + sticky_id alias 清理 + doctor skill check）
 
 ### 本版还的债

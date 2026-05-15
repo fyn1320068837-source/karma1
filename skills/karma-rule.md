@@ -105,12 +105,33 @@ Run `karma rule list` to see if existing rules already cover this case. **Compar
 
 | Situation | Action |
 |---|---|
-| New request's preference text says >50% the same thing as existing rule | Suggest modifying the existing rule (`karma rule edit`) instead of adding |
-| Existing rule covers a superset but new request adds a specific dimension | Two options: (a) modify existing to add the dimension, or (b) add new as a sibling — ask user which |
+| New request's preference text says >50% the same thing as existing rule | **Modify the existing rule** — see "How to modify an existing rule" below. Don't add a duplicate. |
+| Existing rule covers a superset but new request adds a specific dimension | Two options: (a) **modify existing** to absorb the dimension (preferred — keeps library tight), or (b) add new as a sibling — ask user which they prefer |
 | New request shares 1-2 violation_keywords with existing but different intent | Add as separate rule, but mention the keyword overlap so user can decide |
 | No semantic overlap | Add as new rule |
 
 Don't be paranoid — most new rules don't overlap. But if they do, flag it before drafting (saves a Step 3 → Step 5 → "wait, this duplicates X" loop).
+
+#### How to modify an existing rule (replace / merge / extend scope)
+
+karma has no atomic `rule replace` command **on purpose** — modifying = `remove` + `add` composed by the Agent, so the steps are explicit and the user sees both halves.
+
+**The 3-step modify recipe** (use this when Step 2 says "modify"):
+
+1. **Draft the new yaml first** — write the full revised rule to `/tmp/karma-rule-<id>.yaml` (keep the original `id` so violation history stays linked, unless the rule's purpose genuinely changed)
+2. **Preview** — `karma rule preview --from-yaml /tmp/karma-rule-<id>.yaml` to confirm schema + injection text
+3. **Atomic-ish swap** — `karma rule remove <id> && karma rule add --from-yaml /tmp/karma-rule-<id>.yaml` (chain with `&&` so an `add` failure doesn't leave the library missing the rule)
+
+**Common modify shapes**:
+
+| Shape | What changes | Keep id? |
+|---|---|---|
+| **Replace** (same intent, better wording) | `preference` text rewritten | Yes — history stays linked |
+| **Extend scope** (anchor → general) | `preference` widens applicability + violation_keywords may grow | Yes |
+| **Merge** (fold rule B into rule A) | A absorbs B's intent; B removed | Keep A's id, then `karma rule remove <B-id>` |
+| **Genuine purpose change** | New rule is a different concern | Use new id (rare — usually means a fresh rule, not a modify) |
+
+**Why not `karma rule edit`?** That command launches `$EDITOR` for the user to hand-edit `rules.yaml` — it's a user-facing escape hatch, not an Agent-automatable path. The Agent should always use the `remove` + `add` recipe so the user sees the diff in conversation.
 
 ### Step 3: Refine into yaml
 
@@ -165,11 +186,23 @@ If user wants changes, iterate (back to Step 3).
 ### Step 6: Write to rules.yaml
 
 Once user confirms:
+
+**For a brand-new rule** (Step 2 said "no overlap"):
 ```bash
 karma rule add --from-yaml /tmp/karma-new-rule.yaml
 ```
 
-This re-validates schema + checks for id conflicts + verifies any violation_checks exist in REGISTRY + appends to `~/.claude/karma/rules.yaml`.
+**For modifying an existing rule** (Step 2 said "modify"):
+```bash
+# Step 1: preview the new version BEFORE removing — catches schema/REGISTRY errors while old rule still exists
+karma rule preview --from-yaml /tmp/karma-rule-<id>.yaml
+# Step 2: only after preview passes, do the swap
+karma rule remove <id> && karma rule add --from-yaml /tmp/karma-rule-<id>.yaml
+```
+
+Both paths re-validate schema + check id conflicts + verify `violation_checks` exist in REGISTRY before touching `~/.claude/karma/rules.yaml`.
+
+**Honest caveat on atomicity**: `remove && add` is *not* a true transaction — if `add` fails (e.g., disk full, permission error) after `remove` succeeded, the rule is gone. That's why preview-first matters: it surfaces schema errors before the destructive `remove` step. For paranoid scenarios, `cp ~/.claude/karma/rules.yaml ~/.claude/karma/rules.yaml.bak` before the swap is the cheap insurance.
 
 ### Step 7: Report results
 

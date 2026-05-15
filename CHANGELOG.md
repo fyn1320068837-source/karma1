@@ -10,6 +10,37 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.5.14] — 2026-05-15 (docs — `karma-rule` skill teaches the modify recipe with existing commands, no new CLI added)
+
+### Why this release
+
+Live dogfooding turned up a real gap: when an Agent walks through Step 2 of the skill and the decision table says "modify existing rule," the skill stopped there — `karma rule edit` was mentioned but that command launches `$EDITOR` for the user (not Agent-automatable). The Agent had no clear path to "modify" using the CLI surface it has, which led me (the Agent dogfooding right now) to propose adding a new `karma rule replace` command. User pushed back: don't grow surface area; teach the existing commands clearly.
+
+### What changed
+
+Pure skill documentation — **zero new CLI commands, zero new code**. Closes the modify gap entirely through clearer instructions.
+
+- **New "How to modify an existing rule (replace / merge / extend scope)" section** under Step 2, with:
+  - The 3-step recipe (draft yaml → preview → `remove && add` swap)
+  - A 4-row "common modify shapes" table (Replace / Extend scope / Merge / Genuine purpose change) clarifying when to keep the `id` (almost always — keeps violation history linked) vs. when to use a new one
+  - Explicit "why not `karma rule edit`" callout — it's a user escape hatch, not an Agent path
+- **Step 6 expanded** with two branches (new rule vs. modify) showing exact commands
+- **Honest atomicity caveat** — clarifies that `remove && add` is *not* a true transaction (if `add` fails after `remove` succeeded, the rule is gone); preview-first reduces but doesn't eliminate the risk; `cp rules.yaml rules.yaml.bak` is the cheap belt-and-suspenders. Original draft incorrectly claimed `&&` "ensured" atomicity — caught and corrected in this same commit (sticky #4: be honest about caveats).
+
+### Why no new CLI command
+
+User principle (from this session): "don't give users a pile of rarely-used skills/commands." Modifying = removing + adding; the existing commands compose. Adding `karma rule replace` would have been surface-area bloat with no real capability gain — the Agent reading the skill just needed the recipe documented.
+
+### Verification
+
+- skill: 269 → 302 lines (+33), 7 `### Step N` headings intact, 10 "modify" / "remove + add" / "How to modify" references in the doc
+- `pytest`: 410/410 passing (unchanged — pure docs)
+- `ruff`: 0 issues
+
+### Also in this release
+
+- `rule 9 lighthearted-vibe` modified in user's `~/.claude/karma/sticky.yaml` (out-of-tree user data, not in this commit): scope expanded from "during /karma rule conversations" to "整体说话方式", with a stronger dual clause "具体问题分析要认真深刻" replacing the milder "该严肃就严肃." This served as the dogfood that exposed the skill gap fixed here.
+
 ## [0.5.13] — 2026-05-15 (refactor — audit-driven dedup: shared `is_python_c_command` + sticky_id alias cleanup + doctor skill check)
 
 ### What this release closes
