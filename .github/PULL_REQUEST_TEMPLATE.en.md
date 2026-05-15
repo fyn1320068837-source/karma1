@@ -1,0 +1,26 @@
+## What this PR does
+
+Brief description of the change. If it's a new feature, explain whether it's at the rule layer / check layer / hook layer.
+
+## Real driving scenario
+
+karma's validation criterion is "the author / user can describe 3 concrete cases" — what real scenarios does this PR solve?
+
+## Verification evidence
+
+- [ ] All tests pass: `pytest tests/ -q`
+- [ ] Static checks clean: `ruff check karma/ tests/ && mypy karma/ tests/ && vulture karma/ --min-confidence 80`
+- [ ] Manual run verifies hook behavior (if hooks changed)
+- [ ] If adding new rule templates / check functions, add corresponding tests
+
+## Boundary check
+
+- [ ] No LLM dependency introduced
+- [ ] No retrieval / cosine / scoring system introduced
+- [ ] No backward-incompatible breakage of existing rule configs
+- [ ] Under ~200 lines (keep changes small and reviewable; large changes split into multiple PRs)
+
+## Related
+
+- Related issue: #
+- Related version: (see `karma --version`)
