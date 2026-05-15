@@ -165,14 +165,17 @@ def format_for_injection(
     if not rule_list:
         return ""
     recent_violations = recent_violations or {}
+    # v0.5.2 i18n: header text via tr() lookup (en / zh by locale)
+    from karma.i18n import tr
     lines = [
-        "[karma — 你跟用户的长期默契]",
-        "跟你协作的是一位真人用户，他列出了几条长期最看重的方向。",
-        "这不是规则也不是审判 — 是他希望跟你建立的协作默契。",
+        tr("inject.header.title"),
+        tr("inject.header.line1"),
+        tr("inject.header.line2"),
         "",
     ]
+    drift_marker = tr("inject.drift_marker")
     for i, r in enumerate(rule_list, 1):
-        marker = "  〔上一回应这条有偏离，本 turn 看看能否更对齐〕" if r.id in recent_violations else ""
+        marker = drift_marker if r.id in recent_violations else ""
         # preference 多行 → 缩进对齐
         pref_lines = r.preference.strip().split("\n")
         lines.append(f"{i}. {pref_lines[0]}{marker}")

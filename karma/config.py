@@ -28,6 +28,10 @@ from karma.paths import karma_home
 DEFAULT_PATH = karma_home() / "config.yaml"
 
 DEFAULTS: dict[str, Any] = {
+    # v0.5.2 i18n: user-visible text locale ("en" default; "zh" / "auto")
+    # "auto" → use karma.locale_detect.is_chinese_user() to pick zh / en
+    # Explicit "en" / "zh" overrides locale detection
+    "locale": "auto",
     "notify_enabled": True,
     # 按 turn 距离统计 — Agent 注意力漂移按 turn 累积（不是人类时钟）
     "recent_violation_turns": 5,    # ⚠️ 标记窗口（最近 N turn 内违反过的 sticky 标）

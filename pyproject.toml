@@ -55,6 +55,8 @@ artifacts = ["data/*.yaml"]
 "data/rules.dev.example.zh.yaml" = "data/rules.dev.example.zh.yaml"
 "data/rules.dev.minimal.example.yaml" = "data/rules.dev.minimal.example.yaml"
 "data/rules.dev.minimal.example.zh.yaml" = "data/rules.dev.minimal.example.zh.yaml"
+"data/locales/en.yaml" = "data/locales/en.yaml"
+"data/locales/zh.yaml" = "data/locales/zh.yaml"
 "data/config.example.yaml" = "data/config.example.yaml"
 
 [tool.pytest.ini_options]
