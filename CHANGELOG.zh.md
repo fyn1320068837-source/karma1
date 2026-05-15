@@ -6,6 +6,44 @@
 
 ## [Unreleased]
 
+## [0.9.2] — 2026-05-15（fix — `test_compact_hooks.py` 硬编码 `/Users/jhz/karma` 路径 → 动态解析；issue #2 来自 @fyn1320068837-source）
+
+### 真实用户 bug 报告（同一外部贡献者的第 2 个 issue）
+
+@fyn1320068837-source 提了 issue #2：`tests/test_compact_hooks.py` 共 **20 处硬编码 `/Users/jhz/karma`**（维护者本机路径），跨全部 9 个测试函数。结果：本机跑通过，但任何其他机器（含 GitHub Actions CI）都 `FileNotFoundError: '/Users/jhz/karma'`。
+
+### CI 已经 broken 3 个 release 我没发现（响亮失败承认）
+
+issue 出来后我才查：GitHub Actions CI **从 v0.8.6 起连续 fail 3 个 release**（v0.8.6 / v0.9.0 / v0.9.1）。我每次都说「pytest 455/455 通过」「460/460 通过」— 那是**本机** test。我 tag/push/release 之前从来没跑 `gh run list` 看 CI。同款 v0.6.1 第一次外部用户 dogfood 闭环的教训：维护者本机自测覆盖不了环境相关 bug。
+
+这违反 rule #4（response 要附证据）。说「pytest 460/460 通过 + ruff 干净」不查 CI 状态，跟「应该可以」不跑测试是同款不诚实。Reporter 抓得准。
+
+### Fix（完全按 reporter 建议）
+
+```python
+# tests/test_compact_hooks.py 头部
+import pathlib, sys
+
+PROJECT_ROOT = str(pathlib.Path(__file__).resolve().parent.parent)
+PYTHON = sys.executable
+```
+
+然后：
+- 所有 `"/Users/jhz/karma/.venv/bin/python"` → `PYTHON`
+- 所有 `cwd="/Users/jhz/karma"` → `cwd=PROJECT_ROOT`
+
+20 处全部替换。本机测试仍通过 (9/9)，现在任意机器 + CI 都能跑。
+
+### 验证
+
+- 460/460 通过
+- `ruff`：0 issue
+- 本 commit 的 CI run **应该是 v0.8.5 后第一次绿**
+
+### 教训
+
+外部用户 dogfood 极其宝贵 — 维护者只在硬编码路径匹配的那一台机器上自测，永远抓不到这类 bug。在自己 checklist 加一条「tag/release 前查 `gh run list` 看 CI」。
+
 ## [0.9.1] — 2026-05-15（docs — v0.9.0 doc sync：PRD F2 / HOOK_CONFIGURATION_GUIDE / session_start docstring）
 
 ### 为什么做这个 patch

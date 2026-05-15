@@ -10,6 +10,44 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.9.2] — 2026-05-15 (fix — `test_compact_hooks.py` hardcoded `/Users/jhz/karma` path → dynamic resolution; issue #2 from @fyn1320068837-source)
+
+### Real-user bug report (2nd from same external contributor)
+
+@fyn1320068837-source filed issue #2: `tests/test_compact_hooks.py` had **20 hardcoded references to `/Users/jhz/karma`** (the maintainer's local path) across all 9 test functions. Result: tests pass locally on the maintainer's machine but fail with `FileNotFoundError: '/Users/jhz/karma'` on any other machine, **including CI**.
+
+### CI was broken for 3 releases (loud-failure admission)
+
+Verified after issue filed: GitHub Actions CI has been **failing since v0.8.6** (3 consecutive releases — v0.8.6 / v0.9.0 / v0.9.1) because of this bug. I shipped releases while saying "455/455 passing" / "460/460 passing" — those were **local** test runs. I never checked `gh run list` before tagging. Same class of failure as v0.6.1's first external user dogfood loop: maintainer self-test misses environment-dependent bugs.
+
+This is a direct violation of rule #4 (loud-failure-with-evidence). 「pytest 460/460 通过 + ruff 干净」without checking CI is the same shape of dishonesty as「应该可以」without running tests. Reporter's catch was sharp.
+
+### Fix (exactly as reporter suggested)
+
+```python
+# tests/test_compact_hooks.py header
+import pathlib, sys
+
+PROJECT_ROOT = str(pathlib.Path(__file__).resolve().parent.parent)
+PYTHON = sys.executable
+```
+
+Then:
+- All `"/Users/jhz/karma/.venv/bin/python"` → `PYTHON`
+- All `cwd="/Users/jhz/karma"` → `cwd=PROJECT_ROOT`
+
+20 occurrences replaced. Tests still pass locally (9/9) and now work on any machine + CI.
+
+### Verification
+
+- 460/460 passing
+- `ruff`: 0 issues
+- This commit's CI run should be **green for the first time since v0.8.5**
+
+### Lesson
+
+External user dogfood is invaluable — maintainer self-test on the only machine matching the hardcoded paths cannot catch this class of bug. Adding "check `gh run list` before tag/release" to my own checklist going forward.
+
 ## [0.9.1] — 2026-05-15 (docs — v0.9.0 doc sync: PRD F2 / HOOK_CONFIGURATION_GUIDE / session_start docstring)
 
 ### Why this patch

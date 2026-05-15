@@ -1,12 +1,21 @@
 """PreCompact / SessionStart / SubagentStart / SubagentStop hook 集成测试。
 
 注：v0.4.30 删了 post_compact hook — PostCompact 协议层不支持
-additionalContext，原 hook 是幽灵代码（输出会被 Claude Code 忽略）。"""
+additionalContext，原 hook 是幽灵代码（输出会被 Claude Code 忽略）。
+
+v0.9.2: 动态路径解析 (修 issue #2) — 不再硬编码 /Users/jhz/karma。
+"""
 
 import json
+import pathlib
 import subprocess
+import sys
 
 import pytest
+
+# v0.9.2 (issue #2 fix): 动态解析项目路径让测试在任意机器 / CI 都能跑
+PROJECT_ROOT = str(pathlib.Path(__file__).resolve().parent.parent)
+PYTHON = sys.executable
 
 
 def test_pre_compact_hook_auto_allows():
@@ -22,11 +31,11 @@ def test_pre_compact_hook_auto_allows():
     }
 
     result = subprocess.run(
-        ["/Users/jhz/karma/.venv/bin/python", "-m", "karma.hooks.pre_compact"],
+        [PYTHON, "-m", "karma.hooks.pre_compact"],
         capture_output=True,
         text=True,
         input=json.dumps(payload),
-        cwd="/Users/jhz/karma"
+        cwd=PROJECT_ROOT
     )
 
     if result.returncode == 0:
@@ -50,17 +59,17 @@ def test_user_prompt_submit_updates_model_each_turn(tmp_path, monkeypatch):
     # 第一 turn 主 model 是 sonnet
     payload1 = {"session_id": "test-ups-model", "prompt": "first", "model": "claude-sonnet-4-6"}
     result1 = subprocess.run(
-        ["/Users/jhz/karma/.venv/bin/python", "-m", "karma.hooks.user_prompt_submit"],
+        [PYTHON, "-m", "karma.hooks.user_prompt_submit"],
         capture_output=True, text=True, input=json.dumps(payload1),
-        cwd="/Users/jhz/karma",
+        cwd=PROJECT_ROOT,
     )
     assert result1.returncode == 0
     # 第二 turn 用户 /model opus 切换 — payload 含新 model
     payload2 = {"session_id": "test-ups-model", "prompt": "second", "model": "claude-opus-4-7"}
     result2 = subprocess.run(
-        ["/Users/jhz/karma/.venv/bin/python", "-m", "karma.hooks.user_prompt_submit"],
+        [PYTHON, "-m", "karma.hooks.user_prompt_submit"],
         capture_output=True, text=True, input=json.dumps(payload2),
-        cwd="/Users/jhz/karma",
+        cwd=PROJECT_ROOT,
     )
     assert result2.returncode == 0
     # 容错路径已 exec — 协议有 model 字段时 state 真更新（效果由 dogfooding
@@ -79,11 +88,11 @@ def test_session_start_writes_model_to_state(tmp_path, monkeypatch):
         "model": "claude-opus-4-7",
     }
     result = subprocess.run(
-        ["/Users/jhz/karma/.venv/bin/python", "-m", "karma.hooks.session_start"],
+        [PYTHON, "-m", "karma.hooks.session_start"],
         capture_output=True,
         text=True,
         input=json.dumps(payload),
-        cwd="/Users/jhz/karma",
+        cwd=PROJECT_ROOT,
         env={**__import__("os").environ, "KARMA_HOME": str(tmp_path.parent)},
     )
     assert result.returncode == 0
@@ -105,11 +114,11 @@ def test_session_start_hook_resume():
     }
     
     result = subprocess.run(
-        ["/Users/jhz/karma/.venv/bin/python", "-m", "karma.hooks.session_start"],
+        [PYTHON, "-m", "karma.hooks.session_start"],
         capture_output=True,
         text=True,
         input=json.dumps(payload),
-        cwd="/Users/jhz/karma"
+        cwd=PROJECT_ROOT
     )
     
     if result.returncode == 0:
@@ -126,11 +135,11 @@ def test_pre_compact_hook_manual_allows():
     }
 
     result = subprocess.run(
-        ["/Users/jhz/karma/.venv/bin/python", "-m", "karma.hooks.pre_compact"],
+        [PYTHON, "-m", "karma.hooks.pre_compact"],
         capture_output=True,
         text=True,
         input=json.dumps(payload),
-        cwd="/Users/jhz/karma"
+        cwd=PROJECT_ROOT
     )
 
     assert result.returncode == 0
@@ -150,11 +159,11 @@ def test_hooks_graceful_fallback_on_sticky_error():
         }
         
         result = subprocess.run(
-            ["/Users/jhz/karma/.venv/bin/python", "-m", f"karma.hooks.{hook_name}"],
+            [PYTHON, "-m", f"karma.hooks.{hook_name}"],
             capture_output=True,
             text=True,
             input=json.dumps(payload),
-            cwd="/Users/jhz/karma"
+            cwd=PROJECT_ROOT
         )
         
         # 应该不卡，返回 0 或 1（graceful fail）
@@ -174,11 +183,11 @@ def test_subagent_start_hook():
     }
 
     result = subprocess.run(
-        ["/Users/jhz/karma/.venv/bin/python", "-m", "karma.hooks.subagent_start"],
+        [PYTHON, "-m", "karma.hooks.subagent_start"],
         capture_output=True,
         text=True,
         input=json.dumps(payload),
-        cwd="/Users/jhz/karma"
+        cwd=PROJECT_ROOT
     )
 
     if result.returncode == 0:
@@ -198,11 +207,11 @@ def test_subagent_hooks_output_real_chinese_not_unicode_escape():
     })
     for hook_name in ("subagent_start", "subagent_stop"):
         result = subprocess.run(
-            ["/Users/jhz/karma/.venv/bin/python", "-m", f"karma.hooks.{hook_name}"],
+            [PYTHON, "-m", f"karma.hooks.{hook_name}"],
             capture_output=True,
             text=True,
             input=payload,
-            cwd="/Users/jhz/karma"
+            cwd=PROJECT_ROOT
         )
         assert result.returncode == 0, f"{hook_name} 退出非零: {result.stderr}"
         # 关键守护：raw stdout 不该含 `\u4e` 类 unicode 转义字面（ensure_ascii=True
@@ -226,11 +235,11 @@ def test_subagent_stop_hook_emits_reminder():
     }
 
     result = subprocess.run(
-        ["/Users/jhz/karma/.venv/bin/python", "-m", "karma.hooks.subagent_stop"],
+        [PYTHON, "-m", "karma.hooks.subagent_stop"],
         capture_output=True,
         text=True,
         input=json.dumps(payload),
-        cwd="/Users/jhz/karma"
+        cwd=PROJECT_ROOT
     )
 
     assert result.returncode == 0
