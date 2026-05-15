@@ -6,6 +6,29 @@
 
 ## [Unreleased]
 
+## [0.5.6] — 2026-05-15（fix — keep_pushing `_PUSH_SIGNAL_RE` 补「下一推进点 / 下一步是」类未来规划短语豁免）
+
+### fix — keep_pushing 错拦「下一推进点 / 下一步是 / 接下来打算」类合法收尾
+
+v0.5.4 dogfooding session 真触发 7 次：每个 response 都用「下一推进点：X」/「下一步：Y」明确规划语收尾，但 `keep_pushing.check()` 仍命中默认「纯陈述完结无下一步」trigger。根因：`_PUSH_SIGNAL_RE`（v0.4.19 加的「未来推进规划」分支）漏了最常见形式 — `下一(推进点 / 步 / 个 / 波 / milestone)` + 动词。
+
+跟 v0.4.19 同根因（`_PUSH_SIGNAL_RE` 漏未来规划表达），不同短语族。本版扩 4 个分支：
+
+- `下一(?:推进点|步|个|个推进点|波|个 milestone|个里程碑)` — 「下一推进点 / 下一步」纯前缀
+- `下一步\s*(?:是|做|打算|准备|考虑|推进|继续|去|要|想|可以|应该)` — 「下一步是/打算」+ 意图
+- `接下来\s*(?:打算|准备|计划|考虑|可以|可选|的方向|的推进点)` — 「接下来打算/方向」类
+- `后续\s*(?:推进|步骤|计划|打算|准备|是)` — 「后续推进/步骤」类
+
+假亲戚「下一次再说吧」（推卸不是规划）正确不被覆盖 — 新 pattern 要求 `下一` + 规划名词，不匹配 `下一次` + 填充词。
+
+### 验证
+
+- `tests/test_keep_pushing.py` 加 2 个回归测试：
+  - `test_v056_next_push_point_phrasing_exempted` — 6 种推进短语全豁免
+  - `test_v056_partial_stop_still_blocked` — `"下一次再说吧"` 推卸语仍拦
+- `pytest`：396/396 通过（之前 394 + 新 2）
+- `ruff`：0 issues
+
 ## [0.5.5] — 2026-05-15（fix — testset check 补 python -c 豁免，跟 non_blocking / bypass_karma 对齐）
 
 ### fix — testset.py 漏 python -c 字符串字面豁免（dogfooding 真触发）

@@ -285,3 +285,32 @@ def test_v0441_user_normal_prompt_no_exempt():
     for p in normal_prompts:
         result = fn(response=bare_stop, user_prompt=p)
         assert result is not None, f"正常 prompt {p!r} 不该豁免: 应仍命中"
+
+
+def test_v056_next_push_point_phrasing_exempted():
+    """v0.5.6: 「下一推进点 / 下一步是 / 接下来打算 / 下一波」类未来规划短语豁免.
+
+    dogfooding 真触发: 今晚 7 次错拦本是合法推进规划. _PUSH_SIGNAL_RE 漏覆盖
+    这类未来规划表达 (跟 v0.4.19 根因相同). 同 sticky #7 合法推进意图.
+    """
+    fn = REGISTRY["keep_pushing_no_stop"]
+    push_phrases = [
+        "测试通过。下一推进点：dogfooding skill 工作流.",
+        "测试通过。下一步是 testset.py 加 python -c 豁免.",
+        "做完了。接下来打算 fix keep_pushing 漏覆盖根因.",
+        "完成。下一波推进：trigger key i18n 收尾.",
+        "做完了。后续推进 v0.5.6 release.",
+        "测试通过。下一个推进点：检查 audit 数据.",
+    ]
+    for phrase in push_phrases:
+        result = fn(response=phrase)
+        assert result is None, f"未来推进规划短语 {phrase!r} 应豁免, 实际拦: {result}"
+
+
+def test_v056_partial_stop_still_blocked():
+    """v0.5.6 对偶: 真停下不能因为加入「下一」字眼就豁免."""
+    fn = REGISTRY["keep_pushing_no_stop"]
+    # 「下一次再说吧」是推卸不是推进 — 不该豁免
+    fake_push = "做完了。下一次再说吧。"
+    result = fn(response=fake_push)
+    assert result is not None, "推卸语气不该被错算推进规划豁免"

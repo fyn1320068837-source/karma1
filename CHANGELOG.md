@@ -10,6 +10,29 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.5.6] — 2026-05-15 (fix — keep_pushing `_PUSH_SIGNAL_RE` covers "next push point / next step is" planning phrases)
+
+### fix — keep_pushing false-positive on "下一推进点 / 下一步是" tail phrases
+
+This v0.5.4 dogfooding session hit it 7 times in a row: every response ended with a clear "next push point: X" / "next step: Y" planning phrase, but `keep_pushing.check()` still fired the "no push signal, no decision question — real stop" default trigger. Root cause: `_PUSH_SIGNAL_RE` (introduced in v0.4.19 to cover "future-planning push signals") missed the most common form — `下一(推进点 / 步 / 个 / 波 / milestone)` + verb.
+
+This is the same root cause as v0.4.19 ("`_PUSH_SIGNAL_RE` missed future-planning expressions"), but on a different phrase family. Fix: extend `_PUSH_SIGNAL_RE` with 4 new branches:
+
+- `下一(?:推进点|步|个|个推进点|波|个 milestone|个里程碑)` — bare "next push point / next step" phrase
+- `下一步\s*(?:是|做|打算|准备|考虑|推进|继续|去|要|想|可以|应该)` — "next step is/plans to" + intent
+- `接下来\s*(?:打算|准备|计划|考虑|可以|可选|的方向|的推进点)` — "next planning to / direction" forms
+- `后续\s*(?:推进|步骤|计划|打算|准备|是)` — "follow-up steps / plans" forms
+
+False-cousin "下一次再说吧" (deferral, not planning) is correctly *not* covered because the new patterns require `下一` + planning noun, not `下一次` + filler.
+
+### Verification
+
+- 2 new regression tests in `tests/test_keep_pushing.py`:
+  - `test_v056_next_push_point_phrasing_exempted` — 6 push phrase variants all exempt
+  - `test_v056_partial_stop_still_blocked` — `"下一次再说吧"` deferral still blocks
+- `pytest`: 396/396 passing (394 prior + 2 new)
+- `ruff`: 0 issues
+
 ## [0.5.5] — 2026-05-15 (fix — testset check adds `python -c` exemption, parity with non_blocking / bypass_karma)
 
 ### fix — testset.py false-positive on `python -c` string literals
