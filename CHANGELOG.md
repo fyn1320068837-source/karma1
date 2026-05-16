@@ -10,6 +10,71 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.10.2] — 2026-05-16 (minor — codex closes the gap to Claude Code parity: SessionStart + exec_command→Bash + auto-trust onboarding)
+
+**Second codex-owned PR merged**: [#4](https://github.com/jhaizhou-ops/karma/pull/4) by Codex CLI itself. Codex backend gains 3 capabilities (SessionStart event, exec_command→Bash normalization, auto-trust hooks) closing the major v0.10.1 gaps. Concrete coverage table at the bottom of this section — only PreCompact + SubagentStart/Stop remain not covered, and these aren't blockers because codex doesn't have compact / sub-agent dispatch concepts.
+
+### Codex SessionStart event integration (Task A)
+
+Codex 0.130 supports SessionStart event but karma's codex backend v0.10.1 had it missing from `_HOOK_EVENTS` — meaning codex agents got no sticky baseline injection at session start (had to wait for UserPromptSubmit per-turn anchors to accumulate). v0.10.2 closes this:
+
+- Real captured codex SessionStart payload (PR #4 evidence):
+  ```json
+  {"session_id":"019e2fcc-...","transcript_path":"...","cwd":"/Users/jhz/karma","hook_event_name":"SessionStart","model":"gpt-5.5","permission_mode":"default","source":"startup"}
+  ```
+- Fields fully compatible with Claude's SessionStart shape — karma generic `session_start.py` works out-of-the-box, no normalization needed
+- Subtle finding: Codex doesn't fire SessionStart at TUI startup, fires before first user prompt — still functionally correct
+- `karma/backends/codex.py:_HOOK_EVENTS` now lists 5 events (up from 4): `SessionStart / UserPromptSubmit / PreToolUse / PostToolUse / Stop`. Codex 0.130 supports 6; karma uses 5 (PermissionRequest still skipped, no karma use case).
+
+### exec_command → Bash normalization (Task B)
+
+Codex CLI runs all shell via `exec_command` tool name. v0.10.1 only mapped `apply_patch → Edit`, leaving codex shell calls invisible to karma's Bash-aware checks (`bypass_karma` / `record_bash` / `is_long_task`). v0.10.2:
+
+- `_CODEX_TOOL_MAP` adds `"exec_command": "Bash"`
+- `normalize_tool_input` for `exec_command` now copies `cmd` (Codex Desktop / rollout shape) into canonical `command` field so generic `post_tool_use.py` `state.record_bash(cmd, ...)` works
+- Integration test in `test_codex_backend.py` locks: codex `exec_command` running `pytest tests/` recognized by `is_test_cmd` → `state.last_test_pass_ts` truly advances
+
+### Bonus — Codex `/hooks` auto-trust (Task C)
+
+**The single biggest onboarding UX improvement in karma's history**. v0.10.0 documented Codex 0.130+ requirement that each hook be manually approved in TUI `/hooks` command. Codex CLI's PR #4 went one level deeper: implemented `CodexBackend.trust_karma_hooks()` that mirrors Codex's own `trusted_hash` derivation algorithm and writes `[hooks.state]` entries to `~/.codex/config.toml` automatically during `karma install-hooks --backend codex`. Result: **manual `/hooks` approval step eliminated**.
+
+**Safety**: The trust writer only ever generates entries for karma's own wrappers (verified via `is_karma_entry` — same predicate karma uses for uninstall idempotency). Non-karma hooks (vibe-island bridge, user's custom hooks) are never touched. If Codex changes its hash algorithm in a future version, karma's hashes will fall back to "modified" in `/hooks` instead of silent-trust drift.
+
+`post_install_message()` text rewritten: was "⚠️ CRITICAL — manual /hooks approval required", now "Codex hook 状态 — karma 已写 trusted_hash, 复核可选". README codex alert box flipped from "must manually approve" to "auto-trust, takes effect immediately".
+
+### Codex backend capability table after v0.10.2
+
+| Capability | Claude Code | Codex (v0.10.2) | Status |
+|---|---|---|---|
+| SessionStart sticky baseline injection | ✅ | ✅ | **parity** |
+| Pre/Post tool hooks | ✅ | ✅ | parity |
+| Stop hook | ✅ | ✅ | parity |
+| UserPromptSubmit per-turn | ✅ | ✅ | parity |
+| Bash tool detection | ✅ | ✅ (via exec_command map) | **parity** |
+| apply_patch / Edit detection | ✅ | ✅ (envelope parser) | parity |
+| shell-as-Read detection | N/A (has Read tool) | ✅ (v0.10.1) | codex-specific advantage |
+| Auto-trust hooks | N/A | ✅ (v0.10.2 trusted_hash writer) | codex-specific |
+| PreCompact / SubagentStart/Stop | ✅ | ❌ (no codex equivalent) | not blocked — codex has no compact / sub-agent dispatch concept |
+| PermissionRequest | N/A | not used | karma has no use case |
+
+### karma maintainer-side counterpart (this commit)
+
+Per ownership boundary (codex can't touch README / CHANGELOG / HANDOFF / ARCHITECTURE):
+
+- README.md + README.zh.md codex install table + alert box rewritten from "manual approval required" to "auto-trust takes effect immediately"
+- CHANGELOG + HANDOFF + ARCHITECTURE bilingual v0.10.2 entries
+- Generic `karma/hooks/session_start.py` confirmed handles codex SessionStart payload without changes (compatible field names)
+
+### Verification
+
+- **575/575 passing** under both `LANG=zh_CN.UTF-8` and `LANG=en_US.UTF-8` (was 568 — +7 from PR #4 codex private tests)
+- All 6 local gates pass (pytest zh + en / ruff / mypy / vulture --min-confidence 60 / wheel build+verify+smoke)
+- CI green all 4 jobs (Ubuntu/macOS × Python 3.11/3.12)
+
+### Meta-pattern — second consecutive successful codex PR
+
+v0.10.0 ownership split is now proven over 2 consecutive PRs. Codex CLI's contribution velocity is fast (real-world session captures as evidence, comprehensive test coverage, even bonus features like auto-trust beyond the explicit ask). karma maintainer's role is now stable: review for boundary discipline + maintain GitHub-facing docs + sync general-layer code where backend changes need it. **Cross-platform AI Agent backend collaboration model validated**.
+
 ## [0.10.1] — 2026-05-16 (patch — codex shell-as-Read full integration + cross-backend contract tests)
 
 **First codex-owned PR merged**: [#3](https://github.com/jhaizhou-ops/karma/pull/3) by Codex CLI itself (`feat(codex-backend): detect shell reads from exec_command`). v0.10.0's ownership split worked as intended — codex submitted PR only touching its owned files (`karma/backends/codex.py` + `tests/test_codex_backend.py`), karma maintainer reviewed + handled the karma-side counterpart (the generic `post_tool_use.py` layer consumes the canonical `read_file_paths` field). End-to-end shell-as-Read recognition now works: codex agent runs `tail -n 20 file.py` → karma records it as Read → subsequent `apply_patch` on same file no longer false-positive denied by `read_first`. **Closes the last v0.9.16-era codex usability gap**.

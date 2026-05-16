@@ -6,6 +6,71 @@
 
 ## [Unreleased]
 
+## [0.10.2] — 2026-05-16（minor — codex 关掉对 Claude Code 平价的主要缺口: SessionStart + exec_command→Bash + 自动信任 onboarding）
+
+**第二个 codex 自提 PR 合并**: [#4](https://github.com/jhaizhou-ops/karma/pull/4) Codex CLI 自己提的. Codex backend 拿下 3 项能力 (SessionStart event / exec_command→Bash 归一化 / 自动信任 hook), 关掉 v0.10.1 主要差距. 完整覆盖表见本段末尾 — 只剩 PreCompact + SubagentStart/Stop 没覆盖, 但这俩不是阻塞(codex 没 compact / sub-agent dispatch 概念).
+
+### Codex SessionStart event 接入 (任务 A)
+
+Codex 0.130 支持 SessionStart event, 但 karma v0.10.1 codex backend `_HOOK_EVENTS` 里缺这条 — 让 codex agent 在新会话起手没 sticky baseline 注入 (只能靠后续 UserPromptSubmit per-turn 累积). v0.10.2 关掉:
+
+- 真捕获的 codex SessionStart payload (PR #4 证据):
+  ```json
+  {"session_id":"019e2fcc-...","transcript_path":"...","cwd":"/Users/jhz/karma","hook_event_name":"SessionStart","model":"gpt-5.5","permission_mode":"default","source":"startup"}
+  ```
+- 字段跟 Claude SessionStart 完全兼容 — karma 通用 `session_start.py` 开箱即用, 不需归一化
+- 小发现: Codex 不是 TUI 启动立刻 fire SessionStart, 是第一轮 prompt 之前 fire — 仍功能正确
+- `_HOOK_EVENTS` 现在 5 个 event (原 4 个): `SessionStart / UserPromptSubmit / PreToolUse / PostToolUse / Stop`. Codex 0.130 支持 6 个; karma 用 5 个 (PermissionRequest 跳过, 没 karma 用例).
+
+### exec_command → Bash 归一化 (任务 B)
+
+Codex CLI 跑 shell 全走 `exec_command` tool 名. v0.10.1 只映射 `apply_patch → Edit`, 让 codex shell 调用对 karma Bash check (`bypass_karma` / `record_bash` / `is_long_task`) 不可见. v0.10.2:
+
+- `_CODEX_TOOL_MAP` 加 `"exec_command": "Bash"`
+- `normalize_tool_input` 在 `exec_command` 时把 `cmd` 字段 (Codex Desktop / rollout shape) 拷贝到 canonical `command` 让通用 `post_tool_use.py` `state.record_bash(cmd, ...)` 工作
+- `test_codex_backend.py` 集成测试锁: codex `exec_command` 跑 `pytest tests/` 被 `is_test_cmd` 识别 → `state.last_test_pass_ts` 真推进
+
+### Bonus — Codex `/hooks` 自动信任 (任务 C)
+
+**karma 历史上最大单次 onboarding 体验提升**. v0.10.0 文档说 Codex 0.130+ 要求每个 hook 必须在 TUI `/hooks` 命令手动审批. Codex CLI 的 PR #4 深入一层: 实现 `CodexBackend.trust_karma_hooks()` 复刻 Codex 自家 `trusted_hash` 推导算法, 装机时自动往 `~/.codex/config.toml` 写 `[hooks.state]` entry. 结果: **手动 `/hooks` 审批步骤消除了**.
+
+**安全**: trust writer 只为 karma 自家 wrapper 生成 entry (`is_karma_entry` 验证 — 跟 uninstall 幂等用同 predicate). 非 karma hook (vibe-island bridge / 用户自定义 hook) 永远不碰. Codex 后续升级 hash 算法时, karma hash 会回落到 `/hooks` 显示 "modified" 而不是静默信任漂移.
+
+`post_install_message()` 文案重写: 原 "⚠️ 关键 — 必须手动 /hooks 审批", 现 "Codex hook 状态 — karma 已写 trusted_hash, 复核可选". README codex alert box 从 "必须手动审批" 翻成 "自动信任, 立即生效".
+
+### v0.10.2 后 Codex backend 能力对比表
+
+| 能力 | Claude Code | Codex (v0.10.2) | 状态 |
+|---|---|---|---|
+| SessionStart sticky baseline 注入 | ✅ | ✅ | **平价** |
+| Pre/Post tool hook | ✅ | ✅ | 平价 |
+| Stop hook | ✅ | ✅ | 平价 |
+| UserPromptSubmit per-turn | ✅ | ✅ | 平价 |
+| Bash tool 识别 | ✅ | ✅ (exec_command 映射) | **平价** |
+| apply_patch / Edit 识别 | ✅ | ✅ (envelope parser) | 平价 |
+| shell-as-Read 识别 | N/A (有 Read tool) | ✅ (v0.10.1) | codex 专属优势 |
+| 自动信任 hook | N/A | ✅ (v0.10.2 trusted_hash writer) | codex 专属 |
+| PreCompact / SubagentStart/Stop | ✅ | ❌ (codex 无等价) | 不阻塞 — codex 无 compact / sub-agent dispatch 概念 |
+| PermissionRequest | N/A | 不用 | karma 无用例 |
+
+### karma 维护者端配套 (本 commit)
+
+按所有权边界 (codex 不能动 README / CHANGELOG / HANDOFF / ARCHITECTURE):
+
+- README.md + README.zh.md codex 装机表 + alert box 从 "需手动审批" 重写成 "自动信任, 立即生效"
+- CHANGELOG + HANDOFF + ARCHITECTURE 双语 v0.10.2 段
+- 确认通用 `karma/hooks/session_start.py` 处理 codex SessionStart payload 不需改 (字段名兼容)
+
+### 验证
+
+- **575/575 通过** 双 `LANG=zh_CN.UTF-8` 和 `LANG=en_US.UTF-8` (原 568, PR #4 加了 7 个 codex 私有测试)
+- 全 6 道本地 gate 通过 (pytest zh + en / ruff / mypy / vulture --min-confidence 60 / wheel build+verify+smoke)
+- CI 4 个 job 全绿 (Ubuntu/macOS × Python 3.11/3.12)
+
+### 元 pattern — codex 第二个连续成功 PR
+
+v0.10.0 所有权分工现在跨 2 个连续 PR 验证. Codex CLI 贡献速度快 (真世界 session 捕获作证据, 全面测试覆盖, 甚至 bonus 像 auto-trust 超出明确 ask). karma 维护者角色稳: review 边界纪律 + 维护 GitHub 对外文档 + 通用层 backend 改动配套. **跨平台 AI Agent backend 协作模型验证**.
+
 ## [0.10.1] — 2026-05-16（patch — codex shell-as-Read 全链路打通 + 跨 backend 契约测试）
 
 **首个 codex-owned PR 合并**: [#3](https://github.com/jhaizhou-ops/karma/pull/3) Codex CLI 自己提的 (`feat(codex-backend): detect shell reads from exec_command`). v0.10.0 所有权分工真起作用了 — codex 提的 PR 只动它能改的文件 (`karma/backends/codex.py` + `tests/test_codex_backend.py`), karma 维护者 review + 做 karma 端配套 (通用 `post_tool_use.py` 层消费 canonical `read_file_paths` 字段). 端到端 shell-as-Read 识别真工作: codex agent 跑 `tail -n 20 file.py` → karma 记成 Read → 后续 `apply_patch` 同文件不再被 `read_first` 假阳拦. **关掉 v0.9.16 期 codex 用户体验最后一个缺口**.

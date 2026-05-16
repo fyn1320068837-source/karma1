@@ -79,12 +79,10 @@ Steps:
 | Client | Install command | Note |
 |---|---|---|
 | Claude Code | `karma install-hooks` (default) | Takes effect immediately |
-| Codex CLI | `karma install-hooks --backend codex` | ⚠️ **Codex extra step — see alert below** |
+| Codex CLI | `karma install-hooks --backend codex` | Takes effect immediately (v0.10.2 auto-trust) |
 | Gemini CLI | `karma install-hooks --backend gemini-cli` | Takes effect immediately |
 
-> ⚠️ **Codex critical step — `/hooks` TUI approval required (v0.10.0)**
->
-> codex 0.130+ does NOT auto-enable hooks. After `karma install-hooks --backend codex` writes `~/.codex/hooks.json`, you **must** run `codex` and inside the TUI input `/hooks` then approve all 4 karma wrappers individually. **Without approval, karma is silently inert on codex — all rules will be bypassed without warning.** karma's `install-hooks` and `karma doctor` print loud reminders since v0.10.0; if you missed them, see [docs/CODEX_BACKEND.md](docs/CODEX_BACKEND.md). codex's `/hooks` approval is its security model — third parties including karma can't bypass it.
+> 💡 **Codex auto-trust (v0.10.2)** — `karma install-hooks --backend codex` automatically writes Codex 0.130+ `trusted_hash` entries in `~/.codex/config.toml` for the 5 karma-owned wrappers. **No manual `/hooks` TUI approval required**. karma's hash derivation only trusts its own wrappers (`karma_*.py` paths verified by `is_karma_entry`), never third-party hooks. If Codex changes the hash algorithm in a future version, your hooks will fall back to "modified" in `/hooks` rather than silent-trusting — verify and re-approve at that point. See [docs/CODEX_BACKEND.md](docs/CODEX_BACKEND.md) for details. Contributed by Codex CLI itself in PR [#4](https://github.com/jhaizhou-ops/karma/pull/4).
 
 ### Uninstall
 

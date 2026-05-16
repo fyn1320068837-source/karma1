@@ -449,6 +449,8 @@ violations / session_state / config / cli）都从它读 env。
 
 | **v0.10.1 首个 codex 自提 PR 合并 (shell-as-Read) + karma 端通用层接入 + 跨 backend 契约测试**. v0.10.0 所有权分工几小时内就验证: Codex CLI 开 PR #3 实现 `CodexBackend.normalize_tool_input()` shell 读取识别只动 codex 拥有的文件, 边界纪律完美. karma 维护者做明确点出的配套: `karma/hooks/post_tool_use.py` 消费 canonical `tool_input["read_file_paths"]` 列表 — backend-neutral (任何后续 backend 输出该字段都生效). 新集成测试锁全链路. 端到端: codex agent shell 读取真注册为 karma Read → 同文件后续 `apply_patch` 不再被假阳拦. 另加 `tests/contract/test_backend_contract.py` 14 抽象契约 × N backend = 42 自动验证. CI vulture --min-confidence 60 误判 `shlex.shlex.whitespace_split` 加 `whitelist.py` 解决. 568/568 双 locale. **元 pattern 印证**: 所有权分工是正确答案 — Codex CLI 自己捕获真 session rollout 作证据 (比 Claude 任何 audit 信号都准), karma 维护者工作小且聚焦因边界事先清晰. | ✅ |
 
+| **v0.10.2 第二个 codex 自提 PR (#4) 关掉对 Claude code 覆盖主要缺口**. Codex backend 现在覆盖 codex 0.130 的 6 个 event 中的 5 个 (SessionStart / UserPromptSubmit / Pre&PostToolUse / Stop). 三项: SessionStart event 注册 + 真捕获 payload 跟 Claude shape 完全兼容 (codex 在第一轮 prompt 前 fire 不是 TUI 启动 — 功能正确性保留); `exec_command → Bash` 映射 + `cmd → command` 字段拷贝让 `record_bash` / `is_test_cmd` / `last_test_pass_ts` 在 codex 下工作; **`trust_karma_hooks()` 装机时自动给 karma 自家 wrapper 写 `trusted_hash` 到 `~/.codex/config.toml`**, 消除手动 `/hooks` 审批 (karma v0.10.0 期最大 onboarding 痛点). 安全限定: 只 karma `is_karma_entry` 验证的 wrapper, hash 算法变了回落到 `/hooks` "modified" 不是静默漂移. karma 维护者配套: README alert box 翻成 "自动信任" + 双语文档 v0.10.2 段. 575/575 双 locale. **所有权分工连续 2 个 PR 验证** — codex 真证据 (真 session rollout) + 准时 + bonus 超预期. | ✅ |
+
 详见 [CHANGELOG.md](../CHANGELOG.md) 每版本的设计动机；[HANDOFF.md](./HANDOFF.md) 内部接力 context。
 
 ## 持续观察 = 持续开发

@@ -320,12 +320,10 @@ cd ~/karma && python -m venv .venv && .venv/bin/python -m pip install -e .
 | 客户端 | 装机命令 | 备注 |
 |---|---|---|
 | Claude Code | `karma install-hooks`（默认） | 立即生效 |
-| Codex CLI | `karma install-hooks --backend codex` | ⚠️ **Codex 关键最后一步 — 看下方警示框** |
+| Codex CLI | `karma install-hooks --backend codex` | 立即生效 (v0.10.2 自动信任) |
 | Gemini CLI | `karma install-hooks --backend gemini-cli` | 立即生效 |
 
-> ⚠️ **Codex 关键一步 — `/hooks` TUI 审批必做（v0.10.0）**
->
-> codex 0.130+ 不自动启用 hook. `karma install-hooks --backend codex` 写完 `~/.codex/hooks.json` 后**必须**启动 `codex` 在 TUI 内输 `/hooks` 然后逐个 approve karma 4 个 wrapper. **没审批 = karma 在 codex 下完全静默，所有规则失效无任何警告**. karma `install-hooks` 跟 `karma doctor` v0.10.0 起会响亮警示这条; 错过看 [docs/CODEX_BACKEND.zh.md](docs/CODEX_BACKEND.zh.md). codex `/hooks` 审批是它自身安全模型 — 第三方包括 karma 不能绕.
+> 💡 **Codex 自动信任 (v0.10.2)** — `karma install-hooks --backend codex` 装机时自动把 Codex 0.130+ 期望的 `trusted_hash` 5 条 entry 写入 `~/.codex/config.toml`. **不再需要手动 `/hooks` TUI 审批**. karma 的 hash 推导只信任自家 wrapper（`karma_*.py` 路径走 `is_karma_entry` 验证），永远不碰第三方 hook. 如果 Codex 后续升级 hash 算法，你的 hook 会在 `/hooks` 显示 "modified" 而不是被静默信任 — 那时再手动复核 approve. 详情看 [docs/CODEX_BACKEND.zh.md](docs/CODEX_BACKEND.zh.md). 这条由 Codex CLI 自己在 PR [#4](https://github.com/jhaizhou-ops/karma/pull/4) 贡献.
 
 ### 卸载
 
