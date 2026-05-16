@@ -279,9 +279,39 @@ def test_v0441_user_stop_hint_exempts_keep_pushing():
         "看着不错",
         "这就行",
     ]
-    for hint in stop_hints_tired + stop_hints_satisfied:
+    # 类 3: 协作等候 / 暂停 (v0.10.3)
+    # 实证: 本 session (2026-05-16) 用户跟 Codex CLI 协作时累积 100+ 次 keep_pushing
+    # 假阳, 因为 "等候即可" / "不着急赶工" 等协作暂停指令没被识别. v0.10.3 加类 3 覆盖.
+    stop_hints_waiting = [
+        "codex 已经开始开发，等候即可",
+        "不着急赶工导致一堆补丁",
+        "先等等，等 codex 那边出 PR",
+        "等会儿再推, 不急",
+        "慢慢来, 不用赶",
+        "就先这样, 等 codex 接手",
+    ]
+    for hint in stop_hints_tired + stop_hints_satisfied + stop_hints_waiting:
         result = fn(response=bare_stop, user_prompt=hint)
         assert result is None, f"用户叫停 {hint!r} 应豁免反思 hook: {result}"
+
+
+def test_v0103_known_fn_combo_pattern_documented():
+    """v0.10.3 known FN: "不动 + 等 X" 组合 pattern 单字眼词表覆盖不到.
+
+    实证: 本 session 用户原话 "不 commit 挡 working tree 不动, 等 codex" 字面
+    属于停止指令但 user_stop_hints 单字眼匹配抓不到 (单字"不动"语义过宽:
+    "文件不动了"也会撞; 单字"等 codex" 语义模糊: "我们等 codex 改完发版"
+    不是停 Agent). 接受这条 known FN, 留 v0.10.x 后续如有真高频用例再考虑加
+    组合 pattern 引擎. 测试 lockdown 这条记录不让未来人误以为遗忘.
+    """
+    fn = REGISTRY["keep_pushing_no_stop"]
+    bare_stop = "好了，这一波我处理好了。"
+    # 这条 FN 是已记录已接受的 — 当前应该仍命中 (没被豁免)
+    result = fn(response=bare_stop, user_prompt="不 commit 挡 working tree 不动, 等 codex")
+    assert result is not None, (
+        "如果 v0.10.x 后续加了组合 pattern 引擎让这条豁免了 → 删除本测试 + 在 "
+        "data/signals/user_stop_hints/ 加文档说明."
+    )
 
 
 def test_v0441_user_normal_prompt_no_exempt():

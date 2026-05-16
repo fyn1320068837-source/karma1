@@ -24,6 +24,32 @@ go to sleep
 take a break
 let it go
 
+# Category 3: collaborative waiting / pause (v0.10.3)
+# Empirical: user collaborating with contributors (e.g., Codex CLI) often says
+# "just wait" / "no rush". Different from cat-1 (not quitting) and cat-2 (job
+# not done), it's "I'm waiting on the flow, don't push me". When Agent has
+# already complied with a wait directive, any "I'll stand by" response this
+# turn is a legitimate pause not a keep_pushing FP.
+just wait
+let's wait
+lets wait
+i'll wait
+ill wait
+standby
+stand by
+on standby
+no rush
+take your time
+not in a hurry
+no hurry
+hold on
+hold off
+sit tight
+wait for it
+wait for now
+let me know when
+ping me when
+
 # Category 2: satisfied / confirmation
 looks good
 look good
