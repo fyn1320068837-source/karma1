@@ -6,6 +6,102 @@
 
 ## [Unreleased]
 
+## [0.9.15] — 2026-05-16（fix — cross-model audit (GPT-5.5) 抓到 3 个 cross-backend 协议 critical bug；karma 整个生命周期都假设 Claude-only 协议没被验证过）
+
+### 为什么发这版
+
+用户：「再来一轮 cross-audit，本机配置了 codex cli，也配置好了 gpt 5.5 模型，你委派 codex cli 做一次多 Agent 交叉评审。」
+
+跑 `codex exec` GPT-5.5 xhigh reasoning audit karma。**cross-model 视角暴露了 Claude 端 audit 每轮都漏的 3 个 critical bug**：
+
+1. **Gemini BeforeTool output shape 不兼容** — karma 一直输出 Claude 风格 `{hookSpecificOutput: {permissionDecision: "deny"}}`，但 [Gemini hooks docs](https://geminicli.com/docs/hooks/reference/) 要求顶层 `{decision: "deny" | "block", reason: ...}`（WebFetch 验证）。**影响**：Gemini 用户 karma 写 violation + stderr 警告但**危险 tool 真执行** — 所有拦截型规则（non_blocking / bypass_karma / read_first）只记录不真拦。
+
+2. **Gemini tool_name 没归一化** — karma checks 用 Claude 风格 `Bash`/`Read`/`Edit`/`Write`/`NotebookEdit` 比较。Gemini 用 `run_shell_command` / `read_file` / `write_file` / `replace`。**影响**：Gemini 下每个 check 早 return `None` → **0 个 check 触发**。
+
+3. **Codex `apply_patch` tool_name 不处理** — [Codex hooks docs](https://developers.openai.com/codex/hooks) 明确说编辑 hook input 真报 `tool_name: "apply_patch"`，不是 `Edit`/`Write`。karma 0 处处理。**影响**：Codex 用户用 `apply_patch`（主要编辑方式）会绕过 `read_first` / `long_term_fundamental` / `testset` / `evidence` checks。`last_edit_ts` 不推进 → 旧「测试通过」状态被错保留 → git commit `evidence.commit` 门被绕过。
+
+本 session 用户拍我一次：「你没有探查就下结论这很不好。结合实际环境支持和官方文档开始排查、修复和测试吧。」之前打算直接 ask 用户拍 fix 方案，没真 verify。规则 6 read-before-write 也适用 doc — pulled `~/.codex/hooks.json` + `~/.gemini/settings.json` 真配置 + WebFetch 两家官方协议文档。这也 catch 了 codex audit 的一处误判（codex 以为 Codex 需要 legacy shape，文档实际说 Codex 同时接受新格式 — karma 现在 Codex output OK；只 `apply_patch` tool_name 漏了）。
+
+### Fix — `karma/backends/protocol_adapter.py`（新模块）
+
+cross-backend 协议差异集中在一处：
+
+```python
+def detect_backend(payload: dict) -> Backend:
+    # Gemini stdin 有 hook_event_name in {BeforeAgent, BeforeTool, AfterTool, AfterAgent}
+    # Claude/Codex 用 PreToolUse/PostToolUse/UserPromptSubmit/Stop
+    event = payload.get("hook_event_name", "")
+    return "gemini" if event in _GEMINI_EVENT_NAMES else "claude"
+
+def normalize_tool_name(raw: str, payload: dict) -> str:
+    backend = detect_backend(payload)
+    if backend == "gemini":
+        return _GEMINI_TOOL_MAP.get(raw, raw)
+    return _CODEX_TOOL_MAP.get(raw, raw)
+
+def emit_deny(reason: str, payload: dict) -> str:
+    if detect_backend(payload) == "gemini":
+        return json.dumps({"decision": "deny", "reason": reason}, ensure_ascii=False)
+    return json.dumps({"hookSpecificOutput": {...permissionDecision: "deny"...}})
+
+def emit_allow(payload: dict) -> str: ...  # Gemini → {}, Claude/Codex → permissionDecision: allow
+```
+
+Mapping 表：
+```
+Gemini → Claude canonical:
+  run_shell_command → Bash
+  read_file / read_many_files → Read
+  write_file → Write
+  replace / edit / edit_file → Edit
+
+Codex → Claude canonical:
+  apply_patch → Edit  # 让 long_term/testset/bypass_karma 扫 tool_input.command 真触发
+```
+
+### Hook 入口迁移
+
+`pre_tool_use.py` 跟 `post_tool_use.py`:
+- `_allow()` / `_deny()` 现在收 `payload` 参数走 `emit_allow/emit_deny`
+- `tool_name = normalize_tool_name(raw, payload)` 在入口 — 所有下游 check 拿到 canonical
+
+`apply_patch` Phase-2 limitation: `apply_patch` 编辑 diff 在 `tool_input.command` 不是单个 `file_path`。`long_term`/`testset`/`bypass_karma` 扫命令文本正确触发。但 `read_first`（需 `file_path` 比 `state.read_files`）跟 `record_edit`（单 path）目前在 `apply_patch` 上 no-op 因为没 `file_path`。多文件 diff parsing 留 **Phase 2**（让 `read_first` 真强制「patch 每个文件先读」+ `record_edit` 推每个 touched file 的 `last_edit_ts`）。adapter 模块 docstring 写清楚了。
+
+### Critical wheel-打包 fix (第二次 codex full-repo review 抓到)
+
+Phase 1 合并进 v0.9.15 后，用户要求再来一次 codex GPT-5.5 review — 这次评审**整个 karma 项目，不只 diff**。GPT-5.5 抓到一个**比 cross-backend bug 还严重的灾难性打包 bug**：
+
+`pyproject.toml` `force-include` 列了单个 yaml 模板 + skills + locales — 但**从来没包含 `data/signals/`**。`karma/signals.py:40` 写死 `_REPO_ROOT / "data" / "signals"` 加载。源码树测试通过（本地 signals 目录存在），但**wheel 安装后整个 `data/signals/` 树丢失**。`compile_alternation()` 返回 never-match 正则 `(?!)` → **所有 pip 安装用户的 keyword-fallback layer 全静默失效**：`evidence` / `keep_pushing` / `non_blocking` checks 失去检测词表。
+
+这影响**每个 pip 安装的 karma 用户，含 Claude Code 主流路径** — 比 cross-backend bug 更严重（cross-backend 只影响 Gemini/Codex 用户）。我自己 6 道本机门禁有 wheel verify 步骤但**只锁了 6 个 expected 文件**；`data/signals/` 子树从来没在 lockdown 列表里（规则 5 教训扩展：lockdown 只覆盖当时想到的，新加 data 子树会漏）。
+
+**Fix**:
+- `pyproject.toml` force-include 加 `"data/signals" = "data/signals"`（整目录非 glob — 保护未来加新 signal type 不被漏）
+- `.github/workflows/ci.yml` wheel verify 扩：文件列表加 7 个 sample signal 文件（每 type 1 个）+ 新增 **smoke test step** 真 build wheel，pip install 进干净 venv，assert `compile_alternation()` 对 `weak_claims`/`completion_words`/`push_signals`/`stop_hints` 返回 non-empty regex。功能验证非只文件存在。
+
+**真数据验证**（fix 后干净 venv）：`weak_claims` 497 chars / `completion_words` 299 chars / `push_signals` 16653 chars / `stop_hints` 760 chars — pip install 后全 functional。
+
+### 测试覆盖
+
+`tests/test_protocol_adapter.py` — 11 个新测试：
+- `detect_backend` Gemini vs Claude 按 event 名
+- `normalize_tool_name` Gemini → canonical（4 mapping）+ Codex `apply_patch → Edit` + Claude 透传
+- `emit_deny` Gemini 顶层 shape vs Claude `hookSpecificOutput`
+- `emit_allow` Gemini `{}` vs Claude `permissionDecision: allow`
+- **集成 lockdown**：`test_pre_tool_use_under_gemini_payload_emits_gemini_shape` — 真跑完整 `pre_tool_use.main()` 用 Gemini-style payload（`hook_event_name: BeforeTool` + `tool_name: run_shell_command` + 含违反 keyword 的命令），assert output 是顶层 `{decision: deny, reason}` 不是 Claude shape。**这是核心 regression lockdown** — 未来 PR 改 `_allow`/`_deny` 不过 adapter 这条测试直接红。
+
+### 验证
+
+- **497/497 双 locale 都过**（v0.9.14 是 487）
+- 6 道本机门禁全过
+- WebFetch 真直接引官方文档验证：Gemini hooks ref + Codex hooks docs
+
+### 元 pattern
+
+**cross-model audit 价值是真的** — 当在地模型有系统性盲区时。Claude 写的 karma；Claude 本 session 已 review karma 12+ 轮；Claude 的盲区是：**假设 Claude 自己用的协议是通用的**。GPT-5.5 跑在 Codex CLI 上 — 不同训练 exposure 到 Gemini hooks 文档 — 拉了官方 ref 并精确指出这个假设。单模型轮次（v0.9.13 / v0.9.14）边际收益递减；cross-model 轮次打开了全新 audit surface。
+
+这个 bug 在 karma 「3-backend 支持」声明的整个历史里都潜伏 — 每次 dogfooding 都是 Claude Code，所以 cross-backend 协议从来没真被测过。README 字面声称「Claude Code / Codex CLI / Gemini CLI」支持，但 Gemini 支持是 non-functional。诚实修正。
+
 ## [0.9.14] — 2026-05-16（fix — 多 Agent 交叉互审抓到 v0.9.13 我自己引入的回归：`pre_tool_use` `update_state` 漏套 try/except）
 
 ### 响亮失败声明

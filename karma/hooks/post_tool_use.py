@@ -25,6 +25,7 @@ import json
 import sys
 
 from karma import session_state
+from karma.backends.protocol_adapter import normalize_tool_name
 from karma.checks.description_context import is_description_context
 
 
@@ -65,7 +66,12 @@ def main() -> int:
     session_id = payload.get("session_id", "") or "default"
     # v0.4.34 子 Agent 独立架构：agent_id 路由到独立 state 文件
     agent_id = payload.get("agent_id") or None
-    tool_name = payload.get("tool_name", "")
+    # v0.9.15 cross-backend: tool_name 归一化到 karma canonical（Claude 风格） —
+    # Gemini run_shell_command → Bash / Codex apply_patch → Edit 等。
+    # record_read / record_edit / record_bash 全部按 canonical 比较，让 Gemini
+    # / Codex 真触发 state 推进（之前 apply_patch 漏推 last_edit_ts 让 evidence
+    # check 旧测试通过状态被错保留 → git commit 绕过 evidence 门）。
+    tool_name = normalize_tool_name(payload.get("tool_name", ""), payload)
     tool_input = payload.get("tool_input", {}) or {}
     tool_response = payload.get("tool_response", "") or ""
 

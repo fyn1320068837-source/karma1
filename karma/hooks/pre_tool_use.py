@@ -21,6 +21,7 @@ import sys
 import time
 
 from karma import session_state
+from karma.backends.protocol_adapter import emit_allow, emit_deny, normalize_tool_name
 from karma.checks import run_checks
 from karma.checks.common import (
     extract_natural_language,
@@ -32,23 +33,16 @@ from karma.rule import RuleConfigError, load
 from karma.violations import Violation, append, detect
 
 
-def _allow() -> None:
-    print(json.dumps({
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": "allow",
-        }
-    }))
+def _allow(payload: dict) -> None:
+    """v0.9.15: 走 protocol_adapter — Gemini 用 `{}`, Claude/Codex 用 hookSpecificOutput."""
+    print(emit_allow(payload))
 
 
-def _deny(reason: str) -> None:
-    print(json.dumps({
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": "deny",
-            "permissionDecisionReason": reason,
-        }
-    }, ensure_ascii=False))
+def _deny(reason: str, payload: dict) -> None:
+    """v0.9.15: 走 protocol_adapter — Gemini `{decision: deny, reason}` 顶层,
+    Claude/Codex `hookSpecificOutput.permissionDecision`. 之前 karma 只输出
+    Claude 风格让 Gemini 拦截全失效（GPT-5.5 cross-model audit 抓到）."""
+    print(emit_deny(reason, payload))
 
 
 def main() -> int:
@@ -56,10 +50,16 @@ def main() -> int:
         payload = json.load(sys.stdin)
     except json.JSONDecodeError as e:
         print(f"karma PreToolUse: 输入 JSON 解析失败 ({e})", file=sys.stderr)
-        _allow()
+        # JSON 解析失败 payload 不可用，用空 dict 让 emit_allow 默认走 claude shape
+        _allow({})
         return 0
 
-    tool_name = payload.get("tool_name", "")
+    # v0.9.15 cross-backend: tool_name 归一化到 karma canonical（Claude 风格） —
+    # Gemini run_shell_command → Bash / Codex apply_patch → Edit 等。所有
+    # checks 用 canonical 比较不需要每条 check 知道 backend。原 raw tool_name
+    # 也保留（rare cases 需要原值时仍可读 payload）。
+    raw_tool_name = payload.get("tool_name", "")
+    tool_name = normalize_tool_name(raw_tool_name, payload)
     tool_input = payload.get("tool_input", {}) or {}
     session_id = payload.get("session_id", "") or "default"
     # v0.4.34 子 Agent 独立架构：agent_id 区分主/子 Agent
@@ -88,11 +88,11 @@ def main() -> int:
         sticky_list = load()
     except RuleConfigError as e:
         print(f"karma: {e}", file=sys.stderr)
-        _allow()
+        _allow(payload)
         return 0
 
     if not sticky_list:
-        _allow()
+        _allow(payload)
         return 0
 
     # v0.9.13 fix race/no-save: catchup 之前用 load + modify 不 save 让 catchup
@@ -154,19 +154,19 @@ def main() -> int:
         )
 
     if not check_hits and not keyword_violations:
-        _allow()
+        _allow(payload)
         return 0
 
     # 优先工程层：含 suggested_fix 比关键词层信息密度高
     if check_hits:
-        _emit_engine_denial(check_hits[0], sticky_list, tool_name, session_id, state, agent_id)
+        _emit_engine_denial(check_hits[0], sticky_list, tool_name, session_id, state, agent_id, payload)
     else:
-        _emit_keyword_denial(keyword_violations[0], sticky_list, tool_name)
+        _emit_keyword_denial(keyword_violations[0], sticky_list, tool_name, payload)
     return 0
 
 
 def _emit_engine_denial(
-    top, sticky_list, tool_name: str, session_id: str, state, agent_id,
+    top, sticky_list, tool_name: str, session_id: str, state, agent_id, payload: dict,
 ) -> None:
     """工程层 (CheckHit) 命中 → 写 violation + _deny + stderr 🛑。
 
@@ -190,7 +190,7 @@ def _emit_engine_denial(
         f"方向：{sticky_pref.strip()}\n"
         f"建议：{top.suggested_fix}"
     )
-    _deny(reason)
+    _deny(reason, payload)
     print(
         f"🛑 karma: {top.rule_id} (tool={tool_name}) — {top.trigger}",
         file=sys.stderr,
@@ -198,7 +198,7 @@ def _emit_engine_denial(
 
 
 def _emit_keyword_denial(
-    top_kw: Violation, sticky_list, tool_name: str,
+    top_kw: Violation, sticky_list, tool_name: str, payload: dict,
 ) -> None:
     """关键词层 (Violation) 命中 → append (已含完整字段) + _deny + stderr 🛑。"""
     append([top_kw])
@@ -208,7 +208,7 @@ def _emit_keyword_denial(
         f"方向：{sticky_pref.strip()}\n"
         f"请改写，不要用 {top_kw.trigger!r} 这种方式。"
     )
-    _deny(reason)
+    _deny(reason, payload)
     print(
         f"🛑 karma: {top_kw.rule_id} (tool={tool_name}, 关键词 {top_kw.trigger!r})",
         file=sys.stderr,

@@ -10,6 +10,102 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.9.15] — 2026-05-16 (fix — cross-model audit (GPT-5.5) catches 3 critical cross-backend protocol bugs; karma had Claude-only assumptions hiding for entire repo lifetime)
+
+### Why this release
+
+User: "再来一轮 cross-audit，本机配置了 codex cli，也配置好了 gpt 5.5 模型，你委派 codex cli 做一次多 Agent 交叉评审。"
+
+Ran `codex exec` with GPT-5.5 xhigh reasoning against karma. **Cross-model viewpoint exposed 3 critical bugs Claude-side audits missed every previous round**:
+
+1. **Gemini BeforeTool output shape mismatch** — karma always emitted Claude's `{hookSpecificOutput: {permissionDecision: "deny"}}` shape, but [Gemini hooks docs](https://geminicli.com/docs/hooks/reference/) require top-level `{decision: "deny" | "block", reason: ...}`. Verified via WebFetch. **Impact**: Gemini users had karma writing violations + stderr warnings but **the dangerous tool actually executed** — all intercept-type rules (non_blocking / bypass_karma / read_first) were write-only, no real blocking.
+
+2. **Gemini tool_name not normalized** — karma checks compare against Claude-style names (`Bash`/`Read`/`Edit`/`Write`/`NotebookEdit`). Gemini uses `run_shell_command` / `read_file` / `write_file` / `replace`. **Impact**: Every check early-returns `None` on Gemini → **zero checks fire** for Gemini users.
+
+3. **Codex `apply_patch` tool_name not handled** — [Codex hooks docs](https://developers.openai.com/codex/hooks) explicitly state hook input reports `tool_name: "apply_patch"` for edits, not `Edit`/`Write`. karma 0 places handle it. **Impact**: Codex users using `apply_patch` (the primary edit path) bypass `read_first` / `long_term_fundamental` / `testset` / `evidence` checks entirely. `last_edit_ts` doesn't advance → stale "recent test pass" state preserved → git commit `evidence.commit` check waved through.
+
+User caught me misjudging once during this session: "你没有探查就下结论这很不好。结合实际环境支持和官方文档开始排查、修复和测试吧。" Was about to ask user to pick between fix options before verifying. Rule #6 read-before-write applies to docs too — pulled actual `~/.codex/hooks.json` + `~/.gemini/settings.json` + WebFetched both backends' official hook protocol docs. This also caught a codex-audit misjudgment (codex thought Codex needed legacy `{decision, reason}` shape; the docs actually say Codex accepts the new `hookSpecificOutput` shape too — karma's current Codex output is OK; only `apply_patch` tool_name handling is missing).
+
+### Fix — `karma/backends/protocol_adapter.py` (new module)
+
+Centralizes cross-backend protocol differences in one place:
+
+```python
+def detect_backend(payload: dict) -> Backend:
+    # Gemini sends hook_event_name in {BeforeAgent, BeforeTool, AfterTool, AfterAgent}
+    # Claude/Codex use PreToolUse/PostToolUse/UserPromptSubmit/Stop
+    event = payload.get("hook_event_name", "")
+    return "gemini" if event in _GEMINI_EVENT_NAMES else "claude"
+
+def normalize_tool_name(raw: str, payload: dict) -> str:
+    backend = detect_backend(payload)
+    if backend == "gemini":
+        return _GEMINI_TOOL_MAP.get(raw, raw)
+    return _CODEX_TOOL_MAP.get(raw, raw)  # claude/codex share canonical mostly
+
+def emit_deny(reason: str, payload: dict) -> str:
+    if detect_backend(payload) == "gemini":
+        return json.dumps({"decision": "deny", "reason": reason}, ensure_ascii=False)
+    return json.dumps({"hookSpecificOutput": {...permissionDecision: "deny"...}})
+
+def emit_allow(payload: dict) -> str: ...  # Gemini → {}, Claude/Codex → permissionDecision: allow
+```
+
+Mapping tables:
+```
+Gemini → Claude canonical:
+  run_shell_command → Bash
+  read_file / read_many_files → Read
+  write_file → Write
+  replace / edit / edit_file → Edit
+
+Codex → Claude canonical:
+  apply_patch → Edit  # so long_term/testset/bypass_karma scan tool_input.command
+```
+
+### Hook entry migration
+
+`pre_tool_use.py` and `post_tool_use.py`:
+- `_allow()` / `_deny()` now take `payload` and route through `emit_allow/emit_deny`
+- `tool_name = normalize_tool_name(raw, payload)` at entry — all downstream checks see canonical name
+
+`apply_patch` Phase-2 limitation: edits via `apply_patch` carry diff in `tool_input.command`, not single `file_path`. `long_term`/`testset`/`bypass_karma` scan the command text correctly. But `read_first` (needs `file_path` to compare against `state.read_files`) and `record_edit` (single path) currently no-op on `apply_patch` because there's no `file_path`. Multi-file diff parsing is **Phase 2** (would let `read_first` enforce "read every file in the patch first" and `record_edit` advance `last_edit_ts` per touched file). Documented in adapter module docstring.
+
+### Critical wheel-packaging fix (caught by second codex full-repo review)
+
+After Phase 1 merged into v0.9.15, user requested another codex GPT-5.5 review — this time **entire karma project, not just the diff**. GPT-5.5 caught a **catastrophic packaging bug separate from the cross-backend protocol issue**:
+
+`pyproject.toml` `force-include` listed individual yaml templates + skills + locales — but **never included `data/signals/`**. `karma/signals.py:40` hardcodes `_REPO_ROOT / "data" / "signals"` for loading. Source-tree tests pass (signals directory exists locally), but **wheel installations lose the entire `data/signals/` tree**. `compile_alternation()` returns never-match regex `(?!)` → **all keyword-fallback layers fail silently** for every pip-installed user: `evidence` / `keep_pushing` / `non_blocking` checks lose their detection vocabulary entirely.
+
+This affects **every pip-installed karma user including the Claude Code mainstream path** — more severe than the cross-backend bug (which only affected Gemini/Codex users). My own 6-gate local checklist included a wheel verify step but **only locked 6 expected files**; the `data/signals/` subtree was never in the lockdown list (extension of rule #5 lesson: locked lists only cover what was thought-of at lockdown time, new data subtrees slip through).
+
+**Fix**:
+- `pyproject.toml` force-include adds `"data/signals" = "data/signals"` (whole directory, not glob — protects future signal types from being missed)
+- `.github/workflows/ci.yml` wheel-verify expanded: file list now includes 7 sample signal files (1 per type) + new **smoke test step** that builds wheel, pip installs into clean venv, and asserts `compile_alternation()` returns non-empty regex for `weak_claims`/`completion_words`/`push_signals`/`stop_hints`. Functional verification, not just file presence.
+
+**Real-data validation** (post-fix clean venv): `weak_claims` 497 chars / `completion_words` 299 chars / `push_signals` 16653 chars / `stop_hints` 760 chars — all functional after pip install.
+
+### Test coverage
+
+`tests/test_protocol_adapter.py` — 11 new tests:
+- `detect_backend` Gemini vs Claude by event name
+- `normalize_tool_name` Gemini → canonical (4 mappings) + Codex `apply_patch → Edit` + Claude passthrough
+- `emit_deny` Gemini top-level shape vs Claude `hookSpecificOutput`
+- `emit_allow` Gemini `{}` vs Claude `permissionDecision: allow`
+- **Integration lockdown**: `test_pre_tool_use_under_gemini_payload_emits_gemini_shape` — runs full `pre_tool_use.main()` with Gemini-style payload (`hook_event_name: BeforeTool` + `tool_name: run_shell_command` + Bash command containing a violation keyword), asserts output is top-level `{decision: deny, reason}` not Claude shape. **This is the core regression lockdown** — future PRs that touch `_allow`/`_deny` without going through adapter break this test.
+
+### Verification
+
+- **497/497 passing** under both `LANG=zh_CN.UTF-8` and `LANG=en_US.UTF-8` (was 487)
+- All 6 local gates pass
+- WebFetch direct quote verification: Gemini hooks ref + Codex hooks docs both consulted before writing adapter
+
+### Meta-pattern
+
+**Cross-model audit value is real** when the in-house model has systematic blind spots. Claude wrote karma; Claude reviewed karma 12+ times this session; Claude's blind spot was: **assume the protocol that Claude itself uses is universal**. GPT-5.5 — running on Codex CLI, having different training exposure to Gemini hooks docs — pulled official refs and flagged exactly this assumption. Single-model rounds (v0.9.13 / v0.9.14) had diminishing returns; cross-model rounds opened a whole new audit surface.
+
+The bug had been latent for the entire history of karma's "3-backend support" claim — every dogfooding case was Claude Code, so the cross-backend protocol never got tested. README literally claims "Claude Code / Codex CLI / Gemini CLI" support but Gemini support was non-functional. Honest correction shipped.
+
 ## [0.9.14] — 2026-05-16 (fix — multi-agent cross-audit catches v0.9.13's own regression: `pre_tool_use` `update_state` not wrapped in try/except)
 
 ### Why this release (loud failure callout)

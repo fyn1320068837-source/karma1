@@ -1,6 +1,6 @@
 [project]
 name = "karma"
-version = "0.9.14"
+version = "0.9.15"
 description = "Sticky core directional preferences for Claude Code — keep Agent on track in long sessions"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -58,6 +58,13 @@ artifacts = ["data/*.yaml"]
 "data/locales/en.yaml" = "data/locales/en.yaml"
 "data/locales/zh.yaml" = "data/locales/zh.yaml"
 "data/config.example.yaml" = "data/config.example.yaml"
+# v0.9.15 critical fix (caught by GPT-5.5 full-repo review): data/signals/ 整个
+# 目录之前漏 force-include. signals.py:40 固定读 _REPO_ROOT/data/signals，
+# 源码树测试 OK 但 pip install 后 wheel 缺 → compile_alternation() 全 never-match
+# → evidence / keep_pushing / non_blocking 等 keyword-fallback layer 真失效.
+# 影响所有 pip install 用户（含 Claude Code 主流场景）— 比 cross-backend bug
+# 还紧急. 用整目录 force-include 不是 globbing，避免漏新加的 signal type.
+"data/signals" = "data/signals"
 "skills/karma/SKILL.md" = "skills/karma/SKILL.md"
 
 [tool.pytest.ini_options]

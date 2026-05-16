@@ -46,7 +46,7 @@ jobs:
           pip install build
           python -m build --wheel
 
-      - name: Verify wheel contains yaml templates
+      - name: Verify wheel contains yaml templates AND signal data
         run: |
           python -c "
           import glob, zipfile, sys
@@ -54,10 +54,11 @@ jobs:
           if not wheels: sys.exit('wheel build 失败 — dist/ 无 wheel')
           z = zipfile.ZipFile(wheels[0])
           names = z.namelist()
-          # v0.6.0 BREAKING: sticky.* → rules.* 重命名 (此前 expected 还查
-          # data/sticky.dev.example.yaml, 但 wheel 实际产物已是 rules.* —
-          # 校验从 v0.6.0 起就 fail, 但前面的 fail-step 一直挡着没暴露,
-          # 直到 v0.9.6 把前面修干净才浮上来)。
+          # v0.6.0 BREAKING: sticky.* → rules.* 重命名 (v0.9.6 修)
+          # v0.9.15 critical: data/signals/ 整个目录之前漏 force-include
+          # → wheel 缺 signals 导致 compile_alternation() never-match →
+          # evidence / keep_pushing / non_blocking 等 keyword 层失效.
+          # codex GPT-5.5 cross-model audit 抓到. 影响所有 pip install 用户.
           expected = [
               'data/rules.dev.example.yaml',
               'data/rules.dev.example.zh.yaml',
@@ -65,8 +66,36 @@ jobs:
               'data/locales/zh.yaml',
               'data/config.example.yaml',
               'skills/karma/SKILL.md',
+              # v0.9.15: 7 个 signal type * 2 lang = 14 文件
+              # 用 sampling 而非全列：每个 signal type 至少 1 个 lang 在
+              'data/signals/weak_claims/en.txt',
+              'data/signals/completion_words/en.txt',
+              'data/signals/push_signals/en.yaml',
+              'data/signals/stop_hints/en.txt',
+              'data/signals/agent_saturation/zh.txt',
+              'data/signals/explicit_handoff/zh.txt',
+              'data/signals/user_stop_hints/zh.txt',
           ]
           missing = [n for n in expected if n not in names]
           if missing: sys.exit(f'wheel 缺文件: {missing}')
-          print(f'{wheels[0]} 含全部 {len(expected)} 个关键模板 ✓')
+          print(f'{wheels[0]} 含全部 {len(expected)} 个关键模板 + signals ✓')
+          "
+
+      - name: Wheel smoke test - signals compile_alternation truly works
+        # v0.9.15 critical: 即便 wheel 含 signal 文件，也要 functional 验证
+        # 真能编译出 non-empty regex（防 packaging path 错 / load 失败）.
+        # codex GPT-5.5 推荐 smoke test pattern.
+        run: |
+          python -m venv /tmp/karma-wheel-test
+          /tmp/karma-wheel-test/bin/pip install dist/karma-*-py3-none-any.whl
+          /tmp/karma-wheel-test/bin/python -c "
+          from karma.signals import compile_alternation
+          # 验证 4 个关键 signal 真编译成 working regex
+          for sig in ('weak_claims', 'completion_words', 'push_signals', 'stop_hints'):
+              pat = compile_alternation(sig)
+              # never-match pattern '(?!)' 长度 4，真 pattern 应 >> 50
+              assert pat.pattern != '(?!)', f'{sig}: signals 没 load → never-match'
+              assert len(pat.pattern) > 50, f'{sig}: pattern 太短可能漏字眼 ({len(pat.pattern)} chars)'
+              print(f'  ✓ {sig}: pattern {len(pat.pattern)} chars')
+          print('signals compile_alternation smoke test ✓')
           "
