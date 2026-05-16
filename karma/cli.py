@@ -274,7 +274,42 @@ def cmd_init(minimal: bool | None = None) -> int:
                 new_path = dest.with_suffix(dest.suffix + ".new")
                 print(f"⚠ [{backend_name}] karma skill 已存在跟当前版本不一致 — 新版写到 {new_path}")
         print("  → 在客户端里输 `/karma <自然语言描述>` 触发录入流程")
+
+    # v0.9.9: 装完展示默认启用规则简要列表 — 让用户（自己跑 / 让 Agent 代装）
+    # 一眼看到默认开了什么，知道下一步该改 / 删 / 加什么
+    _print_default_rules_summary()
     return 0
+
+
+def _print_default_rules_summary() -> None:
+    """`karma init` 末尾展示默认启用规则的简要列表 — Agent 代装的场景下，
+    这段输出会被 Agent 转述给用户，让用户一眼看到默认开了什么规则。
+
+    格式：每条 1 个 id + preference 首行（不是完整 preference）。规则文本跟随
+    用户安装时的 locale（中文用户装 zh 模板，preference 是中文；英文用户装 en
+    模板，preference 是英文）。i18n locale key 只覆盖 helper 的 header 脚手架
+    文字，不翻译规则内容本身。
+
+    刻意不输出「下一步：跑 karma rule edit ...」这类指令 tip — 那会变成
+    「让用户手动输指令」的 friction，跟 onboarding「Agent 代用户操作」目标相反。
+    用户看到规则列表后想改，自然会跟 Agent 说「帮我改 X」，Agent 知道用
+    `/karma` skill 或 `karma rule edit`。
+
+    异常不阻塞 — init 末尾装到这里之前都已经成功，summary 失败不该让 init 退非 0。
+    """
+    from karma.i18n import tr
+    try:
+        rules = load_rules()
+    except Exception:
+        return
+    if not rules:
+        return
+    print()
+    print(tr("init.summary.header", count=len(rules), soft_max=MAX_RULES))
+    for r in rules:
+        first_line = r.preference.strip().split("\n")[0]
+        print(f"  ▸ [{r.id}]")
+        print(f"    {first_line}")
 
 
 def cmd_rule_list() -> int:

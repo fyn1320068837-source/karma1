@@ -6,6 +6,50 @@
 
 ## [Unreleased]
 
+## [0.9.9] — 2026-05-16（feat — onboarding 改进：`karma init` 末尾展示默认启用规则简要列表，让 Agent 代装时能直接告知用户）
+
+### 为什么发这版
+
+用户在 review v0.9.8 后产品方向 audit 时提出的具体需求：
+
+> 「能不能给新安装的用户一个显式反馈，比如让 Agent 帮忙安装的话，最终会给用户一个默认启用的规则简要内容的列表展示？」
+
+Agent 协助安装流程（README 顶部「让 AI 客户端帮你装」那段）走到 `karma install-hooks` 结束就完了。Agent 本身不知道装完启用了哪些规则 — 要么 (a) 让用户自己跑 `karma rule list` 看（违反「不让用户手动输指令」原则），要么 (b) Agent 自己去 read `rules.yaml`（额外工作 + 装机脚本之外的协议）。
+
+### Fix — `karma init` 末尾加默认规则简要列表
+
+加 `_print_default_rules_summary()` helper 在 `cmd_init` 末尾调用。输出（zh locale）：
+
+```
+已为你启用以下默认规则 (7/10 软上限):
+  ▸ [long-term-fundamental]
+    用户相信你能深挖根因。遇到难题他希望你先停下想「最干净的解法是什么」
+  ▸ [non-blocking-parallel]
+    sleep / wait / 等长任务跑完期间，用户等你的输出。盯着进度条不是协作 — 是「卡了」。
+  ... (每条 1 个 id + preference 首行)
+```
+
+Agent 跑 `karma init` 看到这段 stdout 自然 paraphrase 给用户 — onboarding 需求达成，**用户不需要手动输任何指令**。
+
+### 设计取舍 — 刻意不加「下一步指令」清单
+
+第一版实施带了「下一步:」段含 `karma rule edit / list / remove` 命令 tip。用户反馈：「我可能没说清楚，我不想让用户手动输一条指令。」删掉 tip 段。
+
+原则：**Agent 转述完规则列表后，用户想改规则就跟 Agent 说「帮我去掉规则 X」「改下规则 Y」 — Agent 知道用 `/karma` skill 或 `karma rule edit`**。不需要给用户命令语法。
+
+只有 header 文字走 i18n（`init.summary.header` locale key）。规则内容跟随模板语言（zh 模板 → 中文 preference；en 模板 → 英文 preference）。
+
+### 测试覆盖
+
+`tests/test_cli.py` 加 2 个 case：
+- `test_init_prints_default_rules_summary` — 验证 minimal 装下 header + 每条 rule id 出现在 stdout
+- `test_init_summary_does_not_include_command_tips` — 锁「不含指令 tip」不变量；下次有人重新加「下一步:」/ `karma rule edit` 字面到 summary 段 CI 直接红
+
+### 验证
+
+- 477/477 双 locale 都过（v0.9.8 是 475）
+- 6 道本机门禁全过
+
 ## [0.9.8] — 2026-05-16（fix — 跨进程并发 race + API 强制原子性 `update_state(sid, fn)`）
 
 ### 为什么发这版

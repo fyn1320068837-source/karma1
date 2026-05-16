@@ -304,6 +304,8 @@ cd ~/karma && python -m venv .venv && .venv/bin/python -m pip install -e .
 5. 跑 karma doctor 确认装机成功
 ```
 
+> `karma init` 末尾会展示装好的默认规则简要列表（每条 1 行：id + preference 首行）。Agent 帮你跑的时候会把这段转述给你 — 你一眼能看到现在启用的 5-7 条规则是什么，不用自己再敲 `karma rule list`。之后想改哪条规则，直接跟 Agent 说「帮我去掉规则 X」/「改下规则 Y」就行 — Agent 知道用 `/karma` skill 或 `karma rule edit`。
+
 ### 装机后验证
 
 ```bash

@@ -70,6 +70,8 @@ Steps:
 5. Run `karma doctor` to verify installation
 ```
 
+> `karma init` ends with a summary of the default rules it enabled (one line per rule: id + first line of preference). When the Agent runs it for you, the Agent will relay that summary so you can see at a glance which 5-7 rules are now active — no need to type `karma rule list` yourself. To modify any rule afterward, just tell the Agent "remove rule X" / "change rule Y" — it knows to use the `/karma` skill or `karma rule edit`.
+
 ### Per-client install commands
 
 | Client | Install command | Note |

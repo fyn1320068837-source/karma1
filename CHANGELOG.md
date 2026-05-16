@@ -10,6 +10,46 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.9.9] — 2026-05-16 (feat — onboarding: `karma init` shows default rules summary so Agent-assisted install can relay it to the user)
+
+### Why this release
+
+User observation while reviewing product gaps: "Can `karma init` give a clear feedback at the end — when the Agent helps install karma, the user should be told which default rules are enabled, without needing to type any command themselves."
+
+The Agent-assisted install flow (the "Or ask your AI client to install it" path in README) currently ends after `karma install-hooks` succeeds. Agent has no built-in knowledge of which rules ended up enabled — it would need to either (a) instruct the user to run `karma rule list`, which contradicts "no manual command typing" goal, or (b) read `rules.yaml` itself, which is extra Agent work outside the install script.
+
+### Fix — `karma init` ends with a default-rules summary block
+
+Added `_print_default_rules_summary()` helper called at the end of `cmd_init`. Output format (zh locale shown):
+
+```
+已为你启用以下默认规则 (7/10 软上限):
+  ▸ [long-term-fundamental]
+    用户相信你能深挖根因。遇到难题他希望你先停下想「最干净的解法是什么」
+  ▸ [non-blocking-parallel]
+    sleep / wait / 等长任务跑完期间，用户等你的输出。盯着进度条不是协作 — 是「卡了」。
+  ... (one line per rule: id + first line of preference)
+```
+
+Agent running `karma init` sees this stdout block and naturally relays it to the user — fulfilling the onboarding requirement without any user-typed command.
+
+### Design choice — deliberately no "next steps" tips
+
+First-pass implementation included a "Next steps:" section with `karma rule edit / list / remove` command tips. User pushback: "I don't want the user to type any command manually." Removed the tips block. The principle: **once Agent has relayed the rule summary, user wanting to modify a rule should just tell the Agent "remove rule X" or "change rule Y" — Agent knows to use the `/karma` skill or `karma rule edit`.** No manual command syntax required.
+
+Header text only is bilingual (`init.summary.header` locale key). Rule content stays in whichever language the template uses (zh template → Chinese preference; en template → English preference).
+
+### Test coverage
+
+2 new tests in `tests/test_cli.py`:
+- `test_init_prints_default_rules_summary` — verifies header + each rule id appears in stdout under minimal install
+- `test_init_summary_does_not_include_command_tips` — locks the "no manual command tips" invariant; if anyone re-introduces "Next steps:" / `karma rule edit` literal in the summary block, this fails CI
+
+### Verification
+
+- 477/477 passing under both `LANG=zh_CN.UTF-8` and `LANG=en_US.UTF-8` (was 475)
+- All 6 local gates pass
+
 ## [0.9.8] — 2026-05-16 (fix — cross-process concurrency race + API-enforced atomicity via `update_state(sid, fn)`)
 
 ### Why this release

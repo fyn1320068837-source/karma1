@@ -632,3 +632,63 @@ def test_v0516_doctor_reports_multi_backend_skill_status(fake_home, monkeypatch,
 
     # (v0.5.13 第三个 case 已被 v0.5.16 test 上面 case 2 覆盖)
     assert "未装" in out
+
+
+# === v0.9.9: karma init 末尾 onboarding summary 验证 ===
+# 用户需求：Agent 协助安装完后直接告知客户默认启用的规则有哪些，
+# 不让用户手动输指令。所以 init 末尾要输出规则简要列表（id + preference 首行），
+# 但不带「下一步指令」tip 段。
+
+def test_init_prints_default_rules_summary(fake_home, monkeypatch, capsys):
+    """init 末尾输出含「默认启用规则」header + 每条 rule id + preference 首行。
+
+    Agent 代装场景：Agent 跑 karma init 会看到这段 stdout，自然 paraphrase 给用户。
+    """
+    import karma.violations
+    _patch_rules_path(monkeypatch, fake_home)
+    monkeypatch.setattr(karma.violations, "DEFAULT_PATH", fake_home / "v.jsonl")
+    monkeypatch.setattr(cli, "VIOLATIONS_PATH", fake_home / "v.jsonl")
+    cli.cmd_init(minimal=True)
+    out = capsys.readouterr().out
+
+    # header 含规则数 / 软上限
+    assert "默认规则" in out or "Default rules" in out
+    # minimal 装 5 条核心
+    for rule_id in [
+        "long-term-fundamental",
+        "non-blocking-parallel",
+        "loud-failure-with-evidence",
+        "deep-fix-not-bypass",
+        "read-before-write",
+    ]:
+        assert f"[{rule_id}]" in out, f"summary 应含规则 id {rule_id}"
+
+
+def test_init_summary_does_not_include_command_tips(fake_home, monkeypatch, capsys):
+    """summary 段刻意不包含「跑 karma rule edit / list / remove」类指令 tip —
+    那会变成「让用户手动输指令」的 friction，跟 onboarding「Agent 代用户操作」
+    目标相反。tip 段必须从 v0.9.9 init summary 中删除。
+    """
+    import karma.violations
+    _patch_rules_path(monkeypatch, fake_home)
+    monkeypatch.setattr(karma.violations, "DEFAULT_PATH", fake_home / "v.jsonl")
+    monkeypatch.setattr(cli, "VIOLATIONS_PATH", fake_home / "v.jsonl")
+    cli.cmd_init(minimal=True)
+    out = capsys.readouterr().out
+
+    # 提取 summary 段（从 header 起到末尾）— 这块不能含指令 tip
+    summary_start = -1
+    for marker in ("默认规则", "Default rules"):
+        idx = out.find(marker)
+        if idx >= 0:
+            summary_start = idx
+            break
+    assert summary_start >= 0, "summary header 没出现"
+    summary_block = out[summary_start:]
+
+    # summary 段不该包含 next-steps 指令 tip
+    for tip in ("下一步:", "Next steps:", "karma rule edit", "karma rule list", "karma rule remove"):
+        assert tip not in summary_block, (
+            f"summary 段含指令 tip {tip!r} — 违反 v0.9.9 onboarding 原则"
+            f"\n summary block:\n{summary_block}"
+        )

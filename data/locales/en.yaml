@@ -27,6 +27,12 @@ stop.reason: "[karma — Last response didn't show a next-step push signal] The 
 # ===== Stop hook force_block reason =====
 stop.force_block.reason: "karma forced intervention: cumulative violations of {rules} totaling {count} times. Must fix root cause (deep-dive pattern / engine bug / protocol) or explicitly hand off to user. No more bypassing (manually modifying karma state / temporarily disabling rules)."
 
+# ===== karma init summary of default rules enabled (v0.9.9) =====
+# Under the "Agent installs karma for the user" scenario, this block gets relayed
+# to the user. Deliberately no "next steps: run X" tips — that would turn into
+# "user types commands manually" friction, opposite of onboarding's intent.
+init.summary.header: "Default rules now enabled for you ({count}/{soft_max} soft cap):"
+
 # ===== SessionStart baseline =====
 session_start.compact.title: "[karma — After context compact, recall the agreement with the user]"
 session_start.compact.prior_drift_header: "Rules that drifted before compact (give them extra attention on restart):"

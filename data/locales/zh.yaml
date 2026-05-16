@@ -27,6 +27,11 @@ stop.reason: "[karma — 上一回应没看到下一步推进信号]用户是全
 # ===== Stop hook force_block reason =====
 stop.force_block.reason: "karma 强制干预：累积违反 {rules} 共 {count} 次。必须 fix 原因（深挖 pattern / 工程 bug / 协议）或显式让用户介入。禁止继续绕（手动改 karma 状态 / 临时改 rules.yaml）。"
 
+# ===== karma init 末尾的「默认启用规则」简要列表 (v0.9.9) =====
+# Agent 代装场景下这段会被 Agent 转述给用户，让用户一眼看到默认开了什么规则。
+# 刻意不加「下一步：跑 X 命令」类 tip — 那会变「让用户手动输指令」的 friction。
+init.summary.header: "已为你启用以下默认规则 ({count}/{soft_max} 软上限):"
+
 # ===== SessionStart baseline =====
 session_start.compact.title: "[karma — context compact 后回想一下跟用户的默契]"
 session_start.compact.prior_drift_header: "compact 前这几条曾经偏离过，重起时多留意："
