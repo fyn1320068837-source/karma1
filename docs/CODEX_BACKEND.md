@@ -27,9 +27,11 @@ karma v0.9.15 cross-model audit and v0.9.16 codex envelope parser both hit a rec
 | `karma/checks/*.py` engine checks | karma maintainer | ❌ backend-neutral |
 | `tests/test_protocol_adapter.py` cross-backend tests | karma maintainer | ❌ contract testing |
 
-## The 6-method contract
+## The 8-method contract
 
 Codex backend (`CodexBackend` class in `karma/backends/codex.py`) must implement these methods. Default implementations in `JsonHooksBackend` base class are Claude-shaped; override to match codex protocol.
+
+Methods 1-6 came with v0.10.0 split; methods 7-8 added in v0.10.6 to remove silent Claude-shape assumptions across ContextInjection + Stop hooks (4 ContextInjection-firing hooks + Stop's 2 block paths used to direct-print Claude shape — same drift pattern as v0.9.15).
 
 ### 1. `pre_install_setup(self) -> list[str]`
 
@@ -75,6 +77,18 @@ Return JSON string for "allow this tool call". **Codex does NOT accept `hookSpec
 
 **Current**: ✅ returns `"{}"`. There's a locked regression test (`test_codex_emit_allow_returns_empty_dict_not_claude_shape`) preventing future PRs from accidentally reverting to Claude shape.
 
+### 7. `emit_context_injection(self, event_name: str, additional_context: str, payload: dict) -> str`
+
+Return JSON string for "inject additional context into the Agent's view" (SessionStart / UserPromptSubmit / PostToolUse / SubagentStart). Claude shape is `{hookSpecificOutput: {hookEventName: event_name, additionalContext: additional_context}}`.
+
+**Current**: inherits Claude-shape default from `JsonHooksBackend`. **Real codex acceptance unverified** — see Remaining TODO #8. If codex returns error or silently drops the injection, override to match codex's real shape.
+
+### 8. `emit_stop_block(self, reason: str, payload: dict) -> str`
+
+Return JSON string for "block the Agent's stop" (Stop hook force_block / keep_pushing_block paths). Claude shape is `{decision: "block", reason: reason}`. Gemini overrides to `{}` because AfterAgent has no block semantics — returning empty fails open instead of silently rejecting.
+
+**Current**: inherits Claude-shape default. **Real codex acceptance unverified** — see Remaining TODO #8.
+
 ## Completed TODOs (v0.10.x)
 
 These TODOs were defined in v0.10.0's first cut of this doc and completed in subsequent codex-owned PRs:
@@ -104,7 +118,7 @@ These TODOs were defined in v0.10.0's first cut of this doc and completed in sub
 2. **Verify** existing tests still pass: `.venv/bin/python -m pytest tests/test_protocol_adapter.py tests/test_backends.py -q`
 3. **Add tests** for any new method behavior — at minimum, lock the new shape with a hardcoded expected output
 4. **Capture real codex CLI evidence** (rollout file path / session ID / version) in commit message — this avoids the v0.9.15 "Claude guessed and got it wrong" pattern
-5. **Don't break the 6-method contract** — if you need to add a new method, file an issue first so karma maintainer can update `_base.py` Protocol and all backends synchronously
+5. **Don't break the 8-method contract** — if you need to add a new method, file an issue first so karma maintainer can update `_base.py` Protocol and all backends synchronously
 6. **PR description must include**:
    - codex CLI version tested against (e.g., `codex 0.130.0`)
    - real-world test transcript (e.g., user prompt → karma response screenshot)
