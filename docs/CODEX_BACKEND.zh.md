@@ -86,6 +86,7 @@ v0.10.0 定义的 TODO 在后续 codex-owned PR 里完成:
 | 2 | **真 hook-level payload 捕获** for SessionStart | ✅ Done | v0.10.2 [PR #4](https://github.com/jhaizhou-ops/karma/pull/4) — codex SessionStart payload 捕获 + 锁定到测试 fixture |
 | 4 | **其他 codex tool_name** — `exec_command → Bash` 等 | ✅ Done | v0.10.2 [PR #4](https://github.com/jhaizhou-ops/karma/pull/4) `_CODEX_TOOL_MAP` 扩展 |
 | 5a | **审批状态 UX** — 手动 `/hooks` 审批瓶颈 | ✅ Done | v0.10.2 [PR #4](https://github.com/jhaizhou-ops/karma/pull/4) `trust_karma_hooks()` 自动写 `trusted_hash` |
+| 7 | **`write_file_paths` canonical 写字段** — `sed -i` / `tee` / `producer \| tee file` 写命令同时输出 `write_file_paths` + `is_write=True`. 通用层 `karma/hooks/post_tool_use.py:124-155` 消费列表 (v0.10.5 karma 端 ready) 调 `state.record_edit(p)`. evidence check 现在看到 codex `sed -i` 等真代码改动. | ✅ Done | post-v0.11.2 [PR #6](https://github.com/jhaizhou-ops/karma/pull/6) `extract_read_write_paths_from_exec_command` 函数重命名返 `(read_paths, write_paths, is_write)` tuple |
 
 ## 剩余 TODO 列表（codex 议程）
 
@@ -95,7 +96,7 @@ v0.10.0 定义的 TODO 在后续 codex-owned PR 里完成:
 | 3 | **Codex feature-flag 检测清理** — `_is_hooks_feature_enabled` 手解 `~/.codex/config.toml`. codex 0.131+ 可能有更干净 API. | 如果 codex CLI 出 `codex features list --json` 或 status 文件, 换掉 toml parser. 低优先级 — toml parser 工作. |
 | 5b | **程序化审批验证** — `trust_karma_hooks()` 写 `trusted_hash`; `karma doctor` 可以程序化验证每个 wrapper 当前是否仍 approved (vs. 让用户去 TUI 看). | 调研 `~/.codex/config.toml` `[hooks.state]` entry 是否能读回并 validate against 当前 wrapper hash. 如果可以, `karma doctor` 加 per-wrapper 绿红 check. |
 | 6 | **更多 pipe 读 pattern** — `xargs cat` / recursive `grep -r` / `find` 故意不识别 (PR #5 保守 scope). 如果真 codex 使用显示这些 pattern 高假阴率, 设计组合-pattern 引擎. | 挖 `~/.codex/sessions/*/` rollout 看这些 pattern 真频率; 高就设计扩展. |
-| 7 | **`write_file_paths` canonical 写字段** (v0.10.5 karma 端已 ready, codex 端尚未输出) — karma 维护者在 `karma/hooks/post_tool_use.py` 加了 `tool_input.write_file_paths` 消费 (跟现有 `read_file_paths` 对称). 任何 backend 输出这字段, 通用层就遍历调 `state.record_edit(p)`, 推 `last_edit_ts` 让 evidence check 看到 codex `sed -i` 等真代码改动. 当前 `codex.normalize_tool_input` 只为 `sed -i` 设 `is_write: True` 不输出 `write_file_paths` → codex `sed -i /workspace/src/x.py` 真改文件但 karma `evidence.check` 看不到 `last_edit_ts` 推进 → 完成词假阳拦截. | 扩展 `codex.normalize_tool_input` 让 `_extract_read_paths_from_exec_command()` 返回 `is_write=True` 时同时把 path 列表输出为 `write_file_paths`. path 在 `is_write` 检测时已经解析过, 不要丢. 测试: `sed -i 's/foo/bar/' /workspace/x.py` → 输出 `{cmd, command, is_write: True, write_file_paths: ["/workspace/x.py"]}`. 真证据来源: 任何含 `sed -i` 的 codex session rollout. |
+| 8 | **`emit_context_injection` / `emit_stop_block` codex shape 验证** — v0.10.6 加了 8-method Backend Protocol; codex.py 当前继承 Claude-shape 默认, 但 codex 是否真接受 `{hookSpecificOutput, additionalContext}` shape (SessionStart / UserPromptSubmit / PostToolUse / SubagentStart) + `{decision: "block", reason}` shape (Stop) 未验证. PR #6 明确推迟: "不 override, Claude shape 默认" 含锁定测试. | 真交互式 codex session fire 这些 hook 时捕获真 payload. 如果 codex 静默接受 Claude shape, 锁定测试保留. 如果 codex 报错 / 静默丢, override codex backend 的 `emit_context_injection` / `emit_stop_block`. |
 
 ## 如何贡献（codex PR 流程）
 
