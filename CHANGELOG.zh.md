@@ -6,6 +6,40 @@
 
 ## [Unreleased]
 
+## [0.11.3] — 2026-05-16（minor — `karma audit --days N` 时间窗口过滤: dogfood 决策不被老数据稀释）
+
+### 加什么
+
+`karma audit` (含 `--by-check`) 加 `--days N` 选项. 只统计最近 N 天的违反, 让 dogfood 决策聚焦 fresh 窗口效果, 不被老数据稀释.
+
+**为啥要**: v0.11.0 long_term response-level + v0.11.1 deep_fix L3 ship 后, 想看 engine 真效果 — 但默认全量 audit 把 v0.5.x 期老数据混进来, 新增 pattern 真触发被淹. v0.11.3 给个干净的 fresh-window 视角.
+
+### 用法
+
+```bash
+karma audit --by-check --days 1        # 最近 24 小时
+karma audit --by-check --days 7        # 最近 1 周
+karma audit --days 30 --format md      # 最近 1 月, markdown 表
+```
+
+无 `--days` 时行为不变 (全量 violations.jsonl).
+
+### 边界 case
+
+- `--days N` 必须 > 0 (非整数 / ≤ 0 → 友好错误 + exit 2)
+- 窗口内 0 条违反 → 显示「最近 N 天没违反记录」(区别于真没违反)
+
+### Test coverage
+
+2 个 lockdown:
+- `test_audit_days_filter_excludes_old_violations` — 老 + 新 mixed 数据, `--days 1` 只显示 fresh
+- `test_audit_days_filter_empty_window_message` — 空窗口提示要含天数
+
+### Gate
+
+- 622/622 tests / ruff / mypy / wheel build 全绿
+- push 后 30 秒内 `gh run list --branch main` verify CI (sticky #4 教训实践)
+
 ## [0.11.2] — 2026-05-16（patch — 修 v0.10.6 引入的 CI regression: turn/model 推进早于 rules 加载）
 
 老实承认: v0.10.6 + v0.11.0 + v0.11.1 + README + ARCH 共 5 个 commit 我没看 CI 状态就 push (严重违反 sticky #4 loud-failure). 准备 merge codex PR #6 时才发现 CI 4 个 job 全挂在 `test_user_prompt_submit_writes_payload_model_to_state`.
