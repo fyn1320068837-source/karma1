@@ -6,6 +6,58 @@
 
 ## [Unreleased]
 
+## [0.9.12] — 2026-05-16（fix — v0.9.11 audit `--by-check` 数据归类 bug：`_build_strong_reminder` hook fallback 漏传 `trigger_key` 让 engine 命中被错归 keyword-only）
+
+### 响亮失败声明
+
+v0.9.11 发完 `karma audit --by-check`。作者本机 first-run 跑出一个抓眼球数字：**「86% violation 走 keyword-only 兜底，只 14% 来自 engine check。」** 我把这数字读成真行为信号 + 给用户解读「多数规则没附 violation_checks，engine 层需要更多投入」。
+
+**解读是错的。** 用户问了关键 follow-up：「只 1 次触发的 `bypass_karma` / `evidence.completion` / `testset` 是规则设计冗余，还是该监控的没监控到？」深挖这个问题逼我去 read 真 jsonl —— 发现两条 violation 的 `trigger` 字面完全一样（都是 `check.keep_pushing.default.trigger` 的 i18n 输出），但一条有 `trigger_key` 字段、一条没有。**纯字段缺失差异，背后是同一 engine 命中信号。**
+
+根因：`karma/hooks/user_prompt_submit.py:_build_strong_reminder`（v0.4.41 加的 fallback 路径 — 用户立刻接 prompt 时 stop hook 来不及跑，这条路径补写 violations）构造 `Violation` 时**漏传了 trigger_key**，而 `pre_tool_use.py` 跟 `stop.py` 两条路径都正确传了。所以经过这条 fallback 路径写入的 engine 命中 `trigger_key` 字段都是空的，v0.9.11 的 `--by-check` 视图就把它们错归到 "keyword-only" 桶。
+
+### Fix
+
+`user_prompt_submit.py:_build_strong_reminder` 加 `trigger_key=h.trigger_key` 跟另外两个 hook 路径对齐。
+
+### Regression lockdown — `test_all_hook_violation_writes_pass_trigger_key`
+
+静态扫 `karma/hooks/*.py`：每个 `Violation(...)` 或 `_V(...)` 构造调用如果含 `rule_id=...`，必须同时含 `trigger_key=...`。未来 PR 加新 hook 路径写 violation 漏传 `trigger_key` → CI 直接红。**不变量在测试套件里，不在 code review 记忆里**。
+
+### 老数据诚实声明
+
+**没回填历史 jsonl**（按规则 5 [no-testset-no-future-leakage]）。v0.9.12 前写入的 violation 保持原状字段缺失。哪怕我们能确定性反向 lookup（trigger 字面 → trigger_key 经 locale yaml 反查），回填也是「为了让 dashboard 数字好看而修过去数据」—— 是项目明确拒绝的「修过去验证现在」pattern。
+
+替代：`cmd_audit --by-check` 视图 footer 加 disclaimer：
+
+```
+注: v0.9.12 前历史 jsonl 可能漏 trigger_key 字段（hook 路径 bug），
+导致 engine check 真触发被错归 keyword-only。本视图未回填老数据
+（评测干净度），只对 v0.9.12+ 写入的 violation 分类准确。
+```
+
+用户读视图能看到原样数据 + 诚实 caveat。真 engine-vs-keyword 比例随 v0.9.12+ 新数据自然浮现。
+
+### v0.9.11 数据重新分析（应用 caveat 后）
+
+作者 187 条 dataset，部分被 bug 影响：
+- 原报告 `keep_pushing` engine 20×。加 bug 修正后：`keep_pushing.default` trigger 在 keyword-only 桶又有 79 次出现（是同一 check 真触发只是字段缺失）。**真 `keep_pushing` engine 命中估计 ~99 次**。
+- 原报告 `bypass_karma` engine 1×。keyword-only 桶有 6 条「绕开检测 — 手动写 karma 内部状态」字面（`bypass_karma` check 的 i18n trigger）。**真 `bypass_karma` engine 命中估计 ~7 次**。
+- `evidence.completion`: 1× → 估计 ~10× (9 keyword-only 含相同 completion trigger)
+- `testset.*`: 1× → 估计 ~5× (4 keyword-only 含 testset triggers)
+
+用户问的「1 次触发的是不是冗余」 —— 答案是：**没一个是冗余**，它们真触发都比表面数字多。哪些 pattern 过宽（假阳风险）需要 v0.9.12+ 干净数据才能判断。
+
+### 验证
+
+- 482/482 双 locale 都过（v0.9.11 是 481）
+- 6 道本机门禁全过
+- 新 regression test 通过静态扫描 hook 源码捕获原 bug pattern
+
+### 元教训
+
+v0.9.11 的「86% keyword-only」是一个**dashboard 兼当数据用**的典型错误：我把数字读成用户行为信号给了自信解读，但数字实际是 instrumentation 告诉我数据管道有 bug。规则 4 [loud-failure-with-evidence] 双向适用 — 声称结果之后，还要验证结果不是 instrument artifact。用户问「1 次触发是不是冗余」就是暴露 artifact 的 prompt。
+
 ## [0.9.11] — 2026-05-16（feat — 可观察性：`karma audit --by-check` engine check 命中分布 + `/karma` 无参数默认展示这个视图）
 
 ### 为什么发这版

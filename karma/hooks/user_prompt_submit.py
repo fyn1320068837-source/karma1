@@ -124,10 +124,16 @@ def _build_strong_reminder(
         try:
             import time as _time
             from karma.violations import Violation as _V, append as _v_append
+            # v0.9.12 bug fix: 之前漏传 trigger_key 让 engine check 命中被错归
+            # 「keyword-only」桶（v0.9.11 audit --by-check 暴露了这个数据归类
+            # bug — 86% violation 被错归 keyword-only，实际大部分是 engine
+            # check 真触发只是字段缺失）。trigger_key 来自 CheckHit，跟
+            # pre_tool_use.py / stop.py 写 Violation 一致传递。
             recs = [_V(
                 ts=int(_time.time()), session_id=session_id,
                 rule_id=h.rule_id, trigger=h.trigger,
                 snippet=h.snippet, turn=current_turn,
+                trigger_key=h.trigger_key,  # v0.5.7: locale-agnostic 分组 key
             ) for h in all_hits]
             _v_append(recs)
         except Exception:

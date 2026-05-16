@@ -10,6 +10,58 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.9.12] — 2026-05-16 (fix — v0.9.11 audit `--by-check` data classification bug: `_build_strong_reminder` hook fallback was dropping `trigger_key` on Violation write)
+
+### Why this release (loud failure callout)
+
+v0.9.11 shipped `karma audit --by-check`. First-run dogfood on author's machine produced a striking result: **"86% of violations are keyword-only fallback hits, only 14% from engine checks."** I read this as a real signal and gave the user the interpretation: "most rules don't have `violation_checks` attached, engine layer needs more investment."
+
+**The interpretation was wrong.** User asked the right follow-up: "are these 1-trigger checks like `bypass_karma` / `evidence.completion` / `testset` redundant rule design, or are they missing real signals they should catch?" Investigating that question forced reading the raw violations.jsonl — and found two records with identical `trigger` text (the i18n-translated output of `check.keep_pushing.default.trigger`), one with `trigger_key` field present, one without. **Pure field-presence difference; the underlying signal was the same.**
+
+Root cause: `karma/hooks/user_prompt_submit.py:_build_strong_reminder` (a v0.4.41 fallback path that writes violations when the user immediately submits a new prompt before Stop hook can run) constructs `Violation` objects but **didn't pass `trigger_key`** — while `pre_tool_use.py` and `stop.py` both did. So every engine check fired via this fallback path got recorded with empty `trigger_key`, and v0.9.11's `--by-check` view bucketed them as "keyword-only."
+
+### Fix
+
+`user_prompt_submit.py:_build_strong_reminder` now passes `trigger_key=h.trigger_key` matching the other two hook paths.
+
+### Regression lockdown — `test_all_hook_violation_writes_pass_trigger_key`
+
+Static scan over `karma/hooks/*.py`: for every `Violation(...)` or `_V(...)` construction site that has `rule_id=...`, require `trigger_key=...` in the same call. If a future PR adds another hook path that writes violations and forgets `trigger_key`, CI fails immediately. The invariant is now in the test suite, not just code review memory.
+
+### Honesty caveat on historical data
+
+**Did NOT backfill historical jsonl** (per rule #5 [no-testset-no-future-leakage]). Old violations written before v0.9.12 keep their missing-`trigger_key` state. Rewriting them now — even though we could deterministically map `trigger` text back to `trigger_key` via the locale yaml — would be retroactively manipulating recorded data to make a dashboard look better. That's the kind of "fix the past to validate the present" pattern this project explicitly rejects.
+
+Instead: `cmd_audit --by-check` view footer now prints a disclaimer:
+
+```
+注: v0.9.12 前历史 jsonl 可能漏 trigger_key 字段（hook 路径 bug），
+导致 engine check 真触发被错归 keyword-only。本视图未回填老数据
+（评测干净度），只对 v0.9.12+ 写入的 violation 分类准确。
+```
+
+User reading the view sees the data as-is plus the honest caveat. Real engine-vs-keyword distribution will emerge naturally as new v0.9.12+ violations accumulate.
+
+### Reanalysis of v0.9.11 dogfood data (with caveat applied)
+
+Author's 187-violation dataset, partially affected by the bug:
+- Originally reported `keep_pushing` engine: 20×. After accounting for the bug: the `keep_pushing.default` trigger appears 79 additional times in the keyword-only bucket — those are the same check truly firing. **True `keep_pushing` engine hits estimated ~99.**
+- Originally reported `bypass_karma` engine: 1×. The keyword-only bucket has 6 hits with trigger text "绕开检测 — 手动写 karma 内部状态" (the `bypass_karma` check's i18n trigger). **True `bypass_karma` engine hits estimated ~7.**
+- `evidence.completion`: 1× → estimated ~10× (9 keyword-only with the same completion trigger)
+- `testset.*`: 1× → estimated ~5× (4 keyword-only with `testset` triggers)
+
+User's question "are the 1-trigger checks redundant?" — answer: **none of them are redundant**, they're all firing more than the surface data showed. Whether any are over-broad (false-positive risk) needs clean v0.9.12+ data to judge.
+
+### Verification
+
+- 482/482 passing under both `LANG=zh_CN.UTF-8` and `LANG=en_US.UTF-8` (was 481)
+- All 6 local gates pass
+- New regression test catches the original bug pattern by static scanning hook source files
+
+### Meta-lesson
+
+v0.9.11's "86% keyword-only" was a **dashboard pulling double duty as data**: I read the number as user-behavior signal and gave a confident interpretation, but the number was actually instrumentation telling me about a data-pipeline bug. Rule #4 [loud-failure-with-evidence] applies in both directions — claim a result, then verify the result wasn't just instrument artifact. User asking "are the 1-trigger ones redundant?" was the prompt that exposed the artifact.
+
 ## [0.9.11] — 2026-05-16 (feat — observability: `karma audit --by-check` engine-check hit distribution + `/karma` no-arg defaults to this view)
 
 ### Why this release

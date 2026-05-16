@@ -351,6 +351,19 @@ def _cmd_audit_by_check(violations: list) -> int:
         ratio = keyword_only / total
         print(f"\nkeyword-only 兜底命中 (无 engine check): {keyword_only}× ({ratio*100:.0f}%)")
 
+    # v0.9.12 honesty caveat：v0.9.12 之前的 user_prompt_submit hook fallback 路径
+    # 漏写 trigger_key 字段（v0.9.11 audit --by-check 暴露的真 bug），所以那段
+    # 时期写入的 violation 即使是 engine check 真触发，也会被错归 keyword-only
+    # 桶。v0.9.12 修了 hook 路径 + 加 regression test 锁住所有写 Violation 路径
+    # 必须传 trigger_key。本视图统计混了老数据，**老 keyword-only 占比偏高是
+    # 数据 bug 不是真行为**。要看准的 engine vs keyword-only 比例，只看 v0.9.12+
+    # 写入的 violation。
+    print(
+        "\n注: v0.9.12 前历史 jsonl 可能漏 trigger_key 字段（hook 路径 bug），"
+        "导致 engine check 真触发被错归 keyword-only。本视图未回填老数据"
+        "（评测干净度），只对 v0.9.12+ 写入的 violation 分类准确。"
+    )
+
     return 0
 
 

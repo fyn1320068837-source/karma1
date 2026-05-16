@@ -802,6 +802,47 @@ def test_audit_by_check_aggregates_engine_hits(fake_home, monkeypatch, capsys):
     assert "3×" in out, "bypass_karma 3 条应出现"
 
 
+def test_all_hook_violation_writes_pass_trigger_key():
+    """v0.9.12 regression lockdown: 所有 hook 路径写 Violation 时若 rule_id
+    来自 CheckHit 必须同时传 trigger_key。
+
+    历史 bug：v0.4.41 加的 user_prompt_submit._build_strong_reminder fallback
+    路径写 Violation 时漏传 trigger_key，让 engine check 真触发被错归
+    keyword-only 桶。v0.9.11 audit --by-check 视图暴露了「86% keyword-only」
+    假象，深挖才发现是字段缺失而非真行为。
+
+    静态扫描所有 hook 文件，找 Violation 构造或 `_V(` 调用，确保它附近含
+    trigger_key=... 赋值（white-list 允许的少数例外）。
+    """
+    import re
+    from pathlib import Path
+
+    hooks_dir = Path(__file__).resolve().parent.parent / "karma" / "hooks"
+    offenders: list[str] = []
+
+    for py in hooks_dir.glob("*.py"):
+        text = py.read_text(encoding="utf-8")
+        # 找所有 Violation 构造调用（可能 alias 成 _V）
+        # 匹配 `Violation(` 或 `_V(` 然后看附近 ~15 行内是否含 trigger_key=
+        for m in re.finditer(r"\b(Violation|_V)\s*\(", text):
+            start = m.start()
+            # 取 m.start() 后续 800 字符作为上下文（覆盖典型 Violation(...) 多行构造）
+            ctx = text[start : start + 800]
+            # 看这段是否含 `rule_id=` 来自 CheckHit 命名（h.rule_id / top.rule_id 等）
+            # 简化：只要 ctx 含 rule_id= 且不含 trigger_key= 就视为漏传
+            if "rule_id=" in ctx and "trigger_key=" not in ctx:
+                # 定位行号给出友好错误
+                line_no = text[:start].count("\n") + 1
+                offenders.append(f"{py.name}:{line_no}")
+
+    assert not offenders, (
+        "以下 hook 路径写 Violation 漏传 trigger_key（v0.9.12 后所有写都必须传）:\n"
+        + "\n".join(f"  {o}" for o in offenders)
+        + "\n\nfix：构造 Violation 时加 trigger_key=h.trigger_key（或 top.trigger_key），"
+        "跟 CheckHit 来源对齐。"
+    )
+
+
 def test_audit_default_view_backward_compat(fake_home, monkeypatch, capsys):
     """`karma audit`（无 --by-check）行为不变 — 仍按 rule_id 聚合。
 
