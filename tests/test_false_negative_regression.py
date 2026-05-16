@@ -126,6 +126,86 @@ def test_long_term_response_no_response_no_check():
     assert fn() is None  # 完全没参数
 
 
+# ============================================================
+# v0.11.1 (Agent 1 deep_fix L3 时序 pattern): 测试失败 → 立刻 Edit 没 Read 错源
+# = 「报错没看源代码就改」草草了事 pattern. 用户 #1 最重视 rule.
+# 工程化上限说明: 这是 L3 时序层, L4 认知层 (有没有想清楚) 工程拦不到.
+# ============================================================
+
+def test_deep_fix_edit_after_test_fail_unread_file_blocks():
+    """v0.11.1: pytest 挂 → 立刻 Edit 没读过的文件 → 拦 (草草了事)."""
+    from karma.session_state import SessionState, BashSnapshot
+    fn = REGISTRY["bypass_karma_detection"]
+    state = SessionState(session_id="test")
+    # 模拟最近 Bash 是失败的测试命令
+    state.recent_bash.append(BashSnapshot(
+        ts=0.0,
+        command_summary="pytest tests/test_foo.py",
+        is_test_cmd=True,
+        output_passed=False,
+        output_failed=True,
+    ))
+    hit = fn(
+        tool_name="Edit",
+        tool_input={"file_path": "/workspace/src/foo.py"},
+        session_state=state,
+    )
+    assert hit is not None, "测试挂 + 立刻 Edit 没 Read 的源 → 必须拦"
+    assert hit.trigger_key == "check.deep_fix.edit_after_test_fail_no_read.trigger"
+
+
+def test_deep_fix_edit_after_test_fail_already_read_passes():
+    """v0.11.1: 测试挂但 Agent 已读过源文件 → 不拦 (合法调试)."""
+    from karma.session_state import SessionState, BashSnapshot
+    fn = REGISTRY["bypass_karma_detection"]
+    state = SessionState(session_id="test")
+    state.record_read("/workspace/src/foo.py")  # 已读
+    state.recent_bash.append(BashSnapshot(
+        ts=0.0, command_summary="pytest tests/test_foo.py",
+        is_test_cmd=True, output_passed=False, output_failed=True,
+    ))
+    hit = fn(
+        tool_name="Edit",
+        tool_input={"file_path": "/workspace/src/foo.py"},
+        session_state=state,
+    )
+    assert hit is None, "已 Read 过的源 → 合法调试不拦"
+
+
+def test_deep_fix_edit_after_test_pass_passes():
+    """v0.11.1: 测试通过 + Edit → 不拦 (不是报错救火场景)."""
+    from karma.session_state import SessionState, BashSnapshot
+    fn = REGISTRY["bypass_karma_detection"]
+    state = SessionState(session_id="test")
+    state.recent_bash.append(BashSnapshot(
+        ts=0.0, command_summary="pytest tests/test_foo.py",
+        is_test_cmd=True, output_passed=True, output_failed=False,
+    ))
+    hit = fn(
+        tool_name="Edit",
+        tool_input={"file_path": "/workspace/src/foo.py"},
+        session_state=state,
+    )
+    assert hit is None, "测试通过 + Edit 不是「报错救火」, 不拦"
+
+
+def test_deep_fix_edit_after_non_test_bash_fail_passes():
+    """v0.11.1: 非测试命令失败 (e.g., 网络 / 编译) + Edit → 不拦."""
+    from karma.session_state import SessionState, BashSnapshot
+    fn = REGISTRY["bypass_karma_detection"]
+    state = SessionState(session_id="test")
+    state.recent_bash.append(BashSnapshot(
+        ts=0.0, command_summary="curl https://example.com",
+        is_test_cmd=False, output_passed=False, output_failed=True,
+    ))
+    hit = fn(
+        tool_name="Edit",
+        tool_input={"file_path": "/workspace/src/foo.py"},
+        session_state=state,
+    )
+    assert hit is None, "非测试命令失败 → 不算「测试报错救火」pattern, 不拦"
+
+
 def test_long_term_intent_comment_临时方案():
     """中文「临时方案」注释 → 违反。"""
     fn = REGISTRY["long_term_fundamental"]

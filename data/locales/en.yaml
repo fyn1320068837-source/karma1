@@ -138,6 +138,8 @@ check.long_term.todo_marker.trigger: "Code contains TODO/FIXME/HACK/XXX marker c
 check.long_term.patch_intent.trigger: "Code contains 'patch / bypass / workaround' intent comment"
 check.long_term.response_patch_intent.trigger: "Your wording shows short-term intent ('I'll patch this / hardcode temporarily / quick workaround') — user expects long-term root cause"
 check.long_term.response_acknowledge_but_proceed.trigger: "You acknowledged 'not long-term' but still declared 'going ahead anyway' — contradicts user's long-term root-cause expectation"
+check.deep_fix.edit_after_test_fail_no_read.trigger: "Editing {file_path} immediately after test failure but you haven't Read it this session — classic 'shallow patch' pattern (not looking at source before changing)"
+check.deep_fix.edit_after_test_fail_no_read.fix: "Read {file_path} first to understand the real root cause (function / data flow / caller dependencies), then decide if this single fix is enough or the issue is upstream. Changing without reading = performing a short-term patch for the user; the real cause may be elsewhere."
 
 # testset (7 entries)
 check.testset.reverse_feed.trigger: "Reverse-feeding eval pool (writing back to gold_cases / eval_cases)"

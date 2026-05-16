@@ -10,6 +10,39 @@ Documents karma's important version changes. Versioning follows [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.11.1] — 2026-05-16 (patch — `deep-fix-not-bypass` L3 时序 pattern: 测试失败紧跟 Edit 没读源拦)
+
+User-flagged #1 priority: 用户最重视的规则是 `deep-fix-not-bypass` (反对 Agent 草草了事不深挖). v0.11.1 给这条 rule 加 L3 时序层 engine pattern, 跟现有 L1 (Bash 字面绕 karma 状态) 并存.
+
+### 加什么
+
+**新增检测路径** (在 `karma/checks/bypass_karma.py` 复用 rule_id `deep-fix-not-bypass`):
+- pre_tool_use Edit 时, 看 `session_state.recent_bash[-1]`
+- 如果上一 Bash 是测试命令 (`is_test_cmd=True`) 且**失败** (`output_failed=True`)
+- 而且当前 Edit 的 file 在本 session **从没 Read 过** (`not session_state.has_read(fp)`)
+- → 直接拦, trigger 文案 = 「测试失败后立刻 Edit X 但本 session 没 Read 过 — 没看源代码就改是『草草了事』典型」
+
+### 工程化天花板 (老实写, 不藏)
+
+这是 deep_fix 4 层证据分类的 **L3 时序层**:
+- L1 字面 (`--no-verify` / TODO 注释 / hardcoded hash): v0.10.x 已覆盖
+- L2 话术 (「先打补丁」/「先这样 ship」): v0.11.0 response-level 覆盖
+- **L3 时序 (报错紧跟改, 没读源): v0.11.1 本次加**
+- L4 认知 (Agent 内心是不是真挖了根因): **工程拦不到**, 只能靠 preference 注入 + 用户后置抽查
+
+**预期上限**: 综合 L1+L2+L3 engine 触发率从 v0.11.0 的 ~20% (response 层) 上行到 ~30-35%, **不会到 100%**. L4 占了 deep_fix 真违反空间的大头, 那部分必须靠 preference 提示 + 用户自己用经验抓.
+
+### 假阳防御 (4 个 lockdown test)
+
+- ✅ Edit + test_fail + 没 Read → 拦
+- ✅ Edit + test_fail + 已 Read → 不拦 (合法 debug)
+- ✅ Edit + test_pass → 不拦 (不是报错救火)
+- ✅ Edit + 非测试 Bash fail → 不拦 (network/build 失败不算 test 触发)
+
+### Test coverage
+
+`tests/test_false_negative_regression.py` 加 4 个 case, 总测试 615 → 619.
+
 ## [0.11.0] — 2026-05-16 (minor — long_term-fundamental engine 重新设计, 加 response-level 话术 pattern 让 engine 真触发)
 
 v0.10.x dogfood data audit (2026-05-16 真证据驱动): `long-term-fundamental` rule 217 条总违反, **0% engine 触发率** (12 条全 keyword fallback). 根因 = engine 维度选了**工程层证据** (`--no-verify` / TODO 注释 / hardcoded hash 都很罕见), 而 Agent 真违反场景是**话术**（"先打个补丁" / "短期方案" / "硬编码先这样"）.

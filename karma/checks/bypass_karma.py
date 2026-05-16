@@ -117,12 +117,35 @@ _SHELL_REDIR_WRITE_RE = re.compile(
 _KARMA_CLI_RE = re.compile(r"\bkarma\s+(?:init|install-hooks|uninstall-hooks|reset|reset-session|stats|audit|violations|sticky|doctor)\b")
 
 
-def check(*, tool_name: str = "", tool_input: dict | None = None, **_):
-    """Bash 命令含 karma 内部字面 + 写操作 → 命中「绕开检测」违反。
+def check(*, tool_name: str = "", tool_input: dict | None = None, session_state=None, **_):
+    """两路检测同 rule_id `deep-fix-not-bypass`:
 
-    剥引号字面后扫命令骨架 — git commit message 描述「修了 last_test_pass_ts」
-    是描述不是执行（避免本 commit message 自指假阳）。
+    1. Bash 命令含 karma 内部字面 + 写操作 → 「绕开 karma 检测」违反
+    2. v0.11.1: 测试失败 → 立刻 Edit 没读过的文件 → 「报错没看源就改」草草了事
+
+    第 2 路只是「行为时序 pattern」, 工程化上限有限（认知深度 L4 拦不到，
+    详 [[feedback-language-preference-no-engine]] memory 解释 deep_fix 类天花板).
     """
+    # v0.11.1 路径 2: Edit + 上一 Bash 测试失败 + 当前 file_path 没读过
+    # = 「报错信号紧跟 Edit 没看源代码」草草了事 pattern
+    if tool_name == "Edit" and session_state is not None:
+        edit_fp = (tool_input or {}).get("file_path", "")
+        recent_bash = getattr(session_state, "recent_bash", []) or []
+        if edit_fp and recent_bash:
+            last_bash = recent_bash[-1]
+            # 限定: 最近一条 Bash 是**测试命令**且**失败** (output_failed True)
+            # 且 Agent 没读过这文件 → 拦. 没读过 + 测试挂了立刻改 = 没看源代码
+            is_test_fail = getattr(last_bash, "is_test_cmd", False) and \
+                getattr(last_bash, "output_failed", False)
+            if is_test_fail and not session_state.has_read(edit_fp):
+                return CheckHit(
+                    rule_id=_STICKY_ID,
+                    trigger=tr("check.deep_fix.edit_after_test_fail_no_read.trigger", file_path=edit_fp),
+                    trigger_key="check.deep_fix.edit_after_test_fail_no_read.trigger",
+                    snippet=f"Edit({edit_fp!r}) after test fail without reading source",
+                    suggested_fix=tr("check.deep_fix.edit_after_test_fail_no_read.fix", file_path=edit_fp),
+                )
+
     if tool_name != "Bash":
         return None
     cmd_raw = (tool_input or {}).get("command", "") or ""
